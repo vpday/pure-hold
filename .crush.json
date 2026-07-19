@@ -1,0 +1,20 @@
+{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "tdesign-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "tdesign-mcp-server@latest"]
+    }
+  },
+  "lsp": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"]
+    },
+    "vue": {
+      "command": "vue-language-server",
+      "args": ["--stdio"]
+    }
+  }
+}

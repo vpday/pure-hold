@@ -1,0 +1,50 @@
+{
+  "name": "pure-hold",
+  "version": "0.0.1",
+  "private": true,
+  "description": "",
+  "keywords": [],
+  "license": "AGPL-3.0",
+  "author": "vpday",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "bootstrap": "pnpm install",
+    "dev": "vite",
+    "build": "pnpm type-check && pnpm build-only",
+    "build-only": "vite build",
+    "type-check": "vue-tsc --build",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "pinia": "^3.0.4",
+    "tdesign-vue-next": "^1.20.3",
+    "vue": "^3.5.39"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@tdesign-vue-next/auto-import-resolver": "^0.1.7",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/tsconfig": "^0.9.1",
+    "oxfmt": "^0.57.0",
+    "oxlint": "^1.73.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "~6.0.3",
+    "unplugin-auto-import": "^21.0.0",
+    "unplugin-vue-components": "^32.1.0",
+    "vite": "^8.1.5",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-vue-devtools": "^8.1.5",
+    "vue-tsc": "^3.3.7",
+    "workbox-precaching": "^7.4.1",
+    "workbox-window": "^7.4.1"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
