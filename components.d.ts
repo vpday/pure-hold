@@ -11,10 +11,12 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    PwaUpdateNotification: typeof import('./src/components/PwaUpdateNotification.vue')['default']
     TButton: typeof import('tdesign-vue-next')['Button']
+    TCollapse: typeof import('tdesign-vue-next')['Collapse']
+    TCollapsePanel: typeof import('tdesign-vue-next')['CollapsePanel']
     TConfigProvider: typeof import('tdesign-vue-next')['ConfigProvider']
     TContent: typeof import('tdesign-vue-next')['Content']
+    TDrawer: typeof import('tdesign-vue-next')['Drawer']
     TFooter: typeof import('tdesign-vue-next')['Footer']
     THeader: typeof import('tdesign-vue-next')['Header']
     THeadMenu: typeof import('tdesign-vue-next')['HeadMenu']

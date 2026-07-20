@@ -1,57 +1,73 @@
 # Agent Guide
 
-## Project at a Glance
-
-This is a Vue 3 single-page application built with Vite and TypeScript. The client entry point is `src/main.ts`, which imports global styles and TDesign's stylesheet before mounting `App.vue` to `#app`. The current application shell and layout live entirely in `src/App.vue`; `src/components/` exists but is empty.
+项目架构、代码地图、依赖方向和扩展规则见 `ARCHITECTURE.md`。本文件只保留执行任务时需要遵守的命令、约定和非明显事实，不重复架构背景。
 
 ## Commands
 
-Use pnpm. Node.js `>=24.0.0` is required.
+使用 pnpm。Node.js 必须为 `>=24.0.0`。
 
 ```sh
-pnpm bootstrap       # install dependencies (runs pnpm install)
-pnpm dev             # start the Vite development server
-pnpm type-check      # run vue-tsc project type checking
-pnpm build           # type-check, then create the production build
-pnpm fmt             # format files with oxfmt
-pnpm fmt:check       # check formatting without modifying files
-pnpm lint            # lint with oxlint
-pnpm lint:fix        # apply oxlint fixes
+pnpm bootstrap       # 安装依赖
+pnpm dev             # 启动 Vite 开发服务器
+pnpm test            # 运行 Node.js 内置测试
+pnpm type-check      # 运行 vue-tsc 类型检查
+pnpm build           # 类型检查并构建生产版本
+pnpm build-only      # 仅运行 Vite 生产构建
+pnpm fmt             # 使用 oxfmt 格式化
+pnpm fmt:check       # 检查格式但不修改文件
+pnpm lint            # 使用 oxlint 检查
+pnpm lint:fix        # 应用 oxlint 自动修复
 ```
 
-There are no test scripts, test files, deployment commands, or CI workflows in the repository at present. Run `pnpm type-check` and `pnpm lint` for application changes. `pnpm build` is currently blocked because its script invokes `run-s`, but no package providing that command is installed. `pnpm fmt:check` currently reports pre-existing formatting issues in `auto-imports.d.ts`, `src/main.ts`, `src/style.css`, and `tsconfig.json`.
+仓库使用 Node.js 内置测试运行器，不引入额外测试框架。应用改动至少运行 `pnpm test`、`pnpm type-check` 和 `pnpm lint`；涉及构建、PWA、自动导入或入口时还要运行 `pnpm build-only`。仓库当前没有 CI 工作流。
 
-## Application Structure and Flow
+## Architecture Rules
 
-- `index.html` supplies the `#app` mount target.
-- `src/main.ts` is the only bootstrap path: it loads TDesign's base CSS, then `src/style.css`, then mounts `App.vue`.
-- `src/App.vue` is the root view. It wraps the page with TDesign's `t-config-provider` using the Chinese locale, then renders the header, content, and footer layout.
-- `src/style.css` imports Tailwind CSS. Use Tailwind utility classes in templates where appropriate.
-- `vite.config.ts` configures Vue, Vue DevTools, Tailwind's Vite plugin, and TDesign component/icon auto-import resolution.
+- 新业务代码遵循 `ARCHITECTURE.md` 的 `App -> Feature -> Domain` 依赖方向。
+- 外部接口协议必须在对应领域适配器中转换，DTO、字段下标和编码细节不得泄漏到 Store 或 Vue 组件。
+- Pinia Store 只保存共享领域状态；Drawer、Collapse、轮播、悬停等局部 UI 状态留在 feature。
+- 展示子组件通过 props 和 emits 协作，不直接请求数据或读取 Pinia。
+- 不同领域的 Store 不直接互相修改状态。
+- 不为假设中的复用提前创建 shared 工具或数据源接口；遵循 `ARCHITECTURE.md` 的扩展规则。
 
-Use the `@` alias for imports from `src` when an absolute import improves clarity.
+## Application Conventions
 
-## UI Dependencies
+- `src/main.ts` 是唯一客户端启动入口，负责注册 Pinia并挂载 `App.vue`。
+- `src/App.vue` 是应用壳，只组合全局 Provider、布局、应用基础设施和 feature 入口。
+- Vite 和 `tsconfig.app.json` 统一将 `@`、`@/*` 解析到 `src`。跨层导入优先使用 `@/`，同一模块内部使用相对导入。
+- Vue 组件使用 `<script setup lang="ts">`。
+- TypeScript 开启未使用变量和参数检查；删除未使用代码，不添加抑制。
+- TypeScript 启用 erasable syntax 限制，避免需要运行时转换的 TypeScript 语法。
+- Oxfmt 使用单引号和无分号风格；修改后格式化目标文件。
 
-TDesign Vue Next is configured for component and icon auto-imports through both `unplugin-auto-import` and `unplugin-vue-components`. Do not add manual imports for TDesign components or icons solely to make templates compile; the resolvers generate the declarations in `auto-imports.d.ts` and `components.d.ts`.
+## UI and Responsive Behavior
 
-The root component imports the TDesign Chinese locale directly because it passes that value to `t-config-provider`. Preserve that provider when adding user-facing TDesign components so the locale applies across the application.
+- TDesign Vue Next 组件与图标由 Vite resolver 自动导入。不要为模板组件添加仅用于编译的手动导入。
+- `App.vue` 中的 TDesign 中文 `t-config-provider` 必须保留。
+- Tailwind CSS 是模板布局和视觉样式的首选方式。
+- 纯 CSS 响应式布局使用 Tailwind 类；JavaScript 行为分流使用 `src/shared/composables/useBreakpoints.ts`，不要重复硬编码 Tailwind 断点。
+- 行情涨跌遵循涨红跌绿，并始终保留正负号，不能只依赖颜色表达方向；涨跌与状态色使用 TDesign 主题语义变量，不硬编码 Tailwind 色阶。
 
-Pinia and ECharts are installed but currently have no application usage. Avoid adding stores or charts until a feature needs them.
+## PWA and Network Data
 
-## Build Behavior
-
-Production builds use Rolldown configuration to preserve strict execution order and split large `echarts`, `tdesign-vue-next`, `pinia`, and `vue` dependencies into named chunks. Keep this configuration when adjusting build settings unless a validated change requires otherwise.
-
-## TypeScript and Style
-
-- Write Vue components using `<script setup lang="ts">`, matching `src/App.vue`.
-- Type checking includes `.ts`, `.tsx`, and `.vue` files under `src/`.
-- Unused locals and parameters are type errors. Remove unused code rather than suppressing the error.
-- Oxfmt is configured for single quotes and no semicolons. Run formatting after edits.
-- Oxlint enables ESLint, TypeScript, Unicorn, OXC, and Vue plugins, with correctness rules treated as errors.
-- The TypeScript config enforces erasable syntax only, so avoid TypeScript constructs that require runtime transforms.
+- PWA 使用 `injectManifest`，Service Worker 实现在 `src/sw.ts`。
+- Pinia 内存状态不等同于 PWA 离线缓存，不要为使用 PWA 而自动持久化 Store。
+- 东方财富实时指数行情和腾讯市场状态不进入 Service Worker 缓存。
+- 新增缓存请求前，必须在 `src/sw.ts` 明确请求匹配、时效、容量和失败降级策略；禁止默认缓存所有 GET 请求。
+- 修改 Service Worker、PWA 配置或缓存规则后运行 `pnpm build-only`，确认 Service Worker 产物生成成功。
 
 ## Generated Files
 
-`auto-imports.d.ts` and `components.d.ts` are generated declaration files for the configured auto-import plugins. Do not hand-edit them; regenerate them through the normal Vite/plugin workflow when auto-import configuration changes.
+`auto-imports.d.ts` 和 `components.d.ts` 由自动导入插件生成。不要手工修改；通过正常开发或构建流程重新生成。
+
+## Validation
+
+按改动范围选择最小有效验证，再扩大范围：
+
+1. 格式化本次修改的文件。
+2. 运行 `pnpm test`。
+3. 运行 `pnpm type-check`。
+4. 运行 `pnpm lint`。
+5. 涉及入口、构建、PWA 或自动导入时运行 `pnpm build-only`。
+
+只报告实际运行过的验证。不要把现有无关问题描述为本次改动已解决。

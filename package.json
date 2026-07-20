@@ -14,6 +14,7 @@
     "build": "pnpm type-check && pnpm build-only",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
+    "test": "node --test \"src/**/*.test.ts\"",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "lint": "oxlint",

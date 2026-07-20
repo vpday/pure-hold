@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
-import PwaUpdateNotification from './components/PwaUpdateNotification.vue'
+import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
+import IndexOverviewSection from '@/features/index-overview/IndexOverviewSection.vue'
 </script>
 
 <template>
@@ -22,7 +23,9 @@ import PwaUpdateNotification from './components/PwaUpdateNotification.vue'
         </div>
       </t-header>
       <t-content class="flex-1">
-        <div class="mx-auto w-full max-w-7xl">Content</div>
+        <div class="mx-auto w-full max-w-7xl px-4 py-6">
+          <IndexOverviewSection />
+        </div>
       </t-content>
       <t-footer>
         <div class="mx-auto flex w-full max-w-7xl items-center justify-center">
