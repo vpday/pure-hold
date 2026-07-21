@@ -6,11 +6,17 @@ import { createEastmoneyQuoteRequestUrl } from './createEastmoneyQuoteRequestUrl
 
 const definitions: readonly IndexDefinition[] = [
   {
-    id: 'sh000001',
-    market: 'cn',
-    name: '上证指数',
+    id: '1.000001',
     quoteCode: '1.000001',
     securityCode: '000001',
+    name: '上证指数',
+    sectorNames: ['规模'],
+    sectorCodes: ['BK000002'],
+    typeName: '宽基',
+    typeCode: '001001',
+    indexType: '01',
+    quoteMarketCode: '1',
+    refreshMarketCodes: ['SH'],
   },
 ]
 

@@ -65,6 +65,10 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
+              name: 'index-definitions',
+              test: /\/indexDefinitions\.json$/,
+            },
+            {
               name: 'echarts',
               test: /\/echarts/,
               minSize: 100000,

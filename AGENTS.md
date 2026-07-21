@@ -9,6 +9,7 @@
 ```sh
 pnpm bootstrap       # 安装依赖
 pnpm dev             # 启动 Vite 开发服务器
+pnpm update:index-definitions # 更新离线指数目录
 pnpm test            # 运行 Node.js 内置测试
 pnpm type-check      # 运行 vue-tsc 类型检查
 pnpm build           # 类型检查并构建生产版本
@@ -20,6 +21,8 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 ```
 
 仓库使用 Node.js 内置测试运行器，不引入额外测试框架。应用改动至少运行 `pnpm test`、`pnpm type-check` 和 `pnpm lint`；涉及构建、PWA、自动导入或入口时还要运行 `pnpm build-only`。仓库当前没有 CI 工作流。
+
+`pnpm update:index-definitions` 需要网络，会串行分页请求指数排行接口，并在相邻请求间等待 1–3 秒。`src/domains/indices/config/indexDefinitions.json` 是该命令的生成文件，不手工修改；更新后检查数据 diff，并运行测试、类型检查、lint 和构建。
 
 ## Architecture Rules
 
@@ -58,7 +61,7 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 
 ## Generated Files
 
-`auto-imports.d.ts` 和 `components.d.ts` 由自动导入插件生成。不要手工修改；通过正常开发或构建流程重新生成。
+`auto-imports.d.ts` 和 `components.d.ts` 由自动导入插件生成。不要手工修改；通过正常开发或构建流程重新生成。`src/domains/indices/config/indexDefinitions.json` 由 `pnpm update:index-definitions` 生成。
 
 ## Validation
 

@@ -67,7 +67,7 @@ src/
 │  └─ components/               # 应用级基础设施 UI
 ├─ domains/
 │  └─ indices/
-│     ├─ config/                # 稳定指数与默认分组定义
+│     ├─ config/                # 生成的离线指数目录与默认分组
 │     ├─ models/                # 市场、分组、行情和问题类型
 │     ├─ services/eastmoney/    # 东方财富指数行情适配器
 │     ├─ services/tencent/      # 腾讯市场状态适配器
@@ -92,8 +92,9 @@ Seam 是模块向调用方暴露的稳定接口，调用方通过它使用能力
 实时指数首次加载的主数据流是：
 
 ```text
-defaultIndexDefinitions
-  -> useIndexQuotesStore
+indexDefinitions.json
+  -> defaultIndexDefinitions
+  -> useIndexQuotesStore 按默认分组选择活动定义
   -> fetchEastmoneyIndexQuotes
   -> 东方财富 JSON 响应
   -> EastmoneyIndexQuoteDto[]
@@ -104,7 +105,7 @@ defaultIndexDefinitions
   -> Ticker / List / Card
 ```
 
-后续定时刷新先由 `fetchTencentMarketStatus` 将 GBK 文本转换为交易中的 `cn`、`hk`、`us` 市场集合，再只把对应市场的指数定义交给东方财富行情适配器。市场是刷新规则，分组是用户组织指数的方式；默认分组通过东方财富 `quoteCode` 引用定义，因此未来自定义分组可以引用不同市场的指数，而 Store 仍以稳定应用指数 ID 合并行情。
+后续定时刷新先由 `fetchTencentMarketStatus` 将 GBK 文本转换为腾讯交易中的市场代码集合，再按离线目录中每个指数的 `refreshMarketCodes` 筛选活动定义，并只把对应定义交给东方财富行情适配器。默认分组通过东方财富 `quoteCode` 引用定义，Store 仍以完整 `quoteCode` 形式的稳定指数 ID 合并行情。
 
 关键 seam：
 
@@ -132,7 +133,7 @@ defaultIndexDefinitions
 
 ### 状态与刷新
 
-`useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。首次可见加载会请求全部默认指数，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，只请求交易中的中国内地、香港和美国市场。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
+`useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
 ### PWA 与缓存
 
@@ -172,7 +173,8 @@ ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以�
 | Service Worker 缓存规则   | `src/sw.ts`                               |
 | TypeScript 范围和约束     | `tsconfig*.json`                          |
 | 格式化和 lint 规则        | `.oxfmtrc.json`、`.oxlintrc.json`         |
-| 默认指数集合              | `defaultIndexDefinitions.ts`              |
+| 离线指数目录              | `indexDefinitions.json`                   |
+| 指数目录更新规则          | `scripts/update-index-definitions.mjs`    |
 | 默认指数组                | `defaultIndexGroups.ts`                   |
 | 指数刷新行为              | `useIndexQuotesStore.ts`                  |
 | 响应式断点                | Tailwind 生成的 `--breakpoint-*` CSS 变量 |

@@ -1,8 +1,6 @@
-import type { IndexMarket } from '../../models/indexDefinition'
-
 const marketStatusPattern = /v_marketStat="([^"]*)";?/
 
-export function parseTencentMarketStatus(responseText: string): ReadonlySet<IndexMarket> {
+export function parseTencentMarketStatus(responseText: string): ReadonlySet<string> {
   const match = marketStatusPattern.exec(responseText)
   const fields = match?.[1]?.split('|')
   if (!fields || fields.length < 2) {
@@ -17,24 +15,11 @@ export function parseTencentMarketStatus(responseText: string): ReadonlySet<Inde
     }
   }
 
-  if (
-    ![...statuses.keys()].some(
-      (code) => code === 'SH' || code === 'SZ' || code === 'HK' || code === 'US',
-    )
-  ) {
-    throw new Error('Tencent market status response has no primary markets')
+  if (statuses.size === 0) {
+    throw new Error('Tencent market status response has no markets')
   }
 
-  const openMarkets = new Set<IndexMarket>()
-  if (statuses.get('SH') === 'open' || statuses.get('SZ') === 'open') {
-    openMarkets.add('cn')
-  }
-  if (statuses.get('HK') === 'open') {
-    openMarkets.add('hk')
-  }
-  if (statuses.get('US') === 'open') {
-    openMarkets.add('us')
-  }
-
-  return openMarkets
+  return new Set(
+    [...statuses.entries()].filter(([, status]) => status === 'open').map(([code]) => code),
+  )
 }

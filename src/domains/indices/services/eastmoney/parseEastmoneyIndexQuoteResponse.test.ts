@@ -6,11 +6,17 @@ import { mapEastmoneyIndexQuote } from './mapEastmoneyIndexQuote.ts'
 import { parseEastmoneyIndexQuoteResponse } from './parseEastmoneyIndexQuoteResponse.ts'
 
 const definition: IndexDefinition = {
-  id: 'hkHSTECH',
-  market: 'hk',
-  name: '恒生科技',
+  id: '124.HSTECH',
   quoteCode: '124.HSTECH',
   securityCode: 'HSTECH',
+  name: '恒生科技',
+  sectorNames: null,
+  sectorCodes: null,
+  typeName: '宽基',
+  typeCode: '001001',
+  indexType: '01',
+  quoteMarketCode: '124',
+  refreshMarketCodes: ['HK'],
 }
 
 const validRecord = {
@@ -36,7 +42,7 @@ test('parses and maps an Eastmoney quote into a domain snapshot', () => {
     quote: {
       changeAmount: -121.12,
       changePercent: -2.37,
-      indexId: 'hkHSTECH',
+      indexId: '124.HSTECH',
       price: 4987.36,
       quotedAt: 1784532259000,
     },

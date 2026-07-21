@@ -7,8 +7,8 @@ import type { IndexQuoteSnapshot } from '../../../domains/indices/models/indexQu
 import { toIndexOverviewViewModel } from './toIndexOverviewViewModel.ts'
 
 const definitions: readonly IndexDefinition[] = [
-  { id: 'cn', market: 'cn', name: '内地', quoteCode: '1.000001', securityCode: '000001' },
-  { id: 'hk', market: 'hk', name: '香港', quoteCode: '124.HSTECH', securityCode: 'HSTECH' },
+  definition('cn', '1.000001', '内地'),
+  definition('hk', '124.HSTECH', '香港'),
 ]
 const groups: readonly IndexGroupDefinition[] = [
   { id: 'primary', name: '主要指数', quoteCodes: ['124.HSTECH', '1.000001'] },
@@ -74,3 +74,20 @@ test('keeps explicit signs and trend semantics', () => {
   assert.equal(viewModel.groups[0]?.items[0]?.changePercentText, '-0.50%')
   assert.equal(viewModel.groups[0]?.items[0]?.trend, 'down')
 })
+
+function definition(id: string, quoteCode: string, name: string): IndexDefinition {
+  const [quoteMarketCode = '', securityCode = ''] = quoteCode.split('.')
+  return {
+    id,
+    quoteCode,
+    securityCode,
+    name,
+    sectorNames: null,
+    sectorCodes: null,
+    typeName: null,
+    typeCode: null,
+    indexType: null,
+    quoteMarketCode,
+    refreshMarketCodes: ['SH'],
+  }
+}

@@ -8,6 +8,7 @@ import type { IndexQuoteBatch, IndexQuoteHealth, IndexQuoteSnapshot } from '../m
 import type { IndexQuoteIssue } from '../models/indexQuoteIssue'
 import { fetchEastmoneyIndexQuotes } from '../services/eastmoney/fetchEastmoneyIndexQuotes'
 import { fetchTencentMarketStatus } from '../services/tencent/fetchTencentMarketStatus'
+import { selectActiveIndexDefinitions } from './selectActiveIndexDefinitions'
 import { selectOpenMarketIndexDefinitions } from './selectOpenMarketIndexDefinitions'
 
 const refreshInterval = 10_000
@@ -15,6 +16,7 @@ const refreshInterval = 10_000
 export const useIndexQuotesStore = defineStore('index-quotes', () => {
   const definitions = shallowRef<readonly IndexDefinition[]>(defaultIndexDefinitions)
   const groups = shallowRef(defaultIndexGroups)
+  const activeDefinitions = selectActiveIndexDefinitions(definitions.value, groups.value)
   const quotesByIndexId = shallowRef<Readonly<Record<string, IndexQuoteSnapshot>>>({})
   const isRefreshing = ref(false)
   const health = ref<IndexQuoteHealth>('unknown')
@@ -28,7 +30,7 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
   let refreshTimer: ReturnType<typeof setInterval> | undefined
 
   function refresh(): Promise<void> {
-    return runRefresh((signal) => fetchEastmoneyIndexQuotes(definitions.value, signal))
+    return runRefresh((signal) => fetchEastmoneyIndexQuotes(activeDefinitions, signal))
   }
 
   function refreshOpenMarkets(): Promise<void> {
@@ -43,7 +45,7 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
         throw new MarketStatusRequestError()
       }
 
-      const openDefinitions = selectOpenMarketIndexDefinitions(definitions.value, openMarkets)
+      const openDefinitions = selectOpenMarketIndexDefinitions(activeDefinitions, openMarkets)
       if (openDefinitions.length === 0) {
         return 'markets-closed'
       }

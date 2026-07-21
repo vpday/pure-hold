@@ -1,12 +1,9 @@
-import type { IndexMarket } from '../../models/indexDefinition'
 import { parseTencentMarketStatus } from './parseTencentMarketStatus'
 
 const requestTimeout = 10_000
 const tencentMarketStatusUrl = 'https://qt.gtimg.cn/?q=marketStat'
 
-export async function fetchTencentMarketStatus(
-  signal: AbortSignal,
-): Promise<ReadonlySet<IndexMarket>> {
+export async function fetchTencentMarketStatus(signal: AbortSignal): Promise<ReadonlySet<string>> {
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeout)])
   const response = await fetch(tencentMarketStatusUrl, { signal: requestSignal })
 
