@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import { computed, ref, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 
@@ -16,6 +17,9 @@ const emit = defineEmits<{
   reorder: [fromIndex: number, toIndex: number]
   select: [id: string]
 }>()
+
+const { isSmUp } = useBreakpoints()
+const mobileDialogWidth = 'min(320px, calc(100vw - 32px))'
 
 const draggableGroups = ref<DraftGroup[]>([])
 const nameDialogVisible = ref(false)
@@ -181,18 +185,38 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
     <t-dialog
       v-model:visible="nameDialogVisible"
       :header="isAddingGroup ? '新建分组' : '重命名分组'"
+      :width="isSmUp ? undefined : mobileDialogWidth"
+      :placement="isSmUp ? undefined : 'center'"
       :close-on-esc-keydown="false"
       :close-on-overlay-click="false"
       :confirm-btn="{ content: isAddingGroup ? '新建' : '保存' }"
       @confirm="submitName"
     >
-      <t-input v-model:value="nameInput" autofocus placeholder="请输入分组名称" />
+      <t-input
+        v-if="isSmUp"
+        :maxlength="20"
+        show-limit-number
+        v-model:value="nameInput"
+        autofocus
+        placeholder="请输入分组名称"
+      />
+      <div v-else>
+        <t-textarea
+          v-model:value="nameInput"
+          autofocus
+          :autosize="{ minRows: 2, maxRows: 3 }"
+          :maxlength="20"
+          placeholder="请输入分组名称"
+        />
+      </div>
       <p v-if="nameError" class="mt-2 text-sm text-(--td-error-color)">{{ nameError }}</p>
     </t-dialog>
 
     <t-dialog
       v-model:visible="removalDialogVisible"
       header="删除分组"
+      :width="isSmUp ? undefined : mobileDialogWidth"
+      :placement="isSmUp ? undefined : 'center'"
       :close-on-esc-keydown="false"
       :close-on-overlay-click="false"
       :confirm-btn="{ content: '删除', theme: 'danger' }"

@@ -49,6 +49,7 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 - `App.vue` 中的 TDesign 中文 `t-config-provider` 必须保留。
 - Tailwind CSS 是模板布局和视觉样式的首选方式。
 - 纯 CSS 响应式布局使用 Tailwind 类；JavaScript 行为分流使用 `src/shared/composables/useBreakpoints.ts`，不要重复硬编码 Tailwind 断点。
+- 移动端 `t-dialog` 不依赖桌面默认宽度；宽度必须受视口约束并保留左右安全间距，例如 `min(320px, calc(100vw - 32px))`。桌面端无特殊需求时保留 TDesign 默认尺寸。
 - 行情涨跌遵循涨红跌绿，并始终保留正负号，不能只依赖颜色表达方向；涨跌与状态色使用 TDesign 主题语义变量，不硬编码 Tailwind 色阶。
 
 ## PWA and Network Data

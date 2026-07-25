@@ -31,5 +31,6 @@ declare module 'vue' {
     TListItemMeta: typeof import('tdesign-vue-next')['ListItemMeta']
     TNotification: typeof import('tdesign-vue-next')['Notification']
     TSpace: typeof import('tdesign-vue-next')['Space']
+    TTextarea: typeof import('tdesign-vue-next')['Textarea']
   }
 }
