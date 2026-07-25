@@ -12,16 +12,23 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     TButton: typeof import('tdesign-vue-next')['Button']
+    TCard: typeof import('tdesign-vue-next')['Card']
     TCollapse: typeof import('tdesign-vue-next')['Collapse']
     TCollapsePanel: typeof import('tdesign-vue-next')['CollapsePanel']
     TConfigProvider: typeof import('tdesign-vue-next')['ConfigProvider']
     TContent: typeof import('tdesign-vue-next')['Content']
+    TDialog: typeof import('tdesign-vue-next')['Dialog']
     TDrawer: typeof import('tdesign-vue-next')['Drawer']
+    TEmpty: typeof import('tdesign-vue-next')['Empty']
     TFooter: typeof import('tdesign-vue-next')['Footer']
     THeader: typeof import('tdesign-vue-next')['Header']
     THeadMenu: typeof import('tdesign-vue-next')['HeadMenu']
     TIcon: typeof import('tdesign-vue-next')['Icon']
+    TInput: typeof import('tdesign-vue-next')['Input']
     TLayout: typeof import('tdesign-vue-next')['Layout']
+    TList: typeof import('tdesign-vue-next')['List']
+    TListItem: typeof import('tdesign-vue-next')['ListItem']
+    TListItemMeta: typeof import('tdesign-vue-next')['ListItemMeta']
     TNotification: typeof import('tdesign-vue-next')['Notification']
     TSpace: typeof import('tdesign-vue-next')['Space']
   }

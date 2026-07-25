@@ -1,12 +1,15 @@
 import { defineStore } from 'pinia'
-import { ref, shallowRef } from 'vue'
+import { onScopeDispose, ref, shallowRef } from 'vue'
 
 import { defaultIndexDefinitions } from '../config/defaultIndexDefinitions'
-import { defaultIndexGroups } from '../config/defaultIndexGroups'
+import type { IndexGroupDefinition } from '../models/indexGroupDefinition'
 import type { IndexDefinition } from '../models/indexDefinition'
 import type { IndexQuoteBatch, IndexQuoteHealth, IndexQuoteSnapshot } from '../models/indexQuote'
 import type { IndexQuoteIssue } from '../models/indexQuoteIssue'
 import { fetchEastmoneyIndexQuotes } from '../services/eastmoney/fetchEastmoneyIndexQuotes'
+import { loadIndexGroups } from '../services/persistence/loadIndexGroups'
+import { indexGroupsStorageKey } from '../services/persistence/indexSettingsSchemaVersion'
+import { saveIndexGroups } from '../services/persistence/saveIndexGroups'
 import { fetchTencentMarketStatus } from '../services/tencent/fetchTencentMarketStatus'
 import { selectActiveIndexDefinitions } from './selectActiveIndexDefinitions'
 import { selectOpenMarketIndexDefinitions } from './selectOpenMarketIndexDefinitions'
@@ -15,8 +18,10 @@ const refreshInterval = 10_000
 
 export const useIndexQuotesStore = defineStore('index-quotes', () => {
   const definitions = shallowRef<readonly IndexDefinition[]>(defaultIndexDefinitions)
-  const groups = shallowRef(defaultIndexGroups)
-  const activeDefinitions = selectActiveIndexDefinitions(definitions.value, groups.value)
+  const groups = shallowRef<readonly IndexGroupDefinition[]>(loadIndexGroups())
+  const activeDefinitions = shallowRef(
+    selectActiveIndexDefinitions(definitions.value, groups.value),
+  )
   const quotesByIndexId = shallowRef<Readonly<Record<string, IndexQuoteSnapshot>>>({})
   const isRefreshing = ref(false)
   const health = ref<IndexQuoteHealth>('unknown')
@@ -29,8 +34,13 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
   let polling = false
   let refreshTimer: ReturnType<typeof setInterval> | undefined
 
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', handleStorageChange)
+    onScopeDispose(() => window.removeEventListener('storage', handleStorageChange))
+  }
+
   function refresh(): Promise<void> {
-    return runRefresh((signal) => fetchEastmoneyIndexQuotes(activeDefinitions, signal))
+    return runRefresh((signal) => fetchEastmoneyIndexQuotes(activeDefinitions.value, signal))
   }
 
   function refreshOpenMarkets(): Promise<void> {
@@ -45,7 +55,7 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
         throw new MarketStatusRequestError()
       }
 
-      const openDefinitions = selectOpenMarketIndexDefinitions(activeDefinitions, openMarkets)
+      const openDefinitions = selectOpenMarketIndexDefinitions(activeDefinitions.value, openMarkets)
       if (openDefinitions.length === 0) {
         return 'markets-closed'
       }
@@ -128,6 +138,37 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     health.value = batch.issues.length === 0 ? 'healthy' : 'partial'
   }
 
+  function replaceGroups(newGroups: readonly IndexGroupDefinition[]): void {
+    groups.value = newGroups
+    activeDefinitions.value = selectActiveIndexDefinitions(definitions.value, newGroups)
+    lifecycle += 1
+    activeRequest?.abort()
+    activeRequest = undefined
+    activeRefresh = undefined
+    isRefreshing.value = false
+
+    if (polling && typeof document !== 'undefined' && !document.hidden) {
+      void refresh()
+    }
+  }
+
+  function saveGroups(newGroups: readonly IndexGroupDefinition[] = groups.value): void {
+    saveIndexGroups(newGroups)
+  }
+
+  function syncFromStorage(): void {
+    const storedGroups = loadIndexGroups()
+    if (!areGroupsEqual(groups.value, storedGroups)) {
+      replaceGroups(storedGroups)
+    }
+  }
+
+  function handleStorageChange(event: StorageEvent): void {
+    if (event.key === indexGroupsStorageKey && event.newValue !== null) {
+      syncFromStorage()
+    }
+  }
+
   function startPolling(): void {
     if (polling || typeof document === 'undefined') {
       return
@@ -194,8 +235,11 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     lastSuccessfulAt,
     quotesByIndexId,
     refresh,
+    replaceGroups,
+    saveGroups,
     startPolling,
     stopPolling,
+    syncFromStorage,
   }
 })
 
@@ -203,4 +247,22 @@ class MarketStatusRequestError extends Error {}
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function areGroupsEqual(
+  first: readonly IndexGroupDefinition[],
+  second: readonly IndexGroupDefinition[],
+): boolean {
+  return (
+    first.length === second.length &&
+    first.every(
+      (group, index) =>
+        group.id === second[index]?.id &&
+        group.name === second[index]?.name &&
+        group.quoteCodes.length === second[index]?.quoteCodes.length &&
+        group.quoteCodes.every(
+          (quoteCode, quoteCodeIndex) => quoteCode === second[index]?.quoteCodes[quoteCodeIndex],
+        ),
+    )
+  )
 }

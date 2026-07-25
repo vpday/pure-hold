@@ -1,0 +1,3 @@
+[mcp_servers.tdesign-mcp-server]
+command = "npx"
+args = ["-y", "tdesign-mcp-server@latest"]

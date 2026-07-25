@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 import { useIndexQuotesStore } from '@/domains/indices/stores/useIndexQuotesStore'
+import IndexSettingsEntry from '@/features/index-settings/IndexSettingsEntry.vue'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import IndexQuoteList from './components/IndexQuoteList.vue'
 import IndexQuoteTicker from './components/IndexQuoteTicker.vue'
@@ -14,6 +15,7 @@ const { definitions, groups, health, lastSuccessfulAt, quotesByIndexId } = store
 const { isSmUp } = useBreakpoints()
 const expandedPanels = ref<(number | string)[]>([])
 const drawerVisible = ref(false)
+const settingsEntry = ref<{ open: () => void }>()
 const viewModel = computed(() =>
   toIndexOverviewViewModel({
     definitions: definitions.value,
@@ -54,6 +56,10 @@ function handleHeaderClick(): void {
     drawerVisible.value = true
   }
 }
+
+function openIndexSettings(): void {
+  settingsEntry.value?.open()
+}
 </script>
 
 <template>
@@ -77,7 +83,7 @@ function handleHeaderClick(): void {
         </template>
         <template #headerRightContent>
           <div @click.stop>
-            <t-button disabled variant="text">
+            <t-button variant="text" @click="openIndexSettings">
               <template #icon><t-icon name="setting" /></template>
               指数设置
             </t-button>
@@ -109,5 +115,7 @@ function handleHeaderClick(): void {
         :status-tone="viewModel.statusTone"
       />
     </t-drawer>
+
+    <IndexSettingsEntry ref="settingsEntry" />
   </section>
 </template>

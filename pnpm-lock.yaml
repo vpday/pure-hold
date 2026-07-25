@@ -20,6 +20,9 @@ importers:
       vue:
         specifier: ^3.5.39
         version: 3.5.40(typescript@6.0.3)
+      vue-draggable-plus:
+        specifier: 0.6.1
+        version: 0.6.1(@types/sortablejs@1.15.9)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.3.2
@@ -2800,6 +2803,15 @@ packages:
 
   vscode-uri@3.1.0:
     resolution: {integrity: sha512-/BpdSx+yCQGnCvecbyXdxHDkuk55/G3xwnC0GqY4gmQ3j+A+g8kzzgB4Nk/SINjqn6+waqw3EgbVF2QKExkRxQ==}
+
+  vue-draggable-plus@0.6.1:
+    resolution: {integrity: sha512-FbtQ/fuoixiOfTZzG3yoPl4JAo9HJXRHmBQZFB9x2NYCh6pq0TomHf7g5MUmpaDYv+LU2n6BPq2YN9sBO+FbIg==}
+    peerDependencies:
+      '@types/sortablejs': ^1.15.0
+      '@vue/composition-api': '*'
+    peerDependenciesMeta:
+      '@vue/composition-api':
+        optional: true
 
   vue-tsc@3.3.7:
     resolution: {integrity: sha512-+C+rgD49wAQ5bUTl2sp5a8Bzg4YoldMNXM+g7CFe604MYcQ8PrZPMQhIjJSzKXtPBCa+C5ayMipqjbA7splekQ==}
@@ -5704,6 +5716,10 @@ snapshots:
       terser: 5.49.0
 
   vscode-uri@3.1.0: {}
+
+  vue-draggable-plus@0.6.1(@types/sortablejs@1.15.9):
+    dependencies:
+      '@types/sortablejs': 1.15.9
 
   vue-tsc@3.3.7(typescript@6.0.3):
     dependencies:

@@ -19,18 +19,16 @@ export function toIndexOverviewViewModel(source: IndexOverviewSource): IndexOver
   const definitionsByQuoteCode = new Map(
     source.definitions.map((definition) => [definition.quoteCode, definition]),
   )
-  const groups = source.groups
-    .map((group) => ({
-      id: group.id,
-      items: group.quoteCodes.flatMap((quoteCode) => {
-        const definition = definitionsByQuoteCode.get(quoteCode)
-        return definition
-          ? [toIndexQuoteViewModel(definition, source.quotesByIndexId[definition.id])]
-          : []
-      }),
-      name: group.name,
-    }))
-    .filter((group) => group.items.length > 0)
+  const groups = source.groups.map((group) => ({
+    id: group.id,
+    items: group.quoteCodes.flatMap((quoteCode) => {
+      const definition = definitionsByQuoteCode.get(quoteCode)
+      return definition
+        ? [toIndexQuoteViewModel(definition, source.quotesByIndexId[definition.id])]
+        : []
+    }),
+    name: group.name,
+  }))
   const quoteTimes = Object.values(source.quotesByIndexId).map((quote) => quote.quotedAt)
   const latestQuoteTime = quoteTimes.length > 0 ? Math.max(...quoteTimes) : source.lastSuccessfulAt
 

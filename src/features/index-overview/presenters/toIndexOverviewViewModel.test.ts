@@ -75,6 +75,17 @@ test('keeps explicit signs and trend semantics', () => {
   assert.equal(viewModel.groups[0]?.items[0]?.trend, 'down')
 })
 
+test('keeps empty groups for the detail panel', () => {
+  const viewModel = toIndexOverviewViewModel({
+    definitions,
+    groups: [{ id: 'empty', name: '空分组', quoteCodes: [] }],
+    health: 'healthy',
+    quotesByIndexId: {},
+  })
+
+  assert.deepEqual(viewModel.groups, [{ id: 'empty', items: [], name: '空分组' }])
+})
+
 function definition(id: string, quoteCode: string, name: string): IndexDefinition {
   const [quoteMarketCode = '', securityCode = ''] = quoteCode.split('.')
   return {
