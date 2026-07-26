@@ -1,0 +1,172 @@
+import { defineStore } from 'pinia'
+import { onScopeDispose, ref, shallowRef } from 'vue'
+
+import type { FundGroupDefinition } from '../models/fundGroupDefinition.ts'
+import type { FundSnapshot } from '../models/fundSnapshot.ts'
+import type { FundState } from '../models/fundState.ts'
+import { loadFundState } from '../services/persistence/loadFundState.ts'
+import { saveFundState } from '../services/persistence/saveFundState.ts'
+import type { FundRefreshIssue } from '../services/tiantian/fundRefreshIssue.ts'
+import { fetchTiantianFundSnapshots } from '../services/tiantian/fetchTiantianFundSnapshots.ts'
+import { mergeFundRefreshResult } from './mergeFundRefreshResult.ts'
+
+export const useFundsStore = defineStore('funds', () => {
+  const initialState = loadFundState()
+  const fundOrder = shallowRef<readonly string[]>(initialState.fundOrder)
+  const groups = shallowRef<readonly FundGroupDefinition[]>(initialState.groups)
+  const snapshotsByCode = shallowRef<Readonly<Record<string, FundSnapshot>>>(
+    initialState.snapshotsByCode,
+  )
+  const isRefreshing = ref(false)
+  const lastRefreshIssues = shallowRef<readonly FundRefreshIssue[]>([])
+  const lastSuccessfulRefreshAt = ref<number | undefined>(
+    latestFetchedAt(initialState.snapshotsByCode),
+  )
+
+  let activeController: AbortController | undefined
+  let activeRefresh: Promise<void> | undefined
+  let lifecycle = 0
+
+  onScopeDispose(() => {
+    lifecycle += 1
+    activeController?.abort()
+  })
+
+  function refreshAll(): Promise<void> {
+    if (activeRefresh) {
+      return activeRefresh
+    }
+
+    const requestedCodes = [...fundOrder.value]
+    if (requestedCodes.length === 0) {
+      lastRefreshIssues.value = []
+      return Promise.resolve()
+    }
+
+    const currentLifecycle = lifecycle
+    const controller = new AbortController()
+    activeController = controller
+    isRefreshing.value = true
+
+    const request = fetchTiantianFundSnapshots(requestedCodes, controller.signal)
+      .then((batch) => {
+        if (currentLifecycle !== lifecycle) {
+          return
+        }
+        const merged = mergeFundRefreshResult(
+          snapshotsByCode.value,
+          fundOrder.value,
+          requestedCodes,
+          batch,
+        )
+        lastRefreshIssues.value = merged.issues
+        if (merged.updatedCount === 0) {
+          return
+        }
+
+        snapshotsByCode.value = merged.snapshotsByCode
+        lastSuccessfulRefreshAt.value = batch.fetchedAt
+        try {
+          saveFundState(currentState())
+        } catch {
+          lastRefreshIssues.value = [...merged.issues, { code: 'persistence-failed' as const }]
+        }
+      })
+      .catch((error: unknown) => {
+        if (currentLifecycle === lifecycle && !isAbortError(error)) {
+          lastRefreshIssues.value = requestedCodes.map((fundCode) => ({
+            code: 'request-failed',
+            fundCode,
+          }))
+        }
+      })
+      .finally(() => {
+        if (activeRefresh === request) {
+          activeRefresh = undefined
+          activeController = undefined
+          isRefreshing.value = false
+        }
+      })
+
+    activeRefresh = request
+    return request
+  }
+
+  function deleteFund(code: string): { error?: string } {
+    if (!fundOrder.value.includes(code)) {
+      return {}
+    }
+    const nextSnapshots = { ...snapshotsByCode.value }
+    delete nextSnapshots[code]
+    const candidate: FundState = {
+      fundOrder: fundOrder.value.filter((fundCode) => fundCode !== code),
+      groups: groups.value.map((group) => ({
+        ...group,
+        fundCodes: group.fundCodes.filter((fundCode) => fundCode !== code),
+      })),
+      snapshotsByCode: nextSnapshots,
+    }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '删除失败，未能保存基金数据' }
+    }
+    applyState(candidate)
+    return {}
+  }
+
+  function replaceGroups(nextGroups: readonly FundGroupDefinition[]): { error?: string } {
+    const candidate: FundState = { ...currentState(), groups: nextGroups }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '分组保存失败，请稍后重试' }
+    }
+    groups.value = candidate.groups
+    return {}
+  }
+
+  function currentState(): FundState {
+    return {
+      fundOrder: fundOrder.value,
+      groups: groups.value,
+      snapshotsByCode: snapshotsByCode.value,
+    }
+  }
+
+  function applyState(state: FundState): void {
+    lifecycle += 1
+    activeController?.abort()
+    activeController = undefined
+    activeRefresh = undefined
+    isRefreshing.value = false
+    fundOrder.value = state.fundOrder
+    groups.value = state.groups
+    snapshotsByCode.value = state.snapshotsByCode
+  }
+
+  return {
+    deleteFund,
+    fundOrder,
+    groups,
+    isRefreshing,
+    lastRefreshIssues,
+    lastSuccessfulRefreshAt,
+    refreshAll,
+    replaceGroups,
+    snapshotsByCode,
+  }
+})
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function latestFetchedAt(
+  snapshotsByCode: Readonly<Record<string, FundSnapshot>>,
+): number | undefined {
+  const timestamps = Object.values(snapshotsByCode).flatMap((snapshot) =>
+    snapshot.fetchedAt === null ? [] : [snapshot.fetchedAt],
+  )
+  return timestamps.length > 0 ? Math.max(...timestamps) : undefined
+}

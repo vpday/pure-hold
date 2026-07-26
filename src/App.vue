@@ -1,8 +1,25 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
 import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
+import FundListSection from '@/features/fund-list/FundListSection.vue'
 import IndexOverviewSection from '@/features/index-overview/IndexOverviewSection.vue'
+import { requestGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
+
+const globalRefreshing = ref(false)
+
+async function refreshAllData(): Promise<void> {
+  if (globalRefreshing.value) {
+    return
+  }
+  globalRefreshing.value = true
+  try {
+    await requestGlobalRefresh()
+  } finally {
+    globalRefreshing.value = false
+  }
+}
 </script>
 
 <template>
@@ -16,6 +33,13 @@ import IndexOverviewSection from '@/features/index-overview/IndexOverviewSection
               <div class="text-xl">简持</div>
             </template>
             <template #operations>
+              <a
+                href="javascript:;"
+                title="刷新全部数据"
+                :disabled="globalRefreshing"
+                @click="refreshAllData"
+                ><t-icon class="t-menu__operations-icon" name="refresh"
+              /></a>
               <a href="javascript:;"><t-icon class="t-menu__operations-icon" name="search" /></a>
               <a href="javascript:;"><t-icon class="t-menu__operations-icon" name="setting" /></a>
             </template>
@@ -23,8 +47,9 @@ import IndexOverviewSection from '@/features/index-overview/IndexOverviewSection
         </div>
       </t-header>
       <t-content class="flex-1">
-        <div class="mx-auto w-full max-w-7xl px-4 py-6">
+        <div class="mx-auto w-full max-w-7xl p-4">
           <IndexOverviewSection />
+          <FundListSection />
         </div>
       </t-content>
       <t-footer>

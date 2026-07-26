@@ -19,6 +19,7 @@ declare module 'vue' {
     TContent: typeof import('tdesign-vue-next')['Content']
     TDialog: typeof import('tdesign-vue-next')['Dialog']
     TDrawer: typeof import('tdesign-vue-next')['Drawer']
+    TDropdown: typeof import('tdesign-vue-next')['Dropdown']
     TEmpty: typeof import('tdesign-vue-next')['Empty']
     TFooter: typeof import('tdesign-vue-next')['Footer']
     THeader: typeof import('tdesign-vue-next')['Header']
@@ -30,7 +31,11 @@ declare module 'vue' {
     TListItem: typeof import('tdesign-vue-next')['ListItem']
     TListItemMeta: typeof import('tdesign-vue-next')['ListItemMeta']
     TNotification: typeof import('tdesign-vue-next')['Notification']
+    TPopconfirm: typeof import('tdesign-vue-next')['Popconfirm']
+    TPrimaryTable: typeof import('tdesign-vue-next')['PrimaryTable']
     TSpace: typeof import('tdesign-vue-next')['Space']
+    TTabs: typeof import('tdesign-vue-next')['Tabs']
+    TTag: typeof import('tdesign-vue-next')['Tag']
     TTextarea: typeof import('tdesign-vue-next')['Textarea']
   }
 }
