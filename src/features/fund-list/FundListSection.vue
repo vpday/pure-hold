@@ -15,12 +15,16 @@ import { formatEstimatedDisplayDate, formatNavDisplayDate } from './presenters/f
 import { sortFundSnapshots } from './presenters/sortFundSnapshots'
 import { toFundListViewModel } from './presenters/toFundListViewModel'
 
+const emit = defineEmits<{ searchFunds: [] }>()
 const store = useFundsStore()
-const { fundOrder, groups, isRefreshing, lastRefreshIssues, snapshotsByCode } = storeToRefs(store)
+const { fundOrder, groups, holdingsByCode, isRefreshing, lastRefreshIssues, snapshotsByCode } =
+  storeToRefs(store)
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
-const categories = computed(() => buildFundCategories(fundOrder.value, groups.value))
+const categories = computed(() =>
+  buildFundCategories(fundOrder.value, groups.value, holdingsByCode.value),
+)
 const categoryTabs = computed(() =>
   categories.value.map((category) => ({
     label: `${category.name}（${category.fundCodes.length}）`,
@@ -48,24 +52,6 @@ const latestEstimatedAt = computed(() =>
 const latestNavDate = computed(() =>
   formatNavDisplayDate(latestText(rows.value.map((row) => row.navDateText))),
 )
-const statusText = computed(() => {
-  if (isRefreshing.value) return '基金数据刷新中…'
-  if (lastRefreshIssues.value.some((issue) => issue.code === 'persistence-failed')) {
-    return '刷新成功，但未能保存；刷新页面后可能恢复旧数据'
-  }
-  if (lastRefreshIssues.value.length > 0) {
-    const hasFreshData = rows.value.some(
-      (row) => snapshotsByCode.value[row.code]?.fetchedAt !== null,
-    )
-    return hasFreshData ? '部分基金刷新失败' : '基金刷新失败，请稍后重试'
-  }
-  return ''
-})
-const statusTone = computed(() =>
-  lastRefreshIssues.value.some((issue) => issue.code === 'persistence-failed')
-    ? 'warning'
-    : 'error',
-)
 
 const refreshObserver = () => store.refreshAll()
 let unsubscribeRefresh: (() => void) | undefined
@@ -78,6 +64,20 @@ onBeforeUnmount(() => unsubscribeRefresh?.())
 watch(categories, (nextCategories) => {
   if (!nextCategories.some((category) => category.id === activeCategoryId.value)) {
     activeCategoryId.value = 'all'
+  }
+})
+
+watch(isRefreshing, (refreshing, wasRefreshing) => {
+  if (refreshing || !wasRefreshing) return
+  if (lastRefreshIssues.value.some((issue) => issue.code === 'persistence-failed')) {
+    MessagePlugin.warning('刷新成功，但未能保存；刷新页面后可能恢复旧数据')
+    return
+  }
+  if (lastRefreshIssues.value.length > 0) {
+    const hasFreshData = rows.value.some(
+      (row) => snapshotsByCode.value[row.code]?.fetchedAt !== null,
+    )
+    MessagePlugin.error(hasFreshData ? '部分基金刷新失败' : '基金刷新失败，请稍后重试')
   }
 })
 
@@ -122,6 +122,7 @@ function latestText(values: readonly string[]): string {
       v-if="rows.length === 0"
       :is-all-category="activeCategory.id === 'all'"
       @coming-soon="showComingSoon"
+      @search="emit('searchFunds')"
     />
     <template v-else>
       <div class="hidden sm:block">
@@ -140,14 +141,6 @@ function latestText(values: readonly string[]): string {
         <FundMobileList :rows="rows" @coming-soon="showComingSoon" @delete="deleteFund" />
       </div>
     </template>
-
-    <p
-      v-if="statusText"
-      class="mt-3 text-sm"
-      :class="statusTone === 'warning' ? 'text-(--td-warning-color)' : 'text-(--td-error-color)'"
-    >
-      {{ statusText }}
-    </p>
 
     <FundGroupSettingsEntry ref="groupSettings" />
   </section>

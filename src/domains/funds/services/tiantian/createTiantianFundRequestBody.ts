@@ -13,8 +13,8 @@ export function createTiantianFundRequestBody(fundCodes: readonly string[]): URL
     deviceid: crypto.randomUUID(),
     pageIndex: '1',
     pageSize: '50',
-    plat: 'Iphone',
+    plat: 'Web',
     product: 'EFund',
-    version: '6.8.1',
+    version: '6.5.5',
   })
 }

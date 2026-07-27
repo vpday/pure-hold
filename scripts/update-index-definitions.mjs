@@ -185,9 +185,9 @@ async function fetchPage(pageIndex) {
     secCode: '0',
     type: '0',
     valuationType: '0',
-    plat: 'Iphone',
+    plat: 'Web',
     product: 'EFund',
-    version: '6.8.0',
+    version: '6.5.5',
     deviceid: randomUUID(),
   })
   const response = await fetch(endpoint, {

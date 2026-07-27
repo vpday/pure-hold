@@ -186,7 +186,7 @@ defineExpose({ open })
       </div>
     </template>
 
-    <div v-if="mobileView === 'groups'" class="min-h-full p-4">
+    <div v-if="mobileView === 'groups'" class="min-h-full">
       <GroupList
         :groups="draft.groups.value"
         :selected-group-id="draft.selectedGroupId.value"
@@ -197,7 +197,7 @@ defineExpose({ open })
         @select="handleGroupSelect"
       />
     </div>
-    <div v-else-if="selectedGroup" class="h-full min-h-0 p-4">
+    <div v-else-if="selectedGroup" class="min-h-full">
       <GroupDetail
         :definitions="definitions"
         :group="selectedGroup"

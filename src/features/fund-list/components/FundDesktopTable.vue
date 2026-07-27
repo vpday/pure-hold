@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, h, ref } from 'vue'
 import type { DropdownProps, PrimaryTableProps } from 'tdesign-vue-next'
 
 import type {
@@ -11,7 +11,7 @@ import type {
 } from '../models/fundListViewModel'
 import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRules'
 
-defineProps<{
+const props = defineProps<{
   estimatedAt: string
   loading: boolean
   navDate: string
@@ -37,18 +37,28 @@ const returnColumns: readonly { cell: string; colKey: FundReturnField; title: st
   { cell: 'five-years-cell', colKey: 'fiveYears', title: '近5年' },
   { cell: 'since-inception-cell', colKey: 'sinceInception', title: '成立以来' },
 ]
-const columns: PrimaryTableProps<FundRowViewModel>['columns'] = [
-  { cell: 'name-cell', colKey: 'name', title: '基金名称', fixed: 'left', width: 180 },
-  {
-    cell: 'estimated-nav-cell',
-    colKey: 'estimatedNav',
-    sorter: true,
-    title: 'estimated-nav-title',
-  },
-  { cell: 'nav-cell', colKey: 'nav', sorter: true, title: 'nav-title' },
-  ...returnColumns.map((column) => ({ ...column, sorter: true })),
-  { cell: 'actions-cell', colKey: 'actions', title: '操作', fixed: 'right', width: 98 },
-]
+const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
+  const estimatedAt = props.estimatedAt
+  const navDate = props.navDate
+
+  return [
+    { cell: 'name-cell', colKey: 'name', title: '基金名称', fixed: 'left', width: 180 },
+    {
+      cell: 'estimated-nav-cell',
+      colKey: 'estimatedNav',
+      sorter: true,
+      title: () => renderQuoteTitle('净值估算', estimatedAt),
+    },
+    {
+      cell: 'nav-cell',
+      colKey: 'nav',
+      sorter: true,
+      title: () => renderQuoteTitle('单位净值', navDate),
+    },
+    ...returnColumns.map((column) => ({ ...column, sorter: true })),
+    { cell: 'actions-cell', colKey: 'actions', title: '操作', fixed: 'right', width: 98 },
+  ]
+})
 const moreActionOptions = [
   { content: '删除', theme: 'error', value: 'delete' },
   { content: '记录买入', value: 'buy' },
@@ -84,6 +94,10 @@ function trendClass(trend: FundTrend): string {
   if (trend === 'up') return 'text-(--td-error-color)'
   if (trend === 'down') return 'text-(--td-success-color)'
   return 'text-(--td-text-color-primary)'
+}
+
+function renderQuoteTitle(label: string, date: string) {
+  return h('div', [label, h('p', { class: 'font-mono text-xs font-normal tabular-nums' }, date)])
 }
 
 function handleMoreAction(code: string, value: unknown): void {
@@ -133,6 +147,7 @@ function formatRowDate(rowDate: string, headerDate: string): string {
 
 <template>
   <t-primary-table
+    :key="`${estimatedAt}:${navDate}`"
     :columns="columns"
     :data="rows"
     :loading="loading"
@@ -165,12 +180,6 @@ function formatRowDate(rowDate: string, headerDate: string): string {
         </div>
       </div>
     </template>
-    <template #estimated-nav-title>
-      <div>
-        净值估算
-        <p class="font-mono text-xs font-normal tabular-nums">{{ estimatedAt }}</p>
-      </div>
-    </template>
     <template #estimated-nav-cell="{ row }">
       <div class="font-mono tabular-nums">
         <p v-if="isEstimatedQuoteEmpty(row)">--</p>
@@ -186,12 +195,6 @@ function formatRowDate(rowDate: string, headerDate: string): string {
             {{ formatRowDate(row.estimatedAtText, estimatedAt) }}
           </p>
         </template>
-      </div>
-    </template>
-    <template #nav-title>
-      <div>
-        单位净值
-        <p class="font-mono text-xs font-normal tabular-nums">{{ navDate }}</p>
       </div>
     </template>
     <template #nav-cell="{ row }">

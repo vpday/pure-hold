@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { FundState } from '../../models/fundState.ts'
+import { createTestFundSnapshot } from '../../testing/createTestFundSnapshot.ts'
 import {
   FUND_STATE_SCHEMA_VERSION,
   corruptFundStateStorageKeyPrefix,
@@ -10,14 +11,24 @@ import {
 import { loadFundState } from './loadFundState.ts'
 import { saveFundState } from './saveFundState.ts'
 
-const emptyFundState: FundState = { fundOrder: [], groups: [], snapshotsByCode: {} }
+const emptyFundState: FundState = {
+  fundOrder: [],
+  groups: [],
+  holdingsByCode: {},
+  snapshotsByCode: {},
+}
 
 test('loadFundState stays empty without local storage data and preserves a valid empty state', () => {
   withStorage((storage) => {
     assert.deepEqual(loadFundState(), emptyFundState)
     assert.equal(storage.getItem(fundStateStorageKey), null)
 
-    const empty: FundState = { fundOrder: [], groups: [], snapshotsByCode: {} }
+    const empty: FundState = {
+      fundOrder: [],
+      groups: [],
+      holdingsByCode: {},
+      snapshotsByCode: {},
+    }
     saveFundState(empty)
     assert.deepEqual(loadFundState(), empty)
   })
@@ -45,6 +56,79 @@ test('loadFundState filters group references that are not in fundOrder', () => {
     }
     storage.setItem(fundStateStorageKey, JSON.stringify(persisted))
     assert.deepEqual(loadFundState().groups, [{ fundCodes: [], id: 'custom', name: '自定义' }])
+  })
+})
+
+test('v2 holdings round trip and orphaned holdings are filtered on load', () => {
+  withStorage((storage) => {
+    const state: FundState = {
+      fundOrder: ['000001'],
+      groups: [],
+      holdingsByCode: {
+        '000001': {
+          code: '000001',
+          costPrice: 1.2345,
+          purchaseDate: '2020-02-29',
+          units: 100.5,
+        },
+      },
+      snapshotsByCode: { '000001': createTestFundSnapshot('000001') },
+    }
+    saveFundState(state)
+    assert.deepEqual(loadFundState(), state)
+
+    storage.setItem(
+      fundStateStorageKey,
+      JSON.stringify({
+        ...state,
+        holdingsByCode: {
+          ...state.holdingsByCode,
+          '999999': {
+            code: '999999',
+            costPrice: 1,
+            purchaseDate: '2020-01-01',
+            units: 1,
+          },
+        },
+        version: FUND_STATE_SCHEMA_VERSION,
+      }),
+    )
+    assert.deepEqual(loadFundState().holdingsByCode, state.holdingsByCode)
+  })
+})
+
+test('holdings reject invalid numbers, precision, codes and dates', () => {
+  const base: FundState = {
+    fundOrder: ['000001'],
+    groups: [],
+    holdingsByCode: {},
+    snapshotsByCode: { '000001': createTestFundSnapshot('000001') },
+  }
+  for (const holding of [
+    { code: '000001', costPrice: 0, purchaseDate: '2020-01-01', units: 1 },
+    { code: '000001', costPrice: 1, purchaseDate: '2020-01-01', units: 1.23456 },
+    { code: '000002', costPrice: 1, purchaseDate: '2020-01-01', units: 1 },
+    { code: '000001', costPrice: 1, purchaseDate: '2020-02-30', units: 1 },
+    { code: '000001', costPrice: 1, purchaseDate: '2999-01-01', units: 1 },
+  ]) {
+    withStorage(() => {
+      assert.throws(
+        () =>
+          saveFundState({
+            ...base,
+            holdingsByCode: { '000001': holding },
+          }),
+        /holding/,
+      )
+    })
+  }
+})
+
+test('v2 loading ignores but does not remove the v1 key', () => {
+  withStorage((storage) => {
+    storage.setItem('pure-hold:fund-state:v1', JSON.stringify({ legacy: true }))
+    assert.deepEqual(loadFundState(), emptyFundState)
+    assert.equal(storage.getItem('pure-hold:fund-state:v1'), JSON.stringify({ legacy: true }))
   })
 })
 

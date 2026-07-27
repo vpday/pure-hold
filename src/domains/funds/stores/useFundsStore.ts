@@ -1,7 +1,10 @@
 import { defineStore } from 'pinia'
 import { onScopeDispose, ref, shallowRef } from 'vue'
 
+import type { FundAddition } from '../models/fundAddition.ts'
+import { createEmptyFundSnapshot } from '../models/createEmptyFundSnapshot.ts'
 import type { FundGroupDefinition } from '../models/fundGroupDefinition.ts'
+import type { FundHolding } from '../models/fundHolding.ts'
 import type { FundSnapshot } from '../models/fundSnapshot.ts'
 import type { FundState } from '../models/fundState.ts'
 import { loadFundState } from '../services/persistence/loadFundState.ts'
@@ -14,6 +17,9 @@ export const useFundsStore = defineStore('funds', () => {
   const initialState = loadFundState()
   const fundOrder = shallowRef<readonly string[]>(initialState.fundOrder)
   const groups = shallowRef<readonly FundGroupDefinition[]>(initialState.groups)
+  const holdingsByCode = shallowRef<Readonly<Record<string, FundHolding>>>(
+    initialState.holdingsByCode,
+  )
   const snapshotsByCode = shallowRef<Readonly<Record<string, FundSnapshot>>>(
     initialState.snapshotsByCode,
   )
@@ -37,7 +43,13 @@ export const useFundsStore = defineStore('funds', () => {
       return activeRefresh
     }
 
-    const requestedCodes = [...fundOrder.value]
+    return refreshCodes(fundOrder.value)
+  }
+
+  function refreshCodes(codes: readonly string[]): Promise<void> {
+    if (activeRefresh) return activeRefresh
+    const currentCodes = new Set(fundOrder.value)
+    const requestedCodes = [...new Set(codes)].filter((code) => currentCodes.has(code))
     if (requestedCodes.length === 0) {
       lastRefreshIssues.value = []
       return Promise.resolve()
@@ -92,18 +104,62 @@ export const useFundsStore = defineStore('funds', () => {
     return request
   }
 
+  function addFunds(additions: readonly FundAddition[]): { error?: string } {
+    if (additions.length === 0) {
+      return { error: '请至少选择一只基金' }
+    }
+    const existingCodes = new Set(fundOrder.value)
+    const batchCodes = new Set<string>()
+    for (const addition of additions) {
+      if (
+        !/^\d{6}$/.test(addition.code) ||
+        addition.name.trim().length === 0 ||
+        existingCodes.has(addition.code) ||
+        batchCodes.has(addition.code) ||
+        (addition.holding !== undefined && addition.holding.code !== addition.code)
+      ) {
+        return { error: '所选基金包含重复或无效数据' }
+      }
+      batchCodes.add(addition.code)
+    }
+
+    const nextSnapshots = { ...snapshotsByCode.value }
+    const nextHoldings = { ...holdingsByCode.value }
+    for (const addition of additions) {
+      nextSnapshots[addition.code] = createEmptyFundSnapshot(addition.code, addition.name.trim())
+      if (addition.holding) nextHoldings[addition.code] = addition.holding
+    }
+    const candidate: FundState = {
+      fundOrder: [...fundOrder.value, ...batchCodes],
+      groups: groups.value,
+      holdingsByCode: nextHoldings,
+      snapshotsByCode: nextSnapshots,
+    }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '添加失败，未能保存基金数据' }
+    }
+    applyState(candidate)
+    void refreshCodes([...batchCodes])
+    return {}
+  }
+
   function deleteFund(code: string): { error?: string } {
     if (!fundOrder.value.includes(code)) {
       return {}
     }
     const nextSnapshots = { ...snapshotsByCode.value }
+    const nextHoldings = { ...holdingsByCode.value }
     delete nextSnapshots[code]
+    delete nextHoldings[code]
     const candidate: FundState = {
       fundOrder: fundOrder.value.filter((fundCode) => fundCode !== code),
       groups: groups.value.map((group) => ({
         ...group,
         fundCodes: group.fundCodes.filter((fundCode) => fundCode !== code),
       })),
+      holdingsByCode: nextHoldings,
       snapshotsByCode: nextSnapshots,
     }
     try {
@@ -130,6 +186,7 @@ export const useFundsStore = defineStore('funds', () => {
     return {
       fundOrder: fundOrder.value,
       groups: groups.value,
+      holdingsByCode: holdingsByCode.value,
       snapshotsByCode: snapshotsByCode.value,
     }
   }
@@ -142,13 +199,16 @@ export const useFundsStore = defineStore('funds', () => {
     isRefreshing.value = false
     fundOrder.value = state.fundOrder
     groups.value = state.groups
+    holdingsByCode.value = state.holdingsByCode
     snapshotsByCode.value = state.snapshotsByCode
   }
 
   return {
+    addFunds,
     deleteFund,
     fundOrder,
     groups,
+    holdingsByCode,
     isRefreshing,
     lastRefreshIssues,
     lastSuccessfulRefreshAt,

@@ -33,7 +33,10 @@ export function loadFundState(): FundState {
       throw new TypeError('Persisted fund state has an incompatible version')
     }
     const state = validateAndCloneFundState(parsed, true)
-    if (JSON.stringify(state.groups) !== JSON.stringify(parsed.groups)) {
+    if (
+      JSON.stringify(state.groups) !== JSON.stringify(parsed.groups) ||
+      JSON.stringify(state.holdingsByCode) !== JSON.stringify(parsed.holdingsByCode)
+    ) {
       saveFundState(state)
     }
     return state
@@ -46,7 +49,7 @@ export function loadFundState(): FundState {
 }
 
 function createEmptyFundState(): FundState {
-  return { fundOrder: [], groups: [], snapshotsByCode: {} }
+  return { fundOrder: [], groups: [], holdingsByCode: {}, snapshotsByCode: {} }
 }
 
 function persistRecovery(state: FundState): void {

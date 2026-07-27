@@ -46,6 +46,7 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 ## UI and Responsive Behavior
 
 - TDesign Vue Next 组件与图标由 Vite resolver 自动导入。不要为模板组件添加仅用于编译的手动导入。
+- 静态模板标签继续使用自动导入。传给 `<component :is>`、保存在变量或配置对象中的动态 TDesign 组件必须使用命名运行时导入；不要依赖 `'t-dialog'` 等字符串被全局解析。动态组件的联合 props 应保留字面量类型，必要时使用 `as const` 或拆分有类型的容器组件。
 - `App.vue` 中的 TDesign 中文 `t-config-provider` 必须保留。
 - Tailwind CSS 是模板布局和视觉样式的首选方式。
 - 纯 CSS 响应式布局使用 Tailwind 类；JavaScript 行为分流使用 `src/shared/composables/useBreakpoints.ts`，不要重复硬编码 Tailwind 断点。
@@ -75,3 +76,7 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 5. 涉及入口、构建、PWA 或自动导入时运行 `pnpm build-only`。
 
 只报告实际运行过的验证。不要把现有无关问题描述为本次改动已解决。
+
+ExecPlan 或高影响改动开始前，运行最终验收会使用的同一组相关命令并记录基线，不只运行测试。若命令已有失败，修改前记录具体命令、文件和错误原因；结束时区分“本次目标检查通过”和“全仓验收通过”，任何规定的全仓命令仍失败时不得声明完整验收通过。
+
+格式检查命中用户未跟踪文件、生成文件或其他无关改动时，不得为了获得绿灯而越权格式化。保留这些文件，运行本次修改文件的目标格式检查作为补充证据，并明确报告全仓格式检查仍未满足，由用户决定修复配置、忽略范围或处理对应文件。

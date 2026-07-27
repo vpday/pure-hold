@@ -1,4 +1,5 @@
 import type { FundGroupDefinition } from '../../models/fundGroupDefinition.ts'
+import type { FundHolding } from '../../models/fundHolding.ts'
 import type { FundReturns, FundSnapshot } from '../../models/fundSnapshot.ts'
 import type { FundState } from '../../models/fundState.ts'
 
@@ -19,7 +20,12 @@ export function validateAndCloneFundState(
   value: unknown,
   filterUnknownGroupCodes = false,
 ): FundState {
-  if (!isRecord(value) || !Array.isArray(value.fundOrder) || !isRecord(value.snapshotsByCode)) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.fundOrder) ||
+    !isRecord(value.holdingsByCode) ||
+    !isRecord(value.snapshotsByCode)
+  ) {
     throw new TypeError('Fund state has an invalid shape')
   }
 
@@ -49,7 +55,38 @@ export function validateAndCloneFundState(
   }
 
   const groups = validateGroups(value.groups, knownCodes, filterUnknownGroupCodes)
-  return { fundOrder, groups, snapshotsByCode }
+  const holdingsByCode = validateHoldings(value.holdingsByCode, knownCodes, filterUnknownGroupCodes)
+  return { fundOrder, groups, holdingsByCode, snapshotsByCode }
+}
+
+function validateHoldings(
+  values: Record<string, unknown>,
+  knownCodes: ReadonlySet<string>,
+  filterUnknownCodes: boolean,
+): Record<string, FundHolding> {
+  const holdings: Record<string, FundHolding> = {}
+  for (const [code, value] of Object.entries(values)) {
+    if (!knownCodes.has(code)) {
+      if (filterUnknownCodes) continue
+      throw new TypeError('Fund holding references an unknown fund')
+    }
+    if (
+      !isRecord(value) ||
+      value.code !== code ||
+      !isPositiveNumberWithFourDecimals(value.units) ||
+      !isPositiveNumberWithFourDecimals(value.costPrice) ||
+      !isValidPurchaseDate(value.purchaseDate)
+    ) {
+      throw new TypeError(`Fund holding ${code} has an invalid shape`)
+    }
+    holdings[code] = {
+      code,
+      costPrice: value.costPrice,
+      purchaseDate: value.purchaseDate,
+      units: value.units,
+    }
+  }
+  return holdings
 }
 
 function validateGroups(
@@ -141,6 +178,28 @@ function isNullableFiniteNumber(value: unknown): value is number | null {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
+}
+
+function isPositiveNumberWithFourDecimals(value: unknown): value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return false
+  const scaled = value * 10_000
+  return Math.abs(scaled - Math.round(scaled)) < 1e-8
+}
+
+function isValidPurchaseDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return false
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return false
+  }
+  const today = new Date()
+  const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  return date <= localToday
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
