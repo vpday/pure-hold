@@ -16,16 +16,12 @@ const trendClass = computed(() => ({
 </script>
 
 <template>
-  <div
-    class="rounded-md border border-gray-200 bg-linear-to-b to-(--td-bg-color-container) p-2 flex flex-col items-center w-26"
-    :class="trendClass"
-    :title="item.name"
-  >
+  <div class="index-quote-card" :class="trendClass" :title="item.name">
     <div class="max-w-full truncate text-sm">{{ item.name }}</div>
     <div class="text-base font-mono font-medium tabular-nums">
       {{ item.priceText }}
     </div>
-    <div class="flex flex-row items-baseline space-x-2 font-mono text-xs">
+    <div class="index-quote-change">
       <span class="tabular-nums">
         {{ item.changeAmountText }}
       </span>
@@ -35,3 +31,15 @@ const trendClass = computed(() => ({
     </div>
   </div>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.index-quote-card {
+  @apply flex w-26 flex-col items-center rounded-md border border-gray-200 bg-linear-to-b to-(--td-bg-color-container) p-2;
+}
+
+.index-quote-change {
+  @apply flex flex-row items-baseline space-x-2 font-mono text-xs;
+}
+</style>

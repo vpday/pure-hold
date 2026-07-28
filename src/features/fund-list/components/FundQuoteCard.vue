@@ -84,7 +84,7 @@ function trendClass(trend: FundTrend): string {
       </div>
     </div>
 
-    <div class="mt-4 grid grid-cols-4 gap-x-3 gap-y-3 text-left">
+    <div class="fund-returns-grid">
       <div
         v-for="item in [
           ['oneWeek', '近1周'],
@@ -120,3 +120,11 @@ function trendClass(trend: FundTrend): string {
     </div>
   </t-card>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.fund-returns-grid {
+  @apply mt-4 grid grid-cols-4 gap-x-3 gap-y-3 text-left;
+}
+</style>

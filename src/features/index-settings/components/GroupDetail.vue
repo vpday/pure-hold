@@ -53,7 +53,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
 </script>
 
 <template>
-  <section aria-label="指数配置" class="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+  <section aria-label="指数配置" class="index-group-detail">
     <IndexSearchPanel
       :definitions="definitions"
       :selected-quote-codes="group.quoteCodes"
@@ -74,7 +74,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
       :delay-on-touch-only="true"
       data-testid="index-settings-selected-list"
       handle=".drag-handle"
-      class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
+      class="selected-index-list"
       @end="handleDragEnd"
     >
       <t-card
@@ -114,3 +114,15 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
     />
   </section>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.index-group-detail {
+  @apply flex h-full min-h-0 flex-col gap-4 overflow-hidden;
+}
+
+.selected-index-list {
+  @apply flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1;
+}
+</style>

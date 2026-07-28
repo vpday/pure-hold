@@ -226,10 +226,7 @@ function handleDragEnd(event: {
         </template>
       </t-list-item>
     </VueDraggable>
-    <div
-      v-if="isAdding"
-      class="flex items-center gap-2 rounded-md border border-(--td-component-border) px-3 py-2"
-    >
+    <div v-if="isAdding" class="fund-group-create-row">
       <t-input
         v-model:value="nameInput"
         autofocus
@@ -265,6 +262,12 @@ function handleDragEnd(event: {
 </template>
 
 <style scoped>
+@reference '@/style.css';
+
+.fund-group-create-row {
+  @apply flex items-center gap-2 rounded-md border border-(--td-component-border) px-3 py-2;
+}
+
 :deep(.t-list-item) {
   padding: var(--td-comp-paddingTB-m) 0;
 }

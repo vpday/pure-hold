@@ -98,9 +98,7 @@ defineExpose({ open })
     @close="close"
     @confirm="confirm"
   >
-    <div
-      class="grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)] divide-x divide-(--td-component-border) overflow-hidden"
-    >
+    <div class="settings-dialog-content">
       <div class="min-h-0 overflow-hidden pt-4 pr-4">
         <FundGroupList
           :all-count="draft.fundOrder.value.length"
@@ -192,6 +190,12 @@ defineExpose({ open })
 </template>
 
 <style scoped>
+@reference '@/style.css';
+
+.settings-dialog-content {
+  @apply grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)] divide-x divide-(--td-component-border) overflow-hidden;
+}
+
 :global(.fund-group-settings-dialog .t-dialog__body) {
   display: flex;
   min-height: 0;

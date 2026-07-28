@@ -57,7 +57,7 @@ async function refreshAllData(): Promise<void> {
         </div>
       </t-content>
       <t-footer>
-        <div class="mx-auto flex w-full max-w-7xl items-center justify-center">
+        <div class="app-footer-content">
           <div>仅供个人学习及参考使用，使用前请核实，风险自负。</div>
         </div>
       </t-footer>
@@ -65,3 +65,11 @@ async function refreshAllData(): Promise<void> {
     <FundSearchEntry ref="fundSearchEntry" />
   </t-config-provider>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.app-footer-content {
+  @apply mx-auto flex w-full max-w-7xl items-center justify-center;
+}
+</style>

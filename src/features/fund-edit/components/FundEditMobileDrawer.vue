@@ -31,11 +31,19 @@ const emit = defineEmits<{ close: []; confirm: [] }>()
         </t-button>
       </div>
     </template>
-    <div class="flex h-full min-h-0 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)] pr-1">
+    <div class="fund-edit-mobile-content">
       <slot />
     </div>
   </t-drawer>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.fund-edit-mobile-content {
+  @apply flex h-full min-h-0 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)] pr-1;
+}
+</style>
 
 <style scoped>
 :deep(.t-drawer__body) {

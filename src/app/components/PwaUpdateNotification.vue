@@ -26,7 +26,7 @@ async function applyUpdate() {
 </script>
 
 <template>
-  <div v-if="visible" class="fixed top-4 right-4 z-6000 w-[calc(100%-2rem)] max-w-sm">
+  <div v-if="visible" class="pwa-update-notification">
     <t-notification
       title="发现新版本"
       content="新版本已准备好，可以立即更新。"
@@ -47,3 +47,11 @@ async function applyUpdate() {
     </t-notification>
   </div>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.pwa-update-notification {
+  @apply fixed top-4 right-4 z-6000 w-[calc(100%-2rem)] max-w-sm;
+}
+</style>

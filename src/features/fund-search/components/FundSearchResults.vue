@@ -27,7 +27,7 @@ const asyncLoading = computed<ListProps['asyncLoading']>(() => {
 </script>
 
 <template>
-  <div class="min-h-0 flex-1 overflow-y-auto border border-(--td-component-border) pr-1">
+  <div class="fund-search-results">
     <t-alert v-if="error" theme="error" class="mb-3" :message="error">
       <template #operation>
         <t-button size="small" variant="text" @click="emit('retry')">重试</t-button>
@@ -72,3 +72,11 @@ const asyncLoading = computed<ListProps['asyncLoading']>(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.fund-search-results {
+  @apply min-h-0 flex-1 overflow-y-auto border border-(--td-component-border) pr-1;
+}
+</style>

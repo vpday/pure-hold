@@ -116,10 +116,7 @@ defineExpose({ open })
     @close="close"
     @confirm="handleConfirm"
   >
-    <div
-      data-testid="index-settings-dialog-body"
-      class="grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)] divide-x divide-(--td-component-border) overflow-hidden"
-    >
+    <div data-testid="index-settings-dialog-body" class="settings-dialog-content">
       <div class="min-h-0 overflow-hidden pt-4 pr-4">
         <GroupList
           :groups="draft.groups.value"
@@ -210,6 +207,12 @@ defineExpose({ open })
 </template>
 
 <style scoped>
+@reference '@/style.css';
+
+.settings-dialog-content {
+  @apply grid min-h-0 flex-1 grid-cols-[18rem_minmax(0,1fr)] divide-x divide-(--td-component-border) overflow-hidden;
+}
+
 :global(.index-settings-dialog .t-dialog__body) {
   display: flex;
   min-height: 0;

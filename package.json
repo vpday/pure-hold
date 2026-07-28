@@ -18,7 +18,7 @@
     "update:index-definitions": "node scripts/update-index-definitions.mjs",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "lint": "oxlint",
+    "lint": "node scripts/check-vue-class-length.mjs && oxlint",
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {

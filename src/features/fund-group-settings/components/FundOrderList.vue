@@ -32,7 +32,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
 </script>
 
 <template>
-  <section aria-label="基金排序" class="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
+  <section aria-label="基金排序" class="fund-order-panel">
     <div class="flex items-center justify-between gap-3">
       <span class="text-sm font-medium">{{ categoryName }}（{{ fundCodes.length }}）</span>
       <span class="text-xs text-(--td-text-color-placeholder)">拖拽以排序</span>
@@ -46,7 +46,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
       :delay-on-touch-only="true"
       data-testid="fund-settings-order-list"
       handle=".fund-order-drag-handle"
-      class="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1"
+      class="fund-order-list"
       @end="handleDragEnd"
     >
       <t-card
@@ -72,3 +72,15 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
     <t-empty v-else title="暂无基金" size="medium" />
   </section>
 </template>
+
+<style scoped>
+@reference '@/style.css';
+
+.fund-order-panel {
+  @apply flex h-full min-h-0 flex-col gap-3 overflow-hidden;
+}
+
+.fund-order-list {
+  @apply flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1;
+}
+</style>

@@ -36,9 +36,7 @@ const emit = defineEmits<{
       <div class="min-h-0 flex-1 overflow-hidden">
         <slot />
       </div>
-      <div
-        class="shrink-0 border-t border-(--td-component-stroke) pt-3 pb-[env(safe-area-inset-bottom)]"
-      >
+      <div class="fund-search-mobile-footer">
         <slot name="footer" />
       </div>
     </div>
@@ -46,6 +44,12 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+@reference '@/style.css';
+
+.fund-search-mobile-footer {
+  @apply shrink-0 border-t border-(--td-component-stroke) pt-3 pb-[env(safe-area-inset-bottom)];
+}
+
 :deep(.t-drawer__body) {
   min-height: 0;
   flex: 1;
