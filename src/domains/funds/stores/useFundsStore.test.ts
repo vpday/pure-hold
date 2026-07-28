@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
+import type { FundState } from '../models/fundState.ts'
 import { fundStateStorageKey } from '../services/persistence/fundStateSchemaVersion.ts'
 import { saveFundState } from '../services/persistence/saveFundState.ts'
 import { createTestFundSnapshot } from '../testing/createTestFundSnapshot.ts'
@@ -113,6 +114,7 @@ test('fund addition persists atomically and refreshes only the new funds', async
             holding: {
               code: '000001',
               costPrice: 2,
+              dividendMode: 'cash',
               purchaseDate: '2020-01-01',
               units: 10,
             },
@@ -145,7 +147,79 @@ test('fund addition persists atomically and refreshes only the new funds', async
   })
 })
 
-function createTestFundState() {
+test('single holding update covers replacement, first creation and failures', async () => {
+  await withEnvironment(async (storage) => {
+    saveFundState(createTestFundState())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const replacement = {
+      code: '161726',
+      costPrice: 2,
+      dividendMode: 'cash' as const,
+      purchaseDate: '2021-01-01',
+      units: 200,
+    }
+    assert.deepEqual(store.updateFundHolding(replacement), {})
+    assert.deepEqual(store.holdingsByCode['161726'], replacement)
+
+    const created = { ...replacement, code: '161725', dividendMode: 'reinvest' as const }
+    assert.deepEqual(store.updateFundHolding(created), {})
+    assert.deepEqual(store.holdingsByCode['161725'], created)
+    assert.match(store.updateFundHolding({ ...created, code: '999999' }).error ?? '', /基金不存在/)
+
+    const before = store.holdingsByCode
+    storage.failWrites = true
+    assert.match(
+      store.updateFundHolding({ ...replacement, units: 300 }).error ?? '',
+      /持仓保存失败/,
+    )
+    assert.equal(store.holdingsByCode, before)
+    store.$dispose()
+  })
+})
+
+test('single fund group membership preserves ordering and rejects invalid updates', async () => {
+  await withEnvironment(async (storage) => {
+    saveFundState({
+      ...createTestFundState(),
+      groups: [
+        { fundCodes: ['161725'], id: 'one', name: '一组' },
+        { fundCodes: ['161726', '161725'], id: 'two', name: '二组' },
+        { fundCodes: ['161725'], id: 'three', name: '三组' },
+      ],
+    })
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+
+    assert.deepEqual(store.updateFundGroupMembership('161726', new Set(['one', 'three'])), {})
+    assert.deepEqual(store.groups, [
+      { fundCodes: ['161725', '161726'], id: 'one', name: '一组' },
+      { fundCodes: ['161725'], id: 'two', name: '二组' },
+      { fundCodes: ['161725', '161726'], id: 'three', name: '三组' },
+    ])
+    assert.deepEqual(store.updateFundGroupMembership('161726', new Set()), {})
+    assert.equal(
+      store.groups.every(({ fundCodes }) => !fundCodes.includes('161726')),
+      true,
+    )
+    assert.match(store.updateFundGroupMembership('999999', new Set()).error ?? '', /基金不存在/)
+    assert.match(
+      store.updateFundGroupMembership('161726', new Set(['missing'])).error ?? '',
+      /不存在/,
+    )
+
+    const before = store.groups
+    storage.failWrites = true
+    assert.match(
+      store.updateFundGroupMembership('161726', new Set(['one'])).error ?? '',
+      /分组保存失败/,
+    )
+    assert.equal(store.groups, before)
+    store.$dispose()
+  })
+})
+
+function createTestFundState(): FundState {
   return {
     fundOrder: ['161726', '161725'],
     groups: [],
@@ -153,6 +227,7 @@ function createTestFundState() {
       '161726': {
         code: '161726',
         costPrice: 1.2345,
+        dividendMode: 'reinvest',
         purchaseDate: '2020-01-01',
         units: 100,
       },

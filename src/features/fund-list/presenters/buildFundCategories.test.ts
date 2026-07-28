@@ -11,6 +11,7 @@ test('derives holdings from records in fund order', () => {
       '161725': {
         code: '161725',
         costPrice: 1,
+        dividendMode: 'cash',
         purchaseDate: '2020-01-01',
         units: 100,
       },

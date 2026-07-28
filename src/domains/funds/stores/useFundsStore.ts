@@ -182,6 +182,55 @@ export const useFundsStore = defineStore('funds', () => {
     return {}
   }
 
+  function updateFundHolding(holding: FundHolding): { error?: string } {
+    if (!fundOrder.value.includes(holding.code)) {
+      return { error: '基金不存在，无法保存持仓信息' }
+    }
+    const candidate: FundState = {
+      ...currentState(),
+      holdingsByCode: { ...holdingsByCode.value, [holding.code]: holding },
+    }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '持仓保存失败，请稍后重试' }
+    }
+    holdingsByCode.value = candidate.holdingsByCode
+    return {}
+  }
+
+  function updateFundGroupMembership(
+    code: string,
+    selectedGroupIds: ReadonlySet<string>,
+  ): { error?: string } {
+    if (!fundOrder.value.includes(code)) {
+      return { error: '基金不存在，无法保存基金分组' }
+    }
+    const knownGroupIds = new Set(groups.value.map(({ id }) => id))
+    if ([...selectedGroupIds].some((id) => !knownGroupIds.has(id))) {
+      return { error: '所选基金分组不存在' }
+    }
+    const candidate: FundState = {
+      ...currentState(),
+      groups: groups.value.map((group) => {
+        const containsFund = group.fundCodes.includes(code)
+        if (selectedGroupIds.has(group.id)) {
+          return containsFund ? group : { ...group, fundCodes: [...group.fundCodes, code] }
+        }
+        return containsFund
+          ? { ...group, fundCodes: group.fundCodes.filter((fundCode) => fundCode !== code) }
+          : group
+      }),
+    }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '基金分组保存失败，请稍后重试' }
+    }
+    groups.value = candidate.groups
+    return {}
+  }
+
   function currentState(): FundState {
     return {
       fundOrder: fundOrder.value,
@@ -215,6 +264,8 @@ export const useFundsStore = defineStore('funds', () => {
     refreshAll,
     replaceGroups,
     snapshotsByCode,
+    updateFundGroupMembership,
+    updateFundHolding,
   }
 })
 

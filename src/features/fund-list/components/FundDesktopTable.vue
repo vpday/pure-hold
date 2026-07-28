@@ -21,6 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   comingSoon: []
   delete: [code: string]
+  edit: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
 const pendingDeleteCode = ref<string>()
@@ -60,6 +61,7 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
   ]
 })
 const moreActionOptions = [
+  { content: '编辑', value: 'edit' },
   { content: '删除', theme: 'error', value: 'delete' },
   { content: '记录买入', value: 'buy' },
   { content: '记录卖出', value: 'sell' },
@@ -101,6 +103,10 @@ function renderQuoteTitle(label: string, date: string) {
 }
 
 function handleMoreAction(code: string, value: unknown): void {
+  if (value === 'edit') {
+    emit('edit', code)
+    return
+  }
   if (value === 'delete') {
     pendingDeleteCode.value = code
     return
@@ -217,10 +223,7 @@ function formatRowDate(rowDate: string, headerDate: string): string {
       </span>
     </template>
     <template #actions-cell="{ row }">
-      <div class="flex flex-row space-x-1">
-        <t-button size="small" variant="text" shape="square" @click="emit('comingSoon')"
-          >编辑</t-button
-        >
+      <div>
         <t-popconfirm
           cancel-btn="取消"
           :confirm-btn="{ content: '删除', theme: 'danger' }"

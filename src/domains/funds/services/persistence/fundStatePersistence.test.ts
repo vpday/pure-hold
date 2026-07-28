@@ -59,20 +59,31 @@ test('loadFundState filters group references that are not in fundOrder', () => {
   })
 })
 
-test('v2 holdings round trip and orphaned holdings are filtered on load', () => {
+test('v3 holdings round trip dividend modes and orphaned holdings are filtered on load', () => {
   withStorage((storage) => {
     const state: FundState = {
-      fundOrder: ['000001'],
+      fundOrder: ['000001', '000002'],
       groups: [],
       holdingsByCode: {
         '000001': {
           code: '000001',
           costPrice: 1.2345,
+          dividendMode: 'reinvest',
           purchaseDate: '2020-02-29',
           units: 100.5,
         },
+        '000002': {
+          code: '000002',
+          costPrice: 2,
+          dividendMode: 'cash',
+          purchaseDate: '2021-01-01',
+          units: 20,
+        },
       },
-      snapshotsByCode: { '000001': createTestFundSnapshot('000001') },
+      snapshotsByCode: {
+        '000001': createTestFundSnapshot('000001'),
+        '000002': createTestFundSnapshot('000002'),
+      },
     }
     saveFundState(state)
     assert.deepEqual(loadFundState(), state)
@@ -86,6 +97,7 @@ test('v2 holdings round trip and orphaned holdings are filtered on load', () => 
           '999999': {
             code: '999999',
             costPrice: 1,
+            dividendMode: 'cash',
             purchaseDate: '2020-01-01',
             units: 1,
           },
@@ -97,7 +109,7 @@ test('v2 holdings round trip and orphaned holdings are filtered on load', () => 
   })
 })
 
-test('holdings reject invalid numbers, precision, codes and dates', () => {
+test('holdings reject invalid numbers, precision, codes, dates and dividend modes', () => {
   const base: FundState = {
     fundOrder: ['000001'],
     groups: [],
@@ -105,11 +117,49 @@ test('holdings reject invalid numbers, precision, codes and dates', () => {
     snapshotsByCode: { '000001': createTestFundSnapshot('000001') },
   }
   for (const holding of [
-    { code: '000001', costPrice: 0, purchaseDate: '2020-01-01', units: 1 },
-    { code: '000001', costPrice: 1, purchaseDate: '2020-01-01', units: 1.23456 },
-    { code: '000002', costPrice: 1, purchaseDate: '2020-01-01', units: 1 },
-    { code: '000001', costPrice: 1, purchaseDate: '2020-02-30', units: 1 },
-    { code: '000001', costPrice: 1, purchaseDate: '2999-01-01', units: 1 },
+    {
+      code: '000001',
+      costPrice: 0,
+      dividendMode: 'cash',
+      purchaseDate: '2020-01-01',
+      units: 1,
+    },
+    {
+      code: '000001',
+      costPrice: 1,
+      dividendMode: 'cash',
+      purchaseDate: '2020-01-01',
+      units: 1.23456,
+    },
+    {
+      code: '000002',
+      costPrice: 1,
+      dividendMode: 'cash',
+      purchaseDate: '2020-01-01',
+      units: 1,
+    },
+    {
+      code: '000001',
+      costPrice: 1,
+      dividendMode: 'cash',
+      purchaseDate: '2020-02-30',
+      units: 1,
+    },
+    {
+      code: '000001',
+      costPrice: 1,
+      dividendMode: 'cash',
+      purchaseDate: '2999-01-01',
+      units: 1,
+    },
+    {
+      code: '000001',
+      costPrice: 1,
+      dividendMode: 'unknown',
+      purchaseDate: '2020-01-01',
+      units: 1,
+    },
+    { code: '000001', costPrice: 1, purchaseDate: '2020-01-01', units: 1 },
   ]) {
     withStorage(() => {
       assert.throws(
@@ -117,18 +167,20 @@ test('holdings reject invalid numbers, precision, codes and dates', () => {
           saveFundState({
             ...base,
             holdingsByCode: { '000001': holding },
-          }),
+          } as unknown as FundState),
         /holding/,
       )
     })
   }
 })
 
-test('v2 loading ignores but does not remove the v1 key', () => {
+test('v3 loading ignores but does not remove old keys', () => {
   withStorage((storage) => {
     storage.setItem('pure-hold:fund-state:v1', JSON.stringify({ legacy: true }))
+    storage.setItem('pure-hold:fund-state:v2', JSON.stringify({ legacy: true }))
     assert.deepEqual(loadFundState(), emptyFundState)
     assert.equal(storage.getItem('pure-hold:fund-state:v1'), JSON.stringify({ legacy: true }))
+    assert.equal(storage.getItem('pure-hold:fund-state:v2'), JSON.stringify({ legacy: true }))
   })
 })
 

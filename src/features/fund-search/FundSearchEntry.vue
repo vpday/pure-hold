@@ -105,6 +105,7 @@ defineExpose({ open })
     />
     <template #footer>
       <FundSearchActions
+        :count="search.selected.value.length"
         :disabled="search.selected.value.length === 0"
         :step="step"
         @add="addWithoutHoldings"
@@ -138,6 +139,7 @@ defineExpose({ open })
     />
     <template #footer>
       <FundSearchActions
+        :count="search.selected.value.length"
         :disabled="search.selected.value.length === 0"
         :step="step"
         @add="addWithoutHoldings"

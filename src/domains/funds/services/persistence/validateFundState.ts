@@ -75,6 +75,7 @@ function validateHoldings(
       value.code !== code ||
       !isPositiveNumberWithFourDecimals(value.units) ||
       !isPositiveNumberWithFourDecimals(value.costPrice) ||
+      (value.dividendMode !== 'cash' && value.dividendMode !== 'reinvest') ||
       !isValidPurchaseDate(value.purchaseDate)
     ) {
       throw new TypeError(`Fund holding ${code} has an invalid shape`)
@@ -82,6 +83,7 @@ function validateHoldings(
     holdings[code] = {
       code,
       costPrice: value.costPrice,
+      dividendMode: value.dividendMode,
       purchaseDate: value.purchaseDate,
       units: value.units,
     }

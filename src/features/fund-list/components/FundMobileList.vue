@@ -3,7 +3,7 @@ import type { FundRowViewModel } from '../models/fundListViewModel'
 import FundQuoteCard from './FundQuoteCard.vue'
 
 defineProps<{ rows: readonly FundRowViewModel[] }>()
-const emit = defineEmits<{ comingSoon: []; delete: [code: string] }>()
+const emit = defineEmits<{ comingSoon: []; delete: [code: string]; edit: [code: string] }>()
 </script>
 
 <template>
@@ -14,6 +14,7 @@ const emit = defineEmits<{ comingSoon: []; delete: [code: string] }>()
       :row="row"
       @coming-soon="emit('comingSoon')"
       @delete="emit('delete', $event)"
+      @edit="emit('edit', $event)"
     />
   </div>
 </template>

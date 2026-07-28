@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
+import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
 import FundGroupSettingsEntry from '@/features/fund-group-settings/FundGroupSettingsEntry.vue'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDesktopTable from './components/FundDesktopTable.vue'
@@ -22,6 +23,7 @@ const { fundOrder, groups, holdingsByCode, isRefreshing, lastRefreshIssues, snap
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
+const fundEdit = ref<{ open: (code: string) => void }>()
 const categories = computed(() =>
   buildFundCategories(fundOrder.value, groups.value, holdingsByCode.value),
 )
@@ -134,15 +136,22 @@ function latestText(values: readonly string[]): string {
           :sort="activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
+          @edit="fundEdit?.open($event)"
           @sort-change="setSort"
         />
       </div>
       <div class="sm:hidden">
-        <FundMobileList :rows="rows" @coming-soon="showComingSoon" @delete="deleteFund" />
+        <FundMobileList
+          :rows="rows"
+          @coming-soon="showComingSoon"
+          @delete="deleteFund"
+          @edit="fundEdit?.open($event)"
+        />
       </div>
     </template>
 
     <FundGroupSettingsEntry ref="groupSettings" />
+    <FundEditEntry ref="fundEdit" />
   </section>
 </template>
 

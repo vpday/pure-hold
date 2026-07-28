@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 
-import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
+import { useFundsStore } from '../../../domains/funds/stores/useFundsStore.ts'
 import {
   isFundGroupNameDuplicate,
   moveFundGroup,

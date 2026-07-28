@@ -7,7 +7,7 @@ import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRu
 import FundActions from './FundActions.vue'
 
 defineProps<{ row: FundRowViewModel }>()
-const emit = defineEmits<{ comingSoon: []; delete: [code: string] }>()
+const emit = defineEmits<{ comingSoon: []; delete: [code: string]; edit: [code: string] }>()
 const actionsVisible = ref(false)
 
 function trendClass(trend: FundTrend): string {
@@ -115,6 +115,7 @@ function trendClass(trend: FundTrend): string {
         :name="row.name"
         @coming-soon="emit('comingSoon')"
         @delete="emit('delete', $event)"
+        @edit="emit('edit', $event)"
       />
     </div>
   </t-card>

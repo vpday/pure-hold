@@ -1,11 +1,11 @@
 <script setup lang="ts">
 defineProps<{ code: string; name: string }>()
-const emit = defineEmits<{ comingSoon: []; delete: [code: string] }>()
+const emit = defineEmits<{ comingSoon: []; delete: [code: string]; edit: [code: string] }>()
 </script>
 
 <template>
   <t-space>
-    <t-button size="small" variant="text" @click="emit('comingSoon')">编辑</t-button>
+    <t-button size="small" variant="text" @click="emit('edit', code)">编辑</t-button>
     <t-popconfirm
       cancel-btn="取消"
       :confirm-btn="{ content: '删除', theme: 'danger' }"

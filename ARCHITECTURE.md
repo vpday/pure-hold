@@ -19,6 +19,8 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 页面模型     | `toIndexOverviewViewModel`                             | 领域对象到分组展示对象的转换点                  |
 | 基金列表     | `src/features/fund-list/FundListSection.vue`           | 基金分类、排序、展示、删除和分组管理入口        |
 | 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口      |
+| 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                  |
+| 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件        |
 | 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化          |
 | 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                |
 | 基金持久化   | `loadFundState` / `saveFundState`                      | 版本化基金状态的加载、验证、恢复和保存          |
@@ -33,7 +35,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/domains` 保存稳定业务概念、外部系统适配和领域状态。每个领域内部可以按 `config`、`models`、`services`、`stores` 分类。基金标识、行情、分组和当前汇总持仓进入 `domains/funds`；未来跨资产组合能力进入 `domains/portfolio`，而不是进入一个通用业务 Store。
 
-当前 `FundHolding` 表示“一只基金一份汇总持仓”，用于表达基金是否持有、派生持仓分类和保存简单录入结果。它与基金成员关系共享生命周期，因此属于 `domains/funds`。未来的交易流水、买入批次、成本核算、收益归因、组合估值和跨资产持仓属于 `domains/portfolio`；Portfolio 可以引用基金标识，但不直接修改 Funds Store。
+当前 `FundHolding` 表示“一只基金一份汇总持仓”，保存份额、成本价、购买日期和分红方式，用于表达基金是否持有、派生持仓分类和保存简单录入结果。分红方式当前只记录和回显，不驱动份额或收益计算。它与基金成员关系共享生命周期，因此属于 `domains/funds`。未来的交易流水、买入批次、成本核算、收益归因、组合估值和跨资产持仓属于 `domains/portfolio`；Portfolio 可以引用基金标识，但不直接修改 Funds Store。
 
 `src/features` 保存面向用户的功能组合。Feature 可以读取一个或多个领域，生成页面模型并管理局部交互，但不拥有第三方协议知识。
 
@@ -94,14 +96,16 @@ src/
 │  │  └─ presenters/            # 领域对象到页面模型
 │  ├─ fund-list/                # 基金分类、列表、排序和展示
 │  ├─ fund-group-settings/      # 自定义基金分组管理
-│  └─ fund-search/              # 搜索会话、累计选择和持仓录入
+│  ├─ fund-holding-form/        # 新增与编辑共用的持仓字段和校验
+│  ├─ fund-edit/                # 单基金持仓与分组编辑
+│  └─ fund-search/              # 搜索会话、累计选择和批量新增
 └─ shared/
    └─ composables/              # 无业务语义的共享 Vue 能力
 ```
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择、汇总持仓草稿和最终提交；其展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundEditEntry`。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -140,6 +144,18 @@ indexDefinitions.json
 
 搜索关键词、分页、请求取消、错误、累计选择、展开状态和未提交持仓字段只存在于 `fund-search` Feature。只有最终确认后的基金、汇总持仓和空行情快照进入 Funds Store。`addFunds` 成功表示完整候选状态已经本地保存，不表示随后发起的实时行情刷新成功；刷新失败保留已添加基金、持仓和空行情快照。
 
+单基金编辑的数据流是：
+
+```text
+FundListSection 操作入口
+  -> FundEditEntry 打开基金快照
+  -> fund-holding-form 持仓草稿 + 自定义分组 ID 草稿
+  -> 有持仓输入时 updateFundHolding 先保存持仓
+  -> updateFundGroupMembership 再保存分组关系
+```
+
+两个 Store 操作分别先持久化完整候选状态再替换对应内存引用，但编辑 Feature 不把两者合并为跨步骤事务。持仓草稿全部为空时跳过持仓操作，只保存自定义分组；部分填写时仍要求完整持仓合法，清空已有持仓不会删除原记录。分组保存失败时已保存持仓保留，界面继续打开；再次提交从持仓步骤重新开始。系统派生的“全部”和“持仓”不进入分组草稿。
+
 关键 seam：
 
 - `fetchEastmoneyIndexQuotes` 隐藏 HTTPS、超时、每次请求生成的 UUID v4 设备标识、查询参数和东方财富字段协议。
@@ -149,6 +165,7 @@ indexDefinitions.json
 - `useBreakpoints` 隐藏 Tailwind CSS 变量读取和 `matchMedia` 监听。
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
+- `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
 - `loadFundState` / `saveFundState` 隐藏基金状态 schema 版本、结构验证、损坏数据备份和恢复。
 
 只有出现第二个真实指数行情适配器时，才在 `fetchEastmoneyIndexQuotes` 所在 seam 提取统一数据源接口；当前不为假设中的实现预建工厂。
@@ -176,7 +193,7 @@ indexDefinitions.json
 
 `useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
-`useFundsStore` 是基金共享领域状态的所有者。它保存基金顺序、行情快照、自定义分组和可选汇总持仓，并通过版本化 localStorage 持久化完整状态。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；持久化或网络失败通过稳定问题状态暴露，不把第三方错误或半提交状态泄漏给组件。具体 schema 版本、存储 key 和刷新实现分别以 `fundStateSchemaVersion.ts` 和 `useFundsStore.ts` 为权威来源。
+`useFundsStore` 是基金共享领域状态的所有者。它保存基金顺序、行情快照、自定义分组和可选汇总持仓，并通过版本化 localStorage 持久化完整状态。批量新增、单基金持仓更新和单基金分组关系更新都先保存完整候选状态，再替换相关内存引用。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；持久化或网络失败通过稳定问题状态暴露，不把第三方错误泄漏给组件。具体 schema 版本、存储 key 和刷新实现分别以 `fundStateSchemaVersion.ts` 和 `useFundsStore.ts` 为权威来源。
 
 ### PWA 与缓存
 
