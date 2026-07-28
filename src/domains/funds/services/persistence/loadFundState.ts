@@ -35,6 +35,7 @@ export function loadFundState(): FundState {
     const state = validateAndCloneFundState(parsed, true)
     if (
       JSON.stringify(state.groups) !== JSON.stringify(parsed.groups) ||
+      JSON.stringify(state.holdingOrder) !== JSON.stringify(parsed.holdingOrder) ||
       JSON.stringify(state.holdingsByCode) !== JSON.stringify(parsed.holdingsByCode)
     ) {
       saveFundState(state)
@@ -49,7 +50,7 @@ export function loadFundState(): FundState {
 }
 
 function createEmptyFundState(): FundState {
-  return { fundOrder: [], groups: [], holdingsByCode: {}, snapshotsByCode: {} }
+  return { fundOrder: [], groups: [], holdingOrder: [], holdingsByCode: {}, snapshotsByCode: {} }
 }
 
 function persistRecovery(state: FundState): void {

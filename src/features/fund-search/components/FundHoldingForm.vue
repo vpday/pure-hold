@@ -9,7 +9,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex flex-1 flex-col gap-4 overflow-y-auto scrollbar-gutter-stable scrollbar-thin">
+  <div class="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
     <article
       v-for="draft in drafts"
       :key="draft.code"

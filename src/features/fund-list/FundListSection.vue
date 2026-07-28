@@ -12,20 +12,21 @@ import FundEmptyState from './components/FundEmptyState.vue'
 import FundMobileList from './components/FundMobileList.vue'
 import type { FundSort } from './models/fundListViewModel'
 import { buildFundCategories } from './presenters/buildFundCategories'
+import { clearFundCategorySorts } from './presenters/clearFundCategorySorts'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from './presenters/formatFundDates'
 import { sortFundSnapshots } from './presenters/sortFundSnapshots'
 import { toFundListViewModel } from './presenters/toFundListViewModel'
 
 const emit = defineEmits<{ searchFunds: [] }>()
 const store = useFundsStore()
-const { fundOrder, groups, holdingsByCode, isRefreshing, lastRefreshIssues, snapshotsByCode } =
+const { fundOrder, groups, holdingOrder, isRefreshing, lastRefreshIssues, snapshotsByCode } =
   storeToRefs(store)
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
 const fundEdit = ref<{ open: (code: string) => void }>()
 const categories = computed(() =>
-  buildFundCategories(fundOrder.value, groups.value, holdingsByCode.value),
+  buildFundCategories(fundOrder.value, holdingOrder.value, groups.value),
 )
 const categoryTabs = computed(() =>
   categories.value.map((category) => ({
@@ -85,6 +86,10 @@ watch(isRefreshing, (refreshing, wasRefreshing) => {
 
 function setSort(sort: FundSort | null): void {
   sortByCategory.value = { ...sortByCategory.value, [activeCategory.value.id]: sort }
+}
+
+function clearSavedCategorySorts(categoryIds: readonly string[]): void {
+  sortByCategory.value = clearFundCategorySorts(sortByCategory.value, categoryIds)
 }
 
 function showComingSoon(): void {
@@ -150,7 +155,7 @@ function latestText(values: readonly string[]): string {
       </div>
     </template>
 
-    <FundGroupSettingsEntry ref="groupSettings" />
+    <FundGroupSettingsEntry ref="groupSettings" @saved="clearSavedCategorySorts" />
     <FundEditEntry ref="fundEdit" />
   </section>
 </template>

@@ -23,6 +23,7 @@ export function validateAndCloneFundState(
   if (
     !isRecord(value) ||
     !Array.isArray(value.fundOrder) ||
+    !Array.isArray(value.holdingOrder) ||
     !isRecord(value.holdingsByCode) ||
     !isRecord(value.snapshotsByCode)
   ) {
@@ -56,7 +57,35 @@ export function validateAndCloneFundState(
 
   const groups = validateGroups(value.groups, knownCodes, filterUnknownGroupCodes)
   const holdingsByCode = validateHoldings(value.holdingsByCode, knownCodes, filterUnknownGroupCodes)
-  return { fundOrder, groups, holdingsByCode, snapshotsByCode }
+  const holdingOrder = validateHoldingOrder(
+    value.holdingOrder,
+    knownCodes,
+    holdingsByCode,
+    filterUnknownGroupCodes,
+  )
+  return { fundOrder, groups, holdingOrder, holdingsByCode, snapshotsByCode }
+}
+
+function validateHoldingOrder(
+  values: readonly unknown[],
+  knownCodes: ReadonlySet<string>,
+  holdingsByCode: Readonly<Record<string, FundHolding>>,
+  filterUnknownCodes: boolean,
+): string[] {
+  const order = validateUniqueStrings(values, 'holding order')
+  const filteredOrder = filterUnknownCodes ? order.filter((code) => knownCodes.has(code)) : order
+  if (!filterUnknownCodes && filteredOrder.some((code) => !knownCodes.has(code))) {
+    throw new TypeError('Holding order references an unknown fund')
+  }
+
+  const holdingCodes = Object.keys(holdingsByCode)
+  if (
+    filteredOrder.length !== holdingCodes.length ||
+    holdingCodes.some((code) => !filteredOrder.includes(code))
+  ) {
+    throw new TypeError('Holding order must match fund holdings')
+  }
+  return filteredOrder
 }
 
 function validateHoldings(

@@ -255,7 +255,7 @@ function formatRowDate(rowDate: string, headerDate: string): string {
 @reference '@/style.css';
 
 .fund-code-tags {
-  @apply mt-1 flex max-w-35 gap-1 overflow-x-auto scrollbar-gutter-stable scrollbar-thin scrollbar-thumb-transparent
+  @apply mt-1 flex max-w-35 gap-1 overflow-x-auto scrollbar-thumb-transparent
   hover:scrollbar-thumb-current;
 }
 </style>

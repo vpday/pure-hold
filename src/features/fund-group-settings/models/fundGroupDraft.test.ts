@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   isFundGroupNameDuplicate,
+  moveFundCode,
   moveFundGroup,
   toFundGroupDefinitions,
   toFundGroupDrafts,
@@ -33,4 +34,13 @@ test('fund group draft clones, removes and reorders without changing fund relati
   draft.splice(0, 1)
   assert.deepEqual(toFundGroupDefinitions(draft), [{ fundCodes: ['a'], id: 'one', name: '一组' }])
   assert.deepEqual(definitions[0]?.fundCodes, ['a'])
+})
+
+test('fund code movement is bounded and preserves every code', () => {
+  const codes = ['a', 'b', 'c']
+  moveFundCode(codes, 0, 2)
+  assert.deepEqual(codes, ['b', 'c', 'a'])
+  moveFundCode(codes, -1, 1)
+  moveFundCode(codes, 0, 3)
+  assert.deepEqual(codes, ['b', 'c', 'a'])
 })

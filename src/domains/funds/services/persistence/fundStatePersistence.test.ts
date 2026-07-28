@@ -14,6 +14,7 @@ import { saveFundState } from './saveFundState.ts'
 const emptyFundState: FundState = {
   fundOrder: [],
   groups: [],
+  holdingOrder: [],
   holdingsByCode: {},
   snapshotsByCode: {},
 }
@@ -26,6 +27,7 @@ test('loadFundState stays empty without local storage data and preserves a valid
     const empty: FundState = {
       fundOrder: [],
       groups: [],
+      holdingOrder: [],
       holdingsByCode: {},
       snapshotsByCode: {},
     }
@@ -59,11 +61,12 @@ test('loadFundState filters group references that are not in fundOrder', () => {
   })
 })
 
-test('v3 holdings round trip dividend modes and orphaned holdings are filtered on load', () => {
+test('v4 holdings and their independent order round trip and orphaned data is filtered', () => {
   withStorage((storage) => {
     const state: FundState = {
       fundOrder: ['000001', '000002'],
       groups: [],
+      holdingOrder: ['000002', '000001'],
       holdingsByCode: {
         '000001': {
           code: '000001',
@@ -109,10 +112,43 @@ test('v3 holdings round trip dividend modes and orphaned holdings are filtered o
   })
 })
 
+test('holding order must contain every holding exactly once and only known held funds', () => {
+  const base: FundState = {
+    fundOrder: ['000001', '000002'],
+    groups: [],
+    holdingOrder: ['000001'],
+    holdingsByCode: {
+      '000001': {
+        code: '000001',
+        costPrice: 1,
+        dividendMode: 'cash',
+        purchaseDate: '2020-01-01',
+        units: 1,
+      },
+    },
+    snapshotsByCode: {
+      '000001': createTestFundSnapshot('000001'),
+      '000002': createTestFundSnapshot('000002'),
+    },
+  }
+
+  for (const holdingOrder of [
+    [],
+    ['000001', '000001'],
+    ['000001', '000002'],
+    ['000001', '999999'],
+  ]) {
+    withStorage(() => {
+      assert.throws(() => saveFundState({ ...base, holdingOrder }), /holding order/i)
+    })
+  }
+})
+
 test('holdings reject invalid numbers, precision, codes, dates and dividend modes', () => {
   const base: FundState = {
     fundOrder: ['000001'],
     groups: [],
+    holdingOrder: [],
     holdingsByCode: {},
     snapshotsByCode: { '000001': createTestFundSnapshot('000001') },
   }
@@ -166,6 +202,7 @@ test('holdings reject invalid numbers, precision, codes, dates and dividend mode
         () =>
           saveFundState({
             ...base,
+            holdingOrder: ['000001'],
             holdingsByCode: { '000001': holding },
           } as unknown as FundState),
         /holding/,
@@ -174,13 +211,15 @@ test('holdings reject invalid numbers, precision, codes, dates and dividend mode
   }
 })
 
-test('v3 loading ignores but does not remove old keys', () => {
+test('v4 loading ignores but does not remove old keys', () => {
   withStorage((storage) => {
     storage.setItem('pure-hold:fund-state:v1', JSON.stringify({ legacy: true }))
     storage.setItem('pure-hold:fund-state:v2', JSON.stringify({ legacy: true }))
+    storage.setItem('pure-hold:fund-state:v3', JSON.stringify({ legacy: true }))
     assert.deepEqual(loadFundState(), emptyFundState)
     assert.equal(storage.getItem('pure-hold:fund-state:v1'), JSON.stringify({ legacy: true }))
     assert.equal(storage.getItem('pure-hold:fund-state:v2'), JSON.stringify({ legacy: true }))
+    assert.equal(storage.getItem('pure-hold:fund-state:v3'), JSON.stringify({ legacy: true }))
   })
 })
 

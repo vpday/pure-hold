@@ -17,6 +17,7 @@ export const useFundsStore = defineStore('funds', () => {
   const initialState = loadFundState()
   const fundOrder = shallowRef<readonly string[]>(initialState.fundOrder)
   const groups = shallowRef<readonly FundGroupDefinition[]>(initialState.groups)
+  const holdingOrder = shallowRef<readonly string[]>(initialState.holdingOrder)
   const holdingsByCode = shallowRef<Readonly<Record<string, FundHolding>>>(
     initialState.holdingsByCode,
   )
@@ -132,6 +133,10 @@ export const useFundsStore = defineStore('funds', () => {
     const candidate: FundState = {
       fundOrder: [...fundOrder.value, ...batchCodes],
       groups: groups.value,
+      holdingOrder: [
+        ...holdingOrder.value,
+        ...additions.flatMap((addition) => (addition.holding ? [addition.code] : [])),
+      ],
       holdingsByCode: nextHoldings,
       snapshotsByCode: nextSnapshots,
     }
@@ -159,6 +164,7 @@ export const useFundsStore = defineStore('funds', () => {
         ...group,
         fundCodes: group.fundCodes.filter((fundCode) => fundCode !== code),
       })),
+      holdingOrder: holdingOrder.value.filter((fundCode) => fundCode !== code),
       holdingsByCode: nextHoldings,
       snapshotsByCode: nextSnapshots,
     }
@@ -182,12 +188,44 @@ export const useFundsStore = defineStore('funds', () => {
     return {}
   }
 
+  function replaceFundOrganization(input: {
+    readonly fundOrder: readonly string[]
+    readonly groups: readonly FundGroupDefinition[]
+    readonly holdingOrder: readonly string[]
+  }): { error?: string } {
+    if (
+      !haveSameItems(input.fundOrder, fundOrder.value) ||
+      !haveSameItems(input.holdingOrder, Object.keys(holdingsByCode.value))
+    ) {
+      return { error: '基金数据已变化，请重新打开分组管理' }
+    }
+
+    const candidate: FundState = {
+      ...currentState(),
+      fundOrder: [...input.fundOrder],
+      groups: input.groups.map((group) => ({ ...group, fundCodes: [...group.fundCodes] })),
+      holdingOrder: [...input.holdingOrder],
+    }
+    try {
+      saveFundState(candidate)
+    } catch {
+      return { error: '分组排序保存失败，请稍后重试' }
+    }
+    fundOrder.value = candidate.fundOrder
+    groups.value = candidate.groups
+    holdingOrder.value = candidate.holdingOrder
+    return {}
+  }
+
   function updateFundHolding(holding: FundHolding): { error?: string } {
     if (!fundOrder.value.includes(holding.code)) {
       return { error: '基金不存在，无法保存持仓信息' }
     }
     const candidate: FundState = {
       ...currentState(),
+      holdingOrder: holdingsByCode.value[holding.code]
+        ? holdingOrder.value
+        : [...holdingOrder.value, holding.code],
       holdingsByCode: { ...holdingsByCode.value, [holding.code]: holding },
     }
     try {
@@ -195,6 +233,7 @@ export const useFundsStore = defineStore('funds', () => {
     } catch {
       return { error: '持仓保存失败，请稍后重试' }
     }
+    holdingOrder.value = candidate.holdingOrder
     holdingsByCode.value = candidate.holdingsByCode
     return {}
   }
@@ -235,6 +274,7 @@ export const useFundsStore = defineStore('funds', () => {
     return {
       fundOrder: fundOrder.value,
       groups: groups.value,
+      holdingOrder: holdingOrder.value,
       holdingsByCode: holdingsByCode.value,
       snapshotsByCode: snapshotsByCode.value,
     }
@@ -248,6 +288,7 @@ export const useFundsStore = defineStore('funds', () => {
     isRefreshing.value = false
     fundOrder.value = state.fundOrder
     groups.value = state.groups
+    holdingOrder.value = state.holdingOrder
     holdingsByCode.value = state.holdingsByCode
     snapshotsByCode.value = state.snapshotsByCode
   }
@@ -257,17 +298,27 @@ export const useFundsStore = defineStore('funds', () => {
     deleteFund,
     fundOrder,
     groups,
+    holdingOrder,
     holdingsByCode,
     isRefreshing,
     lastRefreshIssues,
     lastSuccessfulRefreshAt,
     refreshAll,
+    replaceFundOrganization,
     replaceGroups,
     snapshotsByCode,
     updateFundGroupMembership,
     updateFundHolding,
   }
 })
+
+function haveSameItems(first: readonly string[], second: readonly string[]): boolean {
+  return (
+    first.length === second.length &&
+    new Set(first).size === first.length &&
+    first.every((item) => second.includes(item))
+  )
+}
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'

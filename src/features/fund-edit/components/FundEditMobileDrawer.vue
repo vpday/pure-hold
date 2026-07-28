@@ -31,9 +31,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>()
         </t-button>
       </div>
     </template>
-    <div
-      class="flex h-full min-h-0 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)] scrollbar-gutter-stable scrollbar-thin"
-    >
+    <div class="flex h-full min-h-0 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)] pr-1">
       <slot />
     </div>
   </t-drawer>

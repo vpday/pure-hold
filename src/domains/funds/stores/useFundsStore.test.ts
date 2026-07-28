@@ -73,6 +73,7 @@ test('fund deletion persists first and removes every group relation', async () =
     assert.equal(store.fundOrder.includes('161726'), false)
     assert.equal(store.snapshotsByCode['161726'], undefined)
     assert.equal(store.holdingsByCode['161726'], undefined)
+    assert.equal(store.holdingOrder.includes('161726'), false)
     assert.equal(
       store.groups.every((group) => !group.fundCodes.includes('161726')),
       true,
@@ -125,6 +126,7 @@ test('fund addition persists atomically and refreshes only the new funds', async
         {},
       )
       assert.deepEqual(store.fundOrder.slice(-2), ['000001', '000002'])
+      assert.deepEqual(store.holdingOrder, ['161726', '000001'])
       assert.equal(store.snapshotsByCode['000002']?.nav, null)
       assert.equal(store.snapshotsByCode['000002']?.name, '空行情基金')
       assert.equal(store.holdingsByCode['000001']?.units, 10)
@@ -161,10 +163,12 @@ test('single holding update covers replacement, first creation and failures', as
     }
     assert.deepEqual(store.updateFundHolding(replacement), {})
     assert.deepEqual(store.holdingsByCode['161726'], replacement)
+    assert.deepEqual(store.holdingOrder, ['161726'])
 
     const created = { ...replacement, code: '161725', dividendMode: 'reinvest' as const }
     assert.deepEqual(store.updateFundHolding(created), {})
     assert.deepEqual(store.holdingsByCode['161725'], created)
+    assert.deepEqual(store.holdingOrder, ['161726', '161725'])
     assert.match(store.updateFundHolding({ ...created, code: '999999' }).error ?? '', /基金不存在/)
 
     const before = store.holdingsByCode
@@ -174,6 +178,43 @@ test('single holding update covers replacement, first creation and failures', as
       /持仓保存失败/,
     )
     assert.equal(store.holdingsByCode, before)
+    store.$dispose()
+  })
+})
+
+test('fund organization replacement persists all orders atomically', async () => {
+  await withEnvironment(async (storage) => {
+    saveFundState(createTestFundState())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const input = {
+      fundOrder: ['161725', '161726'],
+      groups: [{ fundCodes: ['161725', '161726'], id: 'one', name: '一组' }],
+      holdingOrder: ['161726'],
+    }
+
+    assert.deepEqual(store.replaceFundOrganization(input), {})
+    assert.deepEqual(store.fundOrder, input.fundOrder)
+    assert.deepEqual(store.holdingOrder, input.holdingOrder)
+    assert.deepEqual(store.groups, input.groups)
+    assert.match(
+      store.replaceFundOrganization({ ...input, fundOrder: ['161726'] }).error ?? '',
+      /数据已变化/,
+    )
+
+    const before = {
+      fundOrder: store.fundOrder,
+      groups: store.groups,
+      holdingOrder: store.holdingOrder,
+    }
+    storage.failWrites = true
+    assert.match(
+      store.replaceFundOrganization({ ...input, fundOrder: ['161726', '161725'] }).error ?? '',
+      /保存失败/,
+    )
+    assert.equal(store.fundOrder, before.fundOrder)
+    assert.equal(store.groups, before.groups)
+    assert.equal(store.holdingOrder, before.holdingOrder)
     store.$dispose()
   })
 })
@@ -223,6 +264,7 @@ function createTestFundState(): FundState {
   return {
     fundOrder: ['161726', '161725'],
     groups: [],
+    holdingOrder: ['161726'],
     holdingsByCode: {
       '161726': {
         code: '161726',

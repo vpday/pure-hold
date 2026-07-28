@@ -43,17 +43,25 @@ export function toFundGroupDefinitions(groups: readonly FundGroupDraft[]): FundG
 }
 
 export function moveFundGroup(groups: FundGroupDraft[], fromIndex: number, toIndex: number): void {
+  moveItem(groups, fromIndex, toIndex)
+}
+
+export function moveFundCode(codes: string[], fromIndex: number, toIndex: number): void {
+  moveItem(codes, fromIndex, toIndex)
+}
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number): void {
   if (
     fromIndex < 0 ||
     toIndex < 0 ||
-    fromIndex >= groups.length ||
-    toIndex >= groups.length ||
+    fromIndex >= items.length ||
+    toIndex >= items.length ||
     fromIndex === toIndex
   ) {
     return
   }
-  const [group] = groups.splice(fromIndex, 1)
-  if (group) {
-    groups.splice(toIndex, 0, group)
+  const [item] = items.splice(fromIndex, 1)
+  if (item) {
+    items.splice(toIndex, 0, item)
   }
 }

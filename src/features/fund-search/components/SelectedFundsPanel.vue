@@ -23,11 +23,7 @@ const emit = defineEmits<{
     @change="emit('toggleExpanded')"
   >
     <t-collapse-panel :value="panelValue" :header="`已选 ${items.length} 只`">
-      <t-list
-        class="max-h-40 overflow-y-auto scrollbar-gutter-stable scrollbar-thin"
-        :split="true"
-        size="small"
-      >
+      <t-list class="max-h-40 overflow-y-auto pr-1" :split="true" size="small">
         <t-list-item v-for="item in items" :key="item.code">
           {{ item.name }}（{{ item.code }}）
           <template #action>
