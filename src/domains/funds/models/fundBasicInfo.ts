@@ -21,5 +21,6 @@ export interface FundBasicInfo {
   readonly shanghaiRating: number | null
   readonly standardPurchaseFeePercent: number | null
   readonly trackingError: number | null
+  readonly trackingIndexCode: string | null
   readonly trackingIndexName: string | null
 }

@@ -123,6 +123,7 @@ function createBasicInfo(code: string): FundBasicInfo {
     shanghaiRating: null,
     standardPurchaseFeePercent: null,
     trackingError: null,
+    trackingIndexCode: null,
     trackingIndexName: null,
   }
 }

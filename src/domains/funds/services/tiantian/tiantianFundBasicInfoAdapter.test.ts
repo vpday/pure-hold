@@ -48,6 +48,7 @@ test('maps a valid record and normalizes strings and numeric fields', () => {
         FCODE: '161725',
         FEGMRQ: '2026-06-30',
         FTYPE: ' 指数型-股票 ',
+        INDEXCODE: ' 399997 ',
         INDEXNAME: ' 中证白酒指数 ',
         JJGS: ' 招商基金 ',
         MAXSG: 500000,
@@ -93,6 +94,7 @@ test('maps a valid record and normalizes strings and numeric fields', () => {
     shanghaiRating: 3,
     standardPurchaseFeePercent: 1,
     trackingError: 0.0123,
+    trackingIndexCode: '399997',
     trackingIndexName: '中证白酒指数',
   })
   assert.equal(Object.hasOwn(result, 'isBuy'), false)
@@ -151,8 +153,23 @@ test('normalizes empty, invalid, out-of-range and negative values', () => {
     shanghaiRating: null,
     standardPurchaseFeePercent: null,
     trackingError: null,
+    trackingIndexCode: null,
     trackingIndexName: null,
   })
+})
+
+test('only exposes a tracking index when code and name form a valid pair', () => {
+  for (const record of [
+    { FCODE: '161725', INDEXCODE: '399997' },
+    { FCODE: '161725', INDEXNAME: '中证白酒指数' },
+    { FCODE: '161725', INDEXCODE: '39999', INDEXNAME: '中证白酒指数' },
+    { FCODE: '161725', INDEXCODE: 'abcdef', INDEXNAME: '中证白酒指数' },
+    { FCODE: '161725', INDEXCODE: '399997', INDEXNAME: ' ' },
+  ]) {
+    const result = parseTiantianFundBasicInfoResponse(successful([record]), '161725')
+    assert.equal(result.trackingIndexCode, null)
+    assert.equal(result.trackingIndexName, null)
+  }
 })
 
 test('rejects unsuccessful, missing, mismatched, duplicated and malformed records', () => {

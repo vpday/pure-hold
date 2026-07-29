@@ -1,0 +1,45 @@
+import type {
+  FundPerformanceRangeOption,
+  FundReferenceIndexOption,
+} from '../models/fundPerformance'
+
+export const defaultFundPerformanceRange = 'y' as const
+
+export const fundPerformanceRangeOptions: readonly FundPerformanceRangeOption[] = [
+  { label: '近1月', value: 'y' },
+  { label: '近3月', value: '3y' },
+  { label: '近6月', value: '6y' },
+  { label: '近1年', value: 'n' },
+  { label: '近3年', value: '3n' },
+  { label: '近5年', value: '5n' },
+  { label: '今年来', value: 'jn' },
+  { label: '成立来', value: 'ln' },
+]
+
+const defaultReferenceIndexes: readonly FundReferenceIndexOption[] = [
+  { code: '000001', name: '上证指数' },
+  { code: '399001', name: '深证指数' },
+  { code: '399006', name: '创业板指' },
+  { code: '000300', name: '沪深300' },
+  { code: '399005', name: '中小板指' },
+  { code: '000905', name: '中证500' },
+  { code: '000016', name: '上证50' },
+]
+
+export function buildFundReferenceIndexOptions(
+  trackingIndexCode: string | null | undefined,
+  trackingIndexName: string | null | undefined,
+): readonly FundReferenceIndexOption[] {
+  const code = trackingIndexCode?.trim() ?? ''
+  const name = trackingIndexName?.trim() ?? ''
+  const candidates =
+    /^\d{6}$/.test(code) && name
+      ? [{ code, name }, ...defaultReferenceIndexes]
+      : defaultReferenceIndexes
+  const seen = new Set<string>()
+  return candidates.filter(({ code }) => {
+    if (seen.has(code)) return false
+    seen.add(code)
+    return true
+  })
+}

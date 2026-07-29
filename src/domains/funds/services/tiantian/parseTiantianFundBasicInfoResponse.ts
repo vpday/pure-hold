@@ -20,6 +20,7 @@ export function parseTiantianFundBasicInfoResponse(
   }
 
   const record = matches[0]
+  const trackingIndex = toTrackingIndex(record.INDEXCODE, record.INDEXNAME)
   return {
     code: requestedCode,
     companyName: toText(record.JJGS),
@@ -43,7 +44,8 @@ export function parseTiantianFundBasicInfoResponse(
     shanghaiRating: toRating(record.RLEVEL_SZ),
     standardPurchaseFeePercent: toPercent(record.SOURCERATE),
     trackingError: toFiniteNumber(record.TRKERROR),
-    trackingIndexName: toText(record.INDEXNAME),
+    trackingIndexCode: trackingIndex.code,
+    trackingIndexName: trackingIndex.name,
   }
 }
 
@@ -67,6 +69,15 @@ function toText(value: unknown): string | null {
   }
   const text = value.trim()
   return text || null
+}
+
+function toTrackingIndex(
+  codeValue: unknown,
+  nameValue: unknown,
+): { readonly code: string | null; readonly name: string | null } {
+  const code = typeof codeValue === 'string' ? codeValue.trim() : ''
+  const name = toText(nameValue)
+  return /^\d{6}$/.test(code) && name ? { code, name } : { code: null, name: null }
 }
 
 function toFiniteNumber(value: unknown): number | null {

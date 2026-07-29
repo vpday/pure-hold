@@ -246,6 +246,7 @@ function createBasicInfo(): FundBasicInfo {
     shanghaiRating: 3,
     standardPurchaseFeePercent: 1,
     trackingError: 0.0123,
+    trackingIndexCode: '399997',
     trackingIndexName: '中证白酒指数',
   }
 }

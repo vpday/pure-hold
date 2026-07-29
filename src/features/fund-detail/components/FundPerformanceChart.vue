@@ -1,0 +1,146 @@
+<script setup lang="ts">
+import { LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import * as echarts from 'echarts/core'
+import { UniversalTransition } from 'echarts/features'
+import { CanvasRenderer } from 'echarts/renderers'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+import { useBreakpoints } from '@/shared/composables/useBreakpoints'
+import type { FundPerformanceChartModel } from '../models/fundPerformance'
+import { buildFundPerformanceChartOption } from '../presenters/buildFundPerformanceChartOption'
+
+echarts.use([
+  LineChart,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  UniversalTransition,
+  CanvasRenderer,
+])
+
+const props = defineProps<{
+  error: string
+  isLoading: boolean
+  model?: FundPerformanceChartModel
+  visible: boolean
+}>()
+const emit = defineEmits<{ retry: [] }>()
+const container = ref<HTMLDivElement>()
+const { isSmUp } = useBreakpoints()
+
+let chart: echarts.ECharts | undefined
+let resizeObserver: ResizeObserver | undefined
+
+function render(): void {
+  if (!chart || !props.model) return
+  chart.setOption(
+    buildFundPerformanceChartOption(
+      props.model,
+      [
+        themeColor('--td-error-color'),
+        themeColor('--td-warning-color'),
+        themeColor('--td-success-color'),
+      ],
+      isSmUp.value,
+    ),
+    true,
+  )
+}
+
+function themeColor(name: string): string | undefined {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || undefined
+}
+
+function summaryColor(color: FundPerformanceChartModel['summary'][number]['color']): string {
+  if (color === 'fund') return 'var(--td-error-color)'
+  if (color === 'reference') return 'var(--td-warning-color)'
+  return 'var(--td-success-color)'
+}
+
+onMounted(() => {
+  const element = container.value
+  if (!element) return
+  chart = echarts.init(element)
+  resizeObserver = new ResizeObserver(() => chart?.resize())
+  resizeObserver.observe(element)
+  render()
+})
+
+watch(
+  () => props.model,
+  () => render(),
+)
+watch(isSmUp, () => render())
+watch(
+  () => props.visible,
+  async (visible) => {
+    if (!visible) return
+    await nextTick()
+    chart?.resize()
+    render()
+  },
+)
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  chart?.dispose()
+  chart = undefined
+})
+</script>
+
+<template>
+  <div class="relative min-h-80 w-full overflow-hidden">
+    <div v-if="model" class="summary-grid">
+      <div v-for="item in model.summary" :key="item.label" class="summary-item">
+        <span class="summary-dot" :style="{ backgroundColor: summaryColor(item.color) }" />
+        <span class="truncate">{{ item.label }}：{{ item.valueText }}</span>
+      </div>
+    </div>
+    <div v-show="model" ref="container" class="h-90 w-full" />
+
+    <div v-if="isLoading" class="loading-overlay">
+      <t-loading text="累计收益加载中" />
+    </div>
+
+    <div v-if="error && model" class="error-overlay">
+      <span>{{ error }}</span>
+      <t-button size="small" theme="danger" variant="outline" @click="emit('retry')">
+        重试
+      </t-button>
+    </div>
+
+    <div v-if="!model && !isLoading" class="flex min-h-80 items-center justify-center py-8">
+      <t-empty :description="error || '暂无累计收益数据'">
+        <template #action>
+          <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
+        </template>
+      </t-empty>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+@reference '@/style.css';
+
+.loading-overlay {
+  @apply absolute inset-0 flex items-center justify-center bg-(--td-bg-color-container)/70;
+}
+
+.error-overlay {
+  @apply absolute right-3 bottom-3 left-3 flex items-center justify-between gap-3 rounded-md bg-(--td-error-color-light-9) p-3 text-sm text-(--td-error-color);
+}
+
+.summary-grid {
+  @apply grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-(--td-text-color-primary) sm:absolute sm:top-0 sm:left-0 sm:z-10 sm:flex sm:flex-nowrap sm:gap-3 sm:text-sm;
+}
+
+.summary-item {
+  @apply flex min-w-0 items-center gap-1.5 whitespace-nowrap;
+}
+
+.summary-dot {
+  @apply size-2.5 shrink-0 rounded-full;
+}
+</style>

@@ -5,6 +5,7 @@ export interface TiantianFundBasicInfoDto {
   readonly FCODE?: unknown
   readonly FEGMRQ?: unknown
   readonly FTYPE?: unknown
+  readonly INDEXCODE?: unknown
   readonly INDEXNAME?: unknown
   readonly JJGS?: unknown
   readonly MAXSG?: unknown

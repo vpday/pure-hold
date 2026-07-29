@@ -1,12 +1,28 @@
 <script setup lang="ts">
+import type { FundPerformanceRange } from '@/domains/funds/models/fundCumulativeReturns'
+import { computed } from 'vue'
+
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
+import type {
+  FundPerformanceChartModel,
+  FundPerformanceRangeOption,
+  FundReferenceIndexOption,
+} from '../models/fundPerformance'
 import FundDetailHeader from './FundDetailHeader.vue'
+import FundPerformanceChart from './FundPerformanceChart.vue'
 import FundTradingRules from './FundTradingRules.vue'
 
-defineProps<{
+const props = defineProps<{
   activeTab: string
   error: string
   isLoading: boolean
+  performanceChart?: FundPerformanceChartModel
+  performanceError: string
+  performanceIsLoading: boolean
+  performanceRangeOptions: readonly FundPerformanceRangeOption[]
+  referenceIndexOptions: readonly FundReferenceIndexOption[]
+  selectedPerformanceRange: FundPerformanceRange
+  selectedReferenceIndexCode: string
   size: string
   viewModel: FundDetailViewModel
   visible: boolean
@@ -14,10 +30,17 @@ defineProps<{
 const emit = defineEmits<{
   close: []
   edit: [code: string]
+  retryPerformance: []
   retry: []
+  selectPerformanceRange: [range: FundPerformanceRange]
+  selectReferenceIndex: [code: string]
   selectTab: [tab: string]
   toggleDetails: []
 }>()
+
+const referenceSelectOptions = computed(() =>
+  props.referenceIndexOptions.map(({ code, name }) => ({ label: name, value: code })),
+)
 
 const tabs = [
   { label: '业绩表现', value: 'performance' },
@@ -163,8 +186,33 @@ function trendClass(trend: FundDetailTrend): string {
             :label="tab.label"
             :value="tab.value"
           >
+            <div v-if="tab.value === 'performance'" class="min-w-0">
+              <div class="performance-filters">
+                <t-select
+                  label="日期范围："
+                  :options="performanceRangeOptions"
+                  :value="selectedPerformanceRange"
+                  @update:value="
+                    emit('selectPerformanceRange', String($event) as FundPerformanceRange)
+                  "
+                />
+                <t-select
+                  label="参考指数："
+                  :options="referenceSelectOptions"
+                  :value="selectedReferenceIndexCode"
+                  @update:value="emit('selectReferenceIndex', String($event))"
+                />
+              </div>
+              <FundPerformanceChart
+                :error="performanceError"
+                :is-loading="performanceIsLoading"
+                :model="performanceChart"
+                :visible="visible && activeTab === 'performance'"
+                @retry="emit('retryPerformance')"
+              />
+            </div>
             <FundTradingRules
-              v-if="tab.value === 'trading-rules' && viewModel.tradingRules"
+              v-else-if="tab.value === 'trading-rules' && viewModel.tradingRules"
               :rules="viewModel.tradingRules"
             />
             <div
@@ -197,6 +245,10 @@ function trendClass(trend: FundDetailTrend): string {
 
 .fund-detail-scroll {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.performance-filters {
+  @apply mb-4 flex w-full sm:w-55 flex-col gap-2 sm:flex-row;
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {
