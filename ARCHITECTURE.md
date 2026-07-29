@@ -18,11 +18,13 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 市场状态     | `fetchTencentMarketStatus`                             | 腾讯市场状态适配器的领域入口                    |
 | 页面模型     | `toIndexOverviewViewModel`                             | 领域对象到分组展示对象的转换点                  |
 | 基金列表     | `src/features/fund-list/FundListSection.vue`           | 基金分类、排序、展示、删除和分组管理入口        |
+| 基金详情     | `src/features/fund-detail/FundDetailEntry.vue`         | 详情 Drawer、基础资料会话和编辑切换入口         |
 | 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口      |
 | 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                  |
 | 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件        |
 | 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化          |
 | 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                |
+| 基金资料 API | `fetchTiantianFundBasicInfo`                           | 天天基金基础资料适配器的领域入口                |
 | 基金持久化   | `loadFundState` / `saveFundState`                      | 版本化基金状态的加载、验证、恢复和保存          |
 | 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态               |
 | PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本              |
@@ -84,7 +86,7 @@ src/
 │  └─ funds/
 │     ├─ models/                # 基金快照、分组、汇总持仓和搜索结果
 │     ├─ services/eastmoney/    # 东方财富基金搜索适配器
-│     ├─ services/tiantian/     # 天天基金实时行情适配器
+│     ├─ services/tiantian/     # 天天基金实时行情与基础资料适配器
 │     ├─ services/persistence/  # 版本化基金状态持久化与恢复
 │     └─ stores/                # 基金共享领域状态与刷新事务
 ├─ features/
@@ -95,6 +97,7 @@ src/
 │  │  ├─ models/                # 页面展示模型
 │  │  └─ presenters/            # 领域对象到页面模型
 │  ├─ fund-list/                # 基金分类、列表、排序和展示
+│  ├─ fund-detail/              # 基金详情、局部基础资料会话和响应式 Drawer
 │  ├─ fund-group-settings/      # 自定义基金分组管理
 │  ├─ fund-holding-form/        # 新增与编辑共用的持仓字段和校验
 │  ├─ fund-edit/                # 单基金持仓与分组编辑
@@ -105,7 +108,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundEditEntry`。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内按基金代码加载和缓存 `FundBasicInfo`；详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -156,6 +159,21 @@ FundListSection 操作入口
 
 两个 Store 操作分别先持久化完整候选状态再替换对应内存引用，但编辑 Feature 不把两者合并为跨步骤事务。持仓草稿全部为空时跳过持仓操作，只保存自定义分组；部分填写时仍要求完整持仓合法，清空已有持仓不会删除原记录。分组保存失败时已保存持仓保留，界面继续打开；再次提交从持仓步骤重新开始。系统派生的“全部”和“持仓”不进入分组草稿。
 
+基金详情的数据流是：
+
+```text
+FundListSection 桌面或移动入口
+  -> FundDetailEntry 读取 Funds Store 的 FundSnapshot
+  -> 立即生成名称、代码、净值和收益展示模型
+  -> fetchTiantianFundBasicInfo
+  -> FundBaseInfos DTO 校验与归一化
+  -> Feature 局部 FundBasicInfo 会话缓存
+  -> toFundDetailViewModel
+  -> 响应式底部 Drawer
+```
+
+基础资料缓存只存在于 `FundDetailEntry` 挂载期间，不进入 Pinia、localStorage 或 Service Worker。关闭详情保留成功缓存；全局刷新清空缓存，并在详情打开时重新请求当前基金。基础资料失败只影响详情区，Store 快照提供的头部行情继续展示。
+
 关键 seam：
 
 - `fetchEastmoneyIndexQuotes` 隐藏 HTTPS、超时、每次请求生成的 UUID v4 设备标识、查询参数和东方财富字段协议。
@@ -164,6 +182,8 @@ FundListSection 操作入口
 - `toIndexOverviewViewModel` 隐藏分组组装、数字、时间、状态文案和涨跌语义格式化。
 - `useBreakpoints` 隐藏 Tailwind CSS 变量读取和 `matchMedia` 监听。
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
+- `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验和详情基础字段归一化。
+- `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
 - `loadFundState` / `saveFundState` 隐藏基金状态 schema 版本、结构验证、损坏数据备份和恢复。
@@ -199,13 +219,15 @@ FundListSection 操作入口
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
 
-实时指数行情、东方财富基金搜索和天天基金实时行情不进入 Service Worker 缓存。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
+实时指数行情、东方财富基金搜索、天天基金实时行情和详情基础资料不进入 Service Worker 缓存。详情基础资料缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
 
 ### UI 与响应式
 
 TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite resolver 自动导入。Tailwind CSS 负责布局与视觉样式。
 
 纯 CSS 布局优先使用 Tailwind 响应式类。只有 Drawer/Collapse 分流、轮播容量等 JavaScript 行为使用 `useBreakpoints`。该 composable 读取 Tailwind v4 的 `--breakpoint-*` CSS 变量，使 CSS 与 JavaScript 共用同一断点来源。
+
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `85dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。每次打开时，桌面基础详情默认展开，移动端默认收起；打开后的手动状态不随视口变化重置。
 
 ### 时间和行情语义
 
@@ -228,21 +250,22 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以下列文件为准：
 
-| 事实                      | 权威来源                                  |
-| ------------------------- | ----------------------------------------- |
-| 依赖版本和命令            | `package.json`                            |
-| Vite 插件、PWA 构建和分包 | `vite.config.ts`                          |
-| Service Worker 缓存规则   | `src/sw.ts`                               |
-| TypeScript 范围和约束     | `tsconfig*.json`                          |
-| 格式化和 lint 规则        | `.oxfmtrc.json`、`.oxlintrc.json`         |
-| 离线指数目录              | `indexDefinitions.json`                   |
-| 指数目录更新规则          | `scripts/update-index-definitions.mjs`    |
-| 默认指数组                | `defaultIndexGroups.ts`                   |
-| 指数刷新行为              | `useIndexQuotesStore.ts`                  |
-| 基金状态形状              | `fundState.ts`                            |
-| 基金持久化版本与 key      | `fundStateSchemaVersion.ts`               |
-| 基金搜索协议              | `services/eastmoney/`                     |
-| 基金状态与刷新行为        | `useFundsStore.ts`                        |
-| 响应式断点                | Tailwind 生成的 `--breakpoint-*` CSS 变量 |
+| 事实                       | 权威来源                                  |
+| -------------------------- | ----------------------------------------- |
+| 依赖版本和命令             | `package.json`                            |
+| Vite 插件、PWA 构建和分包  | `vite.config.ts`                          |
+| Service Worker 缓存规则    | `src/sw.ts`                               |
+| TypeScript 范围和约束      | `tsconfig*.json`                          |
+| 格式化和 lint 规则         | `.oxfmtrc.json`、`.oxlintrc.json`         |
+| 离线指数目录               | `indexDefinitions.json`                   |
+| 指数目录更新规则           | `scripts/update-index-definitions.mjs`    |
+| 默认指数组                 | `defaultIndexGroups.ts`                   |
+| 指数刷新行为               | `useIndexQuotesStore.ts`                  |
+| 基金状态形状               | `fundState.ts`                            |
+| 基金持久化版本与 key       | `fundStateSchemaVersion.ts`               |
+| 基金搜索协议               | `services/eastmoney/`                     |
+| 基金实时行情与基础资料协议 | `services/tiantian/`                      |
+| 基金状态与刷新行为         | `useFundsStore.ts`                        |
+| 响应式断点                 | Tailwind 生成的 `--breakpoint-*` CSS 变量 |
 
 只有系统职责、模块关系、依赖方向或关键 seam 发生变化时才更新本文。具体命令和执行规则放在 `AGENTS.md`，单次实施过程放在 ExecPlan，不在本文记录变更历史。

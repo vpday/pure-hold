@@ -7,7 +7,12 @@ import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRu
 import FundActions from './FundActions.vue'
 
 defineProps<{ row: FundRowViewModel }>()
-const emit = defineEmits<{ comingSoon: []; delete: [code: string]; edit: [code: string] }>()
+const emit = defineEmits<{
+  comingSoon: []
+  delete: [code: string]
+  detail: [code: string]
+  edit: [code: string]
+}>()
 const actionsVisible = ref(false)
 
 function trendClass(trend: FundTrend): string {
@@ -20,12 +25,12 @@ function trendClass(trend: FundTrend): string {
 <template>
   <t-card :bordered="true" class="w-full">
     <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="font-medium">{{ row.name }}</h3>
-        <p class="font-mono text-xs tabular-nums text-(--td-text-color-secondary)">
+      <button type="button" class="min-w-0 flex-1 text-left" @click="emit('detail', row.code)">
+        <span class="block font-medium">{{ row.name }}</span>
+        <span class="block font-mono text-xs tabular-nums text-(--td-text-color-secondary)">
           {{ row.code }}
-        </p>
-        <div v-if="row.tags.length" class="mt-1 flex flex-wrap gap-1">
+        </span>
+        <span v-if="row.tags.length" class="mt-1 flex flex-wrap gap-1">
           <t-tag
             v-for="tag in row.tags"
             :key="tag"
@@ -35,13 +40,13 @@ function trendClass(trend: FundTrend): string {
           >
             {{ tag }}
           </t-tag>
-        </div>
-      </div>
+        </span>
+      </button>
       <t-button
         shape="square"
         variant="text"
         :aria-label="actionsVisible ? '收起基金操作' : '展开基金操作'"
-        @click="actionsVisible = !actionsVisible"
+        @click.stop="actionsVisible = !actionsVisible"
       >
         <template #icon><t-icon :name="actionsVisible ? 'chevron-up' : 'more'" /></template>
       </t-button>

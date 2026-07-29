@@ -5,6 +5,7 @@ import { MessagePlugin } from 'tdesign-vue-next'
 
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
+import FundDetailEntry from '@/features/fund-detail/FundDetailEntry.vue'
 import FundGroupSettingsEntry from '@/features/fund-group-settings/FundGroupSettingsEntry.vue'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDesktopTable from './components/FundDesktopTable.vue'
@@ -25,6 +26,7 @@ const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
 const fundEdit = ref<{ open: (code: string) => void }>()
+const fundDetail = ref<{ open: (code: string) => void }>()
 const categories = computed(() =>
   buildFundCategories(fundOrder.value, holdingOrder.value, groups.value),
 )
@@ -141,6 +143,7 @@ function latestText(values: readonly string[]): string {
           :sort="activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
+          @detail="fundDetail?.open($event)"
           @edit="fundEdit?.open($event)"
           @sort-change="setSort"
         />
@@ -150,12 +153,14 @@ function latestText(values: readonly string[]): string {
           :rows="rows"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
+          @detail="fundDetail?.open($event)"
           @edit="fundEdit?.open($event)"
         />
       </div>
     </template>
 
     <FundGroupSettingsEntry ref="groupSettings" @saved="clearSavedCategorySorts" />
+    <FundDetailEntry ref="fundDetail" @edit="fundEdit?.open($event)" />
     <FundEditEntry ref="fundEdit" />
   </section>
 </template>

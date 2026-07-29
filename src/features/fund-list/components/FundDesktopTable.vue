@@ -21,6 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   comingSoon: []
   delete: [code: string]
+  detail: [code: string]
   edit: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
@@ -61,6 +62,7 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
   ]
 })
 const moreActionOptions = [
+  { content: '详情', value: 'detail' },
   { content: '编辑', value: 'edit' },
   { content: '删除', theme: 'error', value: 'delete' },
   { content: '记录买入', value: 'buy' },
@@ -103,6 +105,10 @@ function renderQuoteTitle(label: string, date: string) {
 }
 
 function handleMoreAction(code: string, value: unknown): void {
+  if (value === 'detail') {
+    emit('detail', code)
+    return
+  }
   if (value === 'edit') {
     emit('edit', code)
     return
@@ -168,7 +174,9 @@ function formatRowDate(rowDate: string, headerDate: string): string {
   >
     <template #name-cell="{ row }">
       <div>
-        <p class="whitespace-normal">{{ row.name }}</p>
+        <button type="button" class="fund-name-button" @click="emit('detail', row.code)">
+          {{ row.name }}
+        </button>
         <div class="fund-code-tags">
           <p class="font-mono tabular-nums text-(--td-text-color-secondary)">
             {{ row.code }}
@@ -257,5 +265,10 @@ function formatRowDate(rowDate: string, headerDate: string): string {
 .fund-code-tags {
   @apply mt-1 flex max-w-35 gap-1 overflow-x-auto scrollbar-thumb-transparent
   hover:scrollbar-thumb-current;
+}
+
+.fund-name-button {
+  @apply cursor-pointer whitespace-normal text-left hover:text-(--td-brand-color)
+  focus-visible:outline;
 }
 </style>

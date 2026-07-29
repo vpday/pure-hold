@@ -51,7 +51,7 @@ async function refreshAllData(): Promise<void> {
         </div>
       </t-header>
       <t-content class="flex-1">
-        <div class="mx-auto w-full max-w-7xl p-4">
+        <div class="mx-auto w-full max-w-7xl pt-4">
           <IndexOverviewSection />
           <FundListSection @search-funds="fundSearchEntry?.open()" />
         </div>
