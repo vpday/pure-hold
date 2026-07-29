@@ -167,12 +167,14 @@ FundListSection 桌面或移动入口
   -> 立即生成名称、代码、净值和收益展示模型
   -> fetchTiantianFundBasicInfo
   -> FundBaseInfos DTO 校验与归一化
+  -> 基础资料与交易规则领域值组成 FundBasicInfo
   -> Feature 局部 FundBasicInfo 会话缓存
   -> toFundDetailViewModel
-  -> 响应式底部 Drawer
+  -> FundDetailViewModel
+  -> 响应式底部 Drawer / FundTradingRules
 ```
 
-基础资料缓存只存在于 `FundDetailEntry` 挂载期间，不进入 Pinia、localStorage 或 Service Worker。关闭详情保留成功缓存；全局刷新清空缓存，并在详情打开时重新请求当前基金。基础资料失败只影响详情区，Store 快照提供的头部行情继续展示。
+天天基金协议中的百分号、字段名和确认日编码在适配器中转换为 `FundBasicInfo` 的费率、人民币金额、状态和非负整数天数；协议细节不进入 Feature。`toFundDetailViewModel` 统一生成金额单位、费率、折扣、状态 tone 和 T+N 文案，`FundTradingRules` 只通过 props 渲染三张卡片。基础资料缓存只存在于 `FundDetailEntry` 挂载期间，不进入 Pinia、localStorage 或 Service Worker。关闭详情保留成功缓存；全局刷新清空缓存，并在详情打开时重新请求当前基金。基础资料失败只影响详情区，Store 快照提供的头部行情继续展示。
 
 关键 seam：
 
@@ -182,8 +184,9 @@ FundListSection 桌面或移动入口
 - `toIndexOverviewViewModel` 隐藏分组组装、数字、时间、状态文案和涨跌语义格式化。
 - `useBreakpoints` 隐藏 Tailwind CSS 变量读取和 `matchMedia` 监听。
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
-- `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验和详情基础字段归一化。
+- `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验，以及基础资料和交易规则字段的领域归一化。
 - `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
+- `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
 - `loadFundState` / `saveFundState` 隐藏基金状态 schema 版本、结构验证、损坏数据备份和恢复。
@@ -227,7 +230,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 纯 CSS 布局优先使用 Tailwind 响应式类。只有 Drawer/Collapse 分流、轮播容量等 JavaScript 行为使用 `useBreakpoints`。该 composable 读取 Tailwind v4 的 `--breakpoint-*` CSS 变量，使 CSS 与 JavaScript 共用同一断点来源。
 
-基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `85dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。每次打开时，桌面基础详情默认展开，移动端默认收起；打开后的手动状态不随视口变化重置。
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `85dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。每次打开时，桌面基础详情默认展开，移动端默认收起；打开后的手动状态不随视口变化重置。
 
 ### 时间和行情语义
 

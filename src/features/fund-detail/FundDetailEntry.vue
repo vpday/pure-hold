@@ -24,7 +24,7 @@ const viewModel = computed(() => {
     ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value)
     : undefined
 })
-const drawerSize = computed(() => (isSmUp.value ? '85dvh' : '100dvh'))
+const drawerSize = computed(() => (isSmUp.value ? '90dvh' : '100dvh'))
 
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {

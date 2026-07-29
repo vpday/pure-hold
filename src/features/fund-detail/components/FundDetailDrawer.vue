@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
 import FundDetailHeader from './FundDetailHeader.vue'
+import FundTradingRules from './FundTradingRules.vue'
 
 defineProps<{
   activeTab: string
@@ -56,10 +57,10 @@ function trendClass(trend: FundDetailTrend): string {
     </template>
 
     <div class="h-full min-h-0 overflow-x-hidden overflow-y-auto fund-detail-scroll">
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-4 gap-4">
         <div>
           <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
-          <p class="mt-1 font-mono text-lg font-medium tabular-nums text-(--td-text-color-primary)">
+          <p class="nav-value">
             {{ viewModel.navText }}
           </p>
           <p class="font-mono text-xs tabular-nums">
@@ -138,13 +139,13 @@ function trendClass(trend: FundDetailTrend): string {
             <dt class="text-xs text-(--td-text-color-secondary)">成立日期</dt>
             <dd class="mt-1 text-(--td-text-color-primary)">{{ viewModel.establishedDateText }}</dd>
           </div>
-          <div>
+          <div v-if="viewModel.trackingIndexName && viewModel.trackingIndexName !== '--'">
             <dt class="text-xs text-(--td-text-color-secondary)">跟踪指数</dt>
             <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
               {{ viewModel.trackingIndexName }}
             </dd>
           </div>
-          <div>
+          <div v-if="viewModel.trackingErrorText && viewModel.trackingErrorText !== '--'">
             <dt class="text-xs text-(--td-text-color-secondary)">跟踪误差</dt>
             <dd class="mt-1 font-mono tabular-nums text-(--td-text-color-primary)">
               {{ viewModel.trackingErrorText }}
@@ -155,8 +156,21 @@ function trendClass(trend: FundDetailTrend): string {
 
       <div class="mt-2 min-w-0">
         <t-tabs :value="activeTab" @update:value="emit('selectTab', String($event))">
-          <t-tab-panel v-for="tab in tabs" :key="tab.value" :label="tab.label" :value="tab.value">
-            <div class="flex min-h-56 items-center justify-center py-8">
+          <t-tab-panel
+            class="mt-4"
+            v-for="tab in tabs"
+            :key="tab.value"
+            :label="tab.label"
+            :value="tab.value"
+          >
+            <FundTradingRules
+              v-if="tab.value === 'trading-rules' && viewModel.tradingRules"
+              :rules="viewModel.tradingRules"
+            />
+            <div
+              v-else-if="tab.value !== 'trading-rules'"
+              class="flex min-h-56 items-center justify-center py-8"
+            >
               <t-empty :description="`${tab.label}功能后续开发`" />
             </div>
           </t-tab-panel>
@@ -171,6 +185,10 @@ function trendClass(trend: FundDetailTrend): string {
 
 .details-toggle {
   @apply flex w-full items-center justify-between gap-3 text-left;
+}
+
+.nav-value {
+  @apply mt-1 font-mono text-lg font-medium tabular-nums text-(--td-text-color-primary);
 }
 
 .details-grid {

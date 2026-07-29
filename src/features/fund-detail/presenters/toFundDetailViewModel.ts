@@ -1,8 +1,16 @@
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
-import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
+import type {
+  FundDetailTrend,
+  FundDetailViewModel,
+  FundTradingRulesViewModel,
+  FundTradingStatusTone,
+} from '../models/fundDetailViewModel'
 
 const riskNames = ['低', '中低', '中', '中高', '高'] as const
+const successStatuses = new Set(['开放申购', '开放赎回'])
+const warningStatuses = new Set(['限大额', '限制申购'])
+const errorStatuses = new Set(['暂停申购', '暂停赎回', '封闭期'])
 
 export function toFundDetailViewModel(
   snapshot: FundSnapshot,
@@ -27,7 +35,79 @@ export function toFundDetailViewModel(
     shanghaiRating: basicInfo?.shanghaiRating ?? null,
     trackingErrorText: formatNumber(basicInfo?.trackingError ?? null, 4),
     trackingIndexName: basicInfo?.trackingIndexName ?? '--',
+    tradingRules: basicInfo ? toTradingRulesViewModel(basicInfo) : null,
   }
+}
+
+function toTradingRulesViewModel(basicInfo: FundBasicInfo): FundTradingRulesViewModel {
+  let purchaseDiscountText: string | null = null
+  let standardPurchaseFeeText: string | null = null
+  if (
+    basicInfo.purchaseFeePercent !== null &&
+    basicInfo.standardPurchaseFeePercent !== null &&
+    basicInfo.standardPurchaseFeePercent > 0 &&
+    basicInfo.purchaseFeePercent < basicInfo.standardPurchaseFeePercent
+  ) {
+    purchaseDiscountText = `${formatCompactNumber(
+      (basicInfo.purchaseFeePercent / basicInfo.standardPurchaseFeePercent) * 10,
+    )}折`
+    standardPurchaseFeeText = formatRate(basicInfo.standardPurchaseFeePercent)
+  }
+
+  const purchaseStatus = formatTradingStatus(basicInfo.purchaseStatus)
+  const redemptionStatus = formatTradingStatus(basicInfo.redemptionStatus)
+
+  return {
+    custodyFeeText: formatAnnualFee(basicInfo.custodyFeePercent),
+    dailyPurchaseLimitText: formatAmount(basicInfo.dailyPurchaseLimitYuan),
+    managementFeeText: formatAnnualFee(basicInfo.managementFeePercent),
+    minimumPurchaseAmountText: formatAmount(basicInfo.minimumPurchaseAmountYuan),
+    purchaseConfirmationText: formatConfirmationDays(basicInfo.purchaseConfirmationDays),
+    purchaseDiscountText,
+    purchaseFeeText: formatRate(basicInfo.purchaseFeePercent),
+    purchaseStatusText: purchaseStatus.text,
+    purchaseStatusTone: purchaseStatus.tone,
+    redemptionConfirmationText: formatConfirmationDays(basicInfo.redemptionConfirmationDays),
+    redemptionFundsArrivalText: formatConfirmationDays(basicInfo.redemptionFundsArrivalDays),
+    redemptionStatusText: redemptionStatus.text,
+    redemptionStatusTone: redemptionStatus.tone,
+    salesServiceFeeText: formatAnnualFee(basicInfo.salesServiceFeePercent),
+    standardPurchaseFeeText,
+  }
+}
+
+function formatAmount(value: number | null): string {
+  if (value === null) return '--'
+  if (value < 10_000) return `${formatCompactNumber(value)}元`
+  if (value < 100_000_000) return `${formatCompactNumber(value / 10_000)}万元`
+  return `${formatCompactNumber(value / 100_000_000)}亿元`
+}
+
+function formatAnnualFee(value: number | null): string {
+  return value === null ? '--' : `${formatRate(value)}（每年）`
+}
+
+function formatCompactNumber(value: number): string {
+  return value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function formatConfirmationDays(value: number | null): string {
+  return value === null ? '--' : `T+${value}`
+}
+
+function formatRate(value: number | null): string {
+  return value === null ? '--' : `${formatCompactNumber(value)}%`
+}
+
+function formatTradingStatus(value: string | null): {
+  readonly text: string
+  readonly tone: FundTradingStatusTone
+} {
+  if (value === null) return { text: '--', tone: 'neutral' }
+  if (successStatuses.has(value)) return { text: value, tone: 'success' }
+  if (warningStatuses.has(value)) return { text: value, tone: 'warning' }
+  if (errorStatuses.has(value)) return { text: value, tone: 'error' }
+  return { text: value, tone: 'neutral' }
 }
 
 function formatNumber(value: number | null, digits: number): string {

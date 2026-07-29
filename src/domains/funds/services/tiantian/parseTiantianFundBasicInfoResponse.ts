@@ -23,13 +23,25 @@ export function parseTiantianFundBasicInfoResponse(
   return {
     code: requestedCode,
     companyName: toText(record.JJGS),
+    custodyFeePercent: toPercent(record.TRUSTEXP),
+    dailyPurchaseLimitYuan: toPositiveNumber(record.MAXSG),
     establishedDate: toText(record.ESTABDATE),
     fundType: toText(record.FTYPE),
+    managementFeePercent: toPercent(record.MGREXP),
+    minimumPurchaseAmountYuan: toNonNegativeNumber(record.MINSG),
     morningstarRating: toRating(record.RLEVEL_CX),
     netAssetsYuan: toNonNegativeNumber(record.ENDNAV),
     netAssetsDate: toText(record.FEGMRQ),
+    purchaseConfirmationDays: toNonNegativeInteger(record.SSBCFMDATA),
+    purchaseFeePercent: toPercent(record.RATE),
+    purchaseStatus: toText(record.SGZT),
+    redemptionConfirmationDays: toNonNegativeInteger(record.RDMCFMDATA),
+    redemptionFundsArrivalDays: toNonNegativeInteger(record.DRAWCFMDATA),
+    redemptionStatus: toText(record.SHZT),
     riskLevel: toRating(record.RISKLEVEL),
+    salesServiceFeePercent: toPercent(record.SALESEXP),
     shanghaiRating: toRating(record.RLEVEL_SZ),
+    standardPurchaseFeePercent: toPercent(record.SOURCERATE),
     trackingError: toFiniteNumber(record.TRKERROR),
     trackingIndexName: toText(record.INDEXNAME),
   }
@@ -68,6 +80,31 @@ function toFiniteNumber(value: unknown): number | null {
 function toNonNegativeNumber(value: unknown): number | null {
   const number = toFiniteNumber(value)
   return number !== null && number >= 0 ? number : null
+}
+
+function toPositiveNumber(value: unknown): number | null {
+  const number = toFiniteNumber(value)
+  return number !== null && number > 0 ? number : null
+}
+
+function toNonNegativeInteger(value: unknown): number | null {
+  const number = toNonNegativeNumber(value)
+  return number !== null && Number.isInteger(number) ? number : null
+}
+
+function toPercent(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? value : null
+  }
+  if (typeof value !== 'string') {
+    return null
+  }
+  const text = value.trim()
+  if (!/^(?:\d+(?:\.\d+)?|\.\d+)%?$/.test(text)) {
+    return null
+  }
+  const number = Number(text.endsWith('%') ? text.slice(0, -1) : text)
+  return Number.isFinite(number) ? number : null
 }
 
 function toRating(value: unknown): number | null {
