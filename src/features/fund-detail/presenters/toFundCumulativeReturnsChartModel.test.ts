@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { toFundPerformanceChartModel } from './toFundPerformanceChartModel.ts'
+import { toFundCumulativeReturnsChartModel } from './toFundCumulativeReturnsChartModel.ts'
 
 test('maps cumulative returns to three named chart series without filling holes', () => {
   assert.deepEqual(
-    toFundPerformanceChartModel(
+    toFundCumulativeReturnsChartModel(
       {
         fundCode: '161725',
         maximumDrawdownPercent: 67.9365,
@@ -47,7 +47,7 @@ test('maps cumulative returns to three named chart series without filling holes'
 })
 
 test('uses the latest date point and placeholders for missing summary values', () => {
-  const model = toFundPerformanceChartModel(
+  const model = toFundCumulativeReturnsChartModel(
     {
       fundCode: '161725',
       maximumDrawdownPercent: null,
@@ -83,7 +83,7 @@ test('uses the latest date point and placeholders for missing summary values', (
 })
 
 test('uses the provider drawdown value with the calculated peak and trough', () => {
-  const model = toFundPerformanceChartModel(
+  const model = toFundCumulativeReturnsChartModel(
     {
       fundCode: '161725',
       maximumDrawdownPercent: 7.5,

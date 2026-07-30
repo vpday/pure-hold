@@ -1,24 +1,23 @@
 import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 
-import type {
-  FundCumulativeReturns,
-  FundPerformanceRange,
-} from '@/domains/funds/models/fundCumulativeReturns.ts'
+import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns.ts'
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
+import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange.ts'
 import { fetchEastmoneyFundCumulativeReturns } from '@/domains/funds/services/eastmoney/fetchEastmoneyFundCumulativeReturns.ts'
-import {
-  buildFundReferenceIndexOptions,
-  defaultFundPerformanceRange,
-} from '../config/fundPerformanceOptions.ts'
-import type { FundReferenceIndexOption, LoadFundCumulativeReturns } from '../models/fundPerformance'
+import { buildFundReferenceIndexOptions } from '../config/fundCumulativeReturnsOptions.ts'
+import { defaultFundHistoryRange } from '../config/fundHistoryRangeOptions.ts'
+import type {
+  FundReferenceIndexOption,
+  LoadFundCumulativeReturns,
+} from '../models/fundCumulativeReturnsChart'
 
-export function useFundPerformance(
+export function useFundCumulativeReturns(
   load: LoadFundCumulativeReturns = fetchEastmoneyFundCumulativeReturns,
 ) {
   const currentFundCode = ref<string>()
   const referenceIndexOptions = shallowRef<readonly FundReferenceIndexOption[]>([])
   const selectedReferenceIndexCode = ref('')
-  const selectedRange = ref<FundPerformanceRange>(defaultFundPerformanceRange)
+  const selectedRange = ref<FundHistoryRange>(defaultFundHistoryRange)
   const data = shallowRef<FundCumulativeReturns>()
   const isLoading = ref(false)
   const error = ref('')
@@ -47,7 +46,7 @@ export function useFundPerformance(
     currentFundCode.value = fundCode
     referenceIndexOptions.value = options
     selectedReferenceIndexCode.value = firstOption.code
-    selectedRange.value = defaultFundPerformanceRange
+    selectedRange.value = defaultFundHistoryRange
     data.value = undefined
     error.value = ''
     await request(false)
@@ -64,7 +63,7 @@ export function useFundPerformance(
     await request(false)
   }
 
-  async function selectRange(range: FundPerformanceRange): Promise<void> {
+  async function selectRange(range: FundHistoryRange): Promise<void> {
     if (range === selectedRange.value) return
     selectedRange.value = range
     await request(false)
@@ -86,7 +85,7 @@ export function useFundPerformance(
     currentFundCode.value = undefined
     referenceIndexOptions.value = []
     selectedReferenceIndexCode.value = ''
-    selectedRange.value = defaultFundPerformanceRange
+    selectedRange.value = defaultFundHistoryRange
     data.value = undefined
     isLoading.value = false
     error.value = ''
@@ -137,7 +136,7 @@ export function useFundPerformance(
     generation: number,
     fundCode: string,
     referenceIndexCode: string,
-    range: FundPerformanceRange,
+    range: FundHistoryRange,
   ): boolean {
     return (
       generation === requestGeneration &&
@@ -171,11 +170,7 @@ export function useFundPerformance(
   }
 }
 
-function cacheKey(
-  fundCode: string,
-  referenceIndexCode: string,
-  range: FundPerformanceRange,
-): string {
+function cacheKey(fundCode: string, referenceIndexCode: string, range: FundHistoryRange): string {
   return `${fundCode}:${referenceIndexCode}:${range}`
 }
 

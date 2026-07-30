@@ -1,19 +1,16 @@
-import {
-  fundPerformanceRanges,
-  type FundPerformanceRange,
-} from '../../models/fundCumulativeReturns.ts'
+import { fundHistoryRanges, type FundHistoryRange } from '../../models/fundHistoryRange.ts'
 
 const endpoint = 'https://fundcomapi.eastmoney.com/mm/newCore/FundVPageAccV2'
 
 export function createEastmoneyFundCumulativeReturnsRequestUrl(
   fundCode: string,
   referenceIndexCode: string,
-  range: FundPerformanceRange,
+  range: FundHistoryRange,
 ): URL {
   assertFundCode(fundCode, 'fund code')
   assertFundCode(referenceIndexCode, 'reference index code')
-  if (!fundPerformanceRanges.includes(range)) {
-    throw new TypeError('performance range is invalid')
+  if (!fundHistoryRanges.includes(range)) {
+    throw new TypeError('fund history range is invalid')
   }
 
   const url = new URL(endpoint)

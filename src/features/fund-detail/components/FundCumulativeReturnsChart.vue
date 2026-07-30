@@ -12,8 +12,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
-import type { FundPerformanceChartModel } from '../models/fundPerformance'
-import { buildFundPerformanceChartOption } from '../presenters/buildFundPerformanceChartOption'
+import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart'
+import { buildFundCumulativeReturnsChartOption } from '../presenters/buildFundCumulativeReturnsChartOption'
 
 echarts.use([
   LineChart,
@@ -28,7 +28,7 @@ echarts.use([
 const props = defineProps<{
   error: string
   isLoading: boolean
-  model?: FundPerformanceChartModel
+  model?: FundCumulativeReturnsChartModel
   visible: boolean
 }>()
 const emit = defineEmits<{ retry: [] }>()
@@ -41,7 +41,7 @@ let resizeObserver: ResizeObserver | undefined
 function render(): void {
   if (!chart || !props.model) return
   chart.setOption(
-    buildFundPerformanceChartOption(props.model, {
+    buildFundCumulativeReturnsChartOption(props.model, {
       showLegend: isLgUp.value,
       theme: {
         annotation: themeColor('--td-font-gray-3'),
@@ -60,7 +60,7 @@ function themeColor(name: string): string | undefined {
   return value || undefined
 }
 
-function summaryColor(color: FundPerformanceChartModel['summary'][number]['color']): string {
+function summaryColor(color: FundCumulativeReturnsChartModel['summary'][number]['color']): string {
   if (color === 'fund') return 'var(--td-error-color-6)'
   if (color === 'peer') return 'var(--td-gray-color-5)'
   if (color === 'reference') return 'var(--td-brand-color-4)'

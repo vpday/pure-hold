@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundPerformanceChartModel } from '../models/fundPerformance.ts'
-import { buildFundPerformanceChartOption } from './buildFundPerformanceChartOption.ts'
+import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart.ts'
+import { buildFundCumulativeReturnsChartOption } from './buildFundCumulativeReturnsChartOption.ts'
 
 test('builds a three-line percentage option that preserves null gaps', () => {
   const colors = ['red', 'blue', 'gray'] as const
-  const option = buildFundPerformanceChartOption(
+  const option = buildFundCumulativeReturnsChartOption(
     {
       dates: ['2016-12-03', '2026-07-29'],
       series: [
@@ -72,7 +72,7 @@ test('builds a three-line percentage option that preserves null gaps', () => {
 })
 
 test('overlays only the maximum drawdown segment in green', () => {
-  const option = buildFundPerformanceChartOption(drawdownModel(), {
+  const option = buildFundCumulativeReturnsChartOption(drawdownModel(), {
     theme: {
       annotation: 'darkgray',
       drawdownLine: 'green',
@@ -117,7 +117,7 @@ test('overlays only the maximum drawdown segment in green', () => {
 })
 
 test('does not render the ECharts legend in the mobile layout', () => {
-  const option = buildFundPerformanceChartOption(
+  const option = buildFundCumulativeReturnsChartOption(
     {
       dates: [],
       series: [
@@ -140,7 +140,7 @@ test('does not render the ECharts legend in the mobile layout', () => {
 })
 
 test('formats tooltip values with date, explicit signs and percentages', () => {
-  const option = buildFundPerformanceChartOption({
+  const option = buildFundCumulativeReturnsChartOption({
     dates: ['2026-07-29'],
     series: [
       { name: '基金累计收益', values: [1.2] },
@@ -169,7 +169,7 @@ test('formats tooltip values with date, explicit signs and percentages', () => {
   assert.doesNotMatch(text, /99\.00%/)
 })
 
-function drawdownModel(): FundPerformanceChartModel {
+function drawdownModel(): FundCumulativeReturnsChartModel {
   return {
     dates: ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'],
     drawdown: {

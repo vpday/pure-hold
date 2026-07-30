@@ -1,0 +1,27 @@
+import { fundHistoryRanges, type FundHistoryRange } from '../../models/fundHistoryRange.ts'
+
+const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/newCore/FundVPageDiagramNew'
+
+export function createTiantianFundNetValueHistoryRequestUrl(
+  fundCode: string,
+  range: FundHistoryRange,
+): URL {
+  if (!/^\d{6}$/.test(fundCode)) {
+    throw new TypeError('fund code must be exactly 6 digits')
+  }
+  if (!(fundHistoryRanges as readonly string[]).includes(range)) {
+    throw new TypeError('fund history range is invalid')
+  }
+
+  const url = new URL(endpoint)
+  url.search = new URLSearchParams({
+    FCODE: fundCode,
+    POINTCOUNT: '',
+    RANGE: range,
+    deviceid: crypto.randomUUID(),
+    plat: 'Iphone',
+    product: 'EFund',
+    version: '6.8.3',
+  }).toString()
+  return url
+}

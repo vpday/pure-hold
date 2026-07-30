@@ -18,13 +18,14 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 市场状态     | `fetchTencentMarketStatus`                             | 腾讯市场状态适配器的领域入口                    |
 | 页面模型     | `toIndexOverviewViewModel`                             | 领域对象到分组展示对象的转换点                  |
 | 基金列表     | `src/features/fund-list/FundListSection.vue`           | 基金分类、排序、展示、删除和分组管理入口        |
-| 基金详情     | `src/features/fund-detail/FundDetailEntry.vue`         | 详情 Drawer、基础资料会话和编辑切换入口         |
+| 基金详情     | `src/features/fund-detail/FundDetailEntry.vue`         | 详情 Drawer、基础资料与历史图表会话入口         |
 | 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口      |
 | 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                  |
 | 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件        |
 | 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化          |
 | 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                |
 | 累计收益 API | `fetchEastmoneyFundCumulativeReturns`                  | 东方财富基金历史累计收益适配器的领域入口        |
+| 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口      |
 | 基金资料 API | `fetchTiantianFundBasicInfo`                           | 天天基金基础资料适配器的领域入口                |
 | 基金持久化   | `loadFundState` / `saveFundState`                      | 版本化基金状态的加载、验证、恢复和保存          |
 | 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态               |
@@ -109,7 +110,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内按基金代码加载和缓存 `FundBasicInfo`；详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益与净值历史会话；详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -181,16 +182,29 @@ FundListSection 桌面或移动入口
 
 ```text
 FundBasicInfo 中成对归一化的跟踪指数代码与名称
-  -> useFundPerformance 构建参考指数候选与会话选择
+  -> useFundCumulativeReturns 构建参考指数候选与会话选择
   -> fetchEastmoneyFundCumulativeReturns
   -> FundVPageAccV2 DTO 校验、日期排序、重复日期与最大回撤归一化
   -> FundCumulativeReturns
   -> 会话级组合缓存、取消与过期响应隔离
-  -> toFundPerformanceChartModel
-  -> FundPerformanceChart 按需注册的 ECharts 折线图
+  -> toFundCumulativeReturnsChartModel
+  -> FundCumulativeReturnsChart 按需注册的 ECharts 折线图
 ```
 
 累计收益按基金、参考指数和范围组合缓存，只存在于 `FundDetailEntry` 生命周期内；切换选择时保留上一次成功数据，失败与基础资料错误独立展示。历史序列不进入 Funds Store、localStorage 或 Service Worker，协议字段、请求参数和空值处理也不进入 Vue 组件。
+
+基金详情净值历史的数据流是：
+
+```text
+FundDetailEntry 当前基金代码
+  -> useFundNetValueHistory 懒加载与共享缓存
+  -> fetchTiantianFundNetValueHistory
+  -> FundNetValueHistory
+  -> toFundNetValueChartModel
+  -> FundNetValueChart 按需注册的 ECharts 单折线图
+```
+
+单位净值与累计净值各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；第三方 `FSRQ`、`DWJZ`、`LJJZ` 和 `JZZZL` 字段只存在于天天基金适配器。净值历史首次切换到对应内层 Tab 时才加载，关闭详情会重置视图与范围，但会话生命周期内的成功缓存不进入 Pinia、localStorage 或 Service Worker。
 
 关键 seam：
 
@@ -201,9 +215,11 @@ FundBasicInfo 中成对归一化的跟踪指数代码与名称
 - `useBreakpoints` 隐藏 Tailwind CSS 变量读取和 `matchMedia` 监听。
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
 - `fetchEastmoneyFundCumulativeReturns` 隐藏累计收益 URL、范围参数、UUID、取消、响应校验、日期排序和空值归一化。
+- `fetchTiantianFundNetValueHistory` 隐藏净值历史 URL、范围参数、UUID、取消、响应校验、日期排序和可空数值归一化。
 - `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验，以及基础资料和交易规则字段的领域归一化。
 - `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
-- `useFundPerformance` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
+- `useFundCumulativeReturns` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
+- `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、共享缓存、请求复用、取消、重试和过期响应隔离。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
@@ -240,7 +256,7 @@ FundBasicInfo 中成对归一化的跟踪指数代码与名称
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
 
-实时指数行情、东方财富基金搜索与历史收益、天天基金实时行情和详情基础资料不进入 Service Worker 缓存。详情基础资料与累计收益的会话缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
+实时指数行情、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料和净值历史不进入 Service Worker 缓存。详情基础资料、累计收益与净值历史的会话缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
 
 ### UI 与响应式
 
@@ -248,7 +264,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 纯 CSS 布局优先使用 Tailwind 响应式类。只有 Drawer/Collapse 分流、轮播容量等 JavaScript 行为使用 `useBreakpoints`。该 composable 读取 Tailwind v4 的 `--breakpoint-*` CSS 变量，使 CSS 与 JavaScript 共用同一断点来源。
 
-基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `85dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。业绩表现区域使用响应式选择器和随容器宽度 resize 的累计收益图表；交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。每次打开时，桌面基础详情默认展开，移动端默认收起；打开后的手动状态不随视口变化重置。
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `85dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。业绩表现区域包含“累计收益”“单位净值”“累计净值”三个内层 Tab，各自保存日期范围；参考指数只属于累计收益。累计收益图保留三条收益曲线、摘要和最大回撤，两个净值图各显示一条红色折线，并在隐藏后重新显示时随容器 resize。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。每次打开详情时，内层 Tab 回到累计收益且三个范围回到近 6 月。
 
 ### 时间和行情语义
 

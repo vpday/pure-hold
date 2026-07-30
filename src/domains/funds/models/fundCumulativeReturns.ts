@@ -1,6 +1,4 @@
-export const fundPerformanceRanges = ['y', '3y', '6y', 'n', '3n', '5n', 'jn', 'ln'] as const
-
-export type FundPerformanceRange = (typeof fundPerformanceRanges)[number]
+import type { FundHistoryRange } from './fundHistoryRange.ts'
 
 export interface FundCumulativeReturnPoint {
   readonly date: string
@@ -13,6 +11,6 @@ export interface FundCumulativeReturns {
   readonly fundCode: string
   readonly maximumDrawdownPercent: number | null
   readonly referenceIndexCode: string
-  readonly range: FundPerformanceRange
+  readonly range: FundHistoryRange
   readonly points: readonly FundCumulativeReturnPoint[]
 }

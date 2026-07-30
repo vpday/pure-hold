@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
-  buildFundReferenceIndexOptions,
-  defaultFundPerformanceRange,
-  fundPerformanceRangeOptions,
-} from './fundPerformanceOptions.ts'
+import { buildFundReferenceIndexOptions } from './fundCumulativeReturnsOptions.ts'
 
 test('puts a valid tracking index first and keeps its name while deduplicating', () => {
   assert.deepEqual(buildFundReferenceIndexOptions(' 000001 ', ' 基金自身指数 '), [
@@ -28,22 +24,5 @@ test('uses the fixed index order when the tracking index pair is invalid', () =>
   assert.deepEqual(
     buildFundReferenceIndexOptions('399997', ' ').map(({ code }) => code),
     expectedCodes,
-  )
-})
-
-test('defines all performance ranges and defaults to the recent six months', () => {
-  assert.equal(defaultFundPerformanceRange, '6y')
-  assert.deepEqual(
-    fundPerformanceRangeOptions.map(({ label, value }) => [label, value]),
-    [
-      ['近1月', 'y'],
-      ['近3月', '3y'],
-      ['近6月', '6y'],
-      ['近1年', 'n'],
-      ['近3年', '3n'],
-      ['近5年', '5n'],
-      ['今年来', 'jn'],
-      ['成立来', 'ln'],
-    ],
   )
 })

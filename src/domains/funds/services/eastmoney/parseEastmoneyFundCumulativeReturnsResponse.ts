@@ -1,8 +1,8 @@
 import type {
   FundCumulativeReturnPoint,
   FundCumulativeReturns,
-  FundPerformanceRange,
 } from '../../models/fundCumulativeReturns.ts'
+import type { FundHistoryRange } from '../../models/fundHistoryRange.ts'
 import type {
   EastmoneyFundCumulativeReturnDto,
   EastmoneyFundCumulativeReturnsResponse,
@@ -12,7 +12,7 @@ export function parseEastmoneyFundCumulativeReturnsResponse(
   value: unknown,
   fundCode: string,
   referenceIndexCode: string,
-  range: FundPerformanceRange,
+  range: FundHistoryRange,
 ): FundCumulativeReturns {
   if (
     !isRecord(value) ||

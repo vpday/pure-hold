@@ -1,12 +1,12 @@
 import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns.ts'
 import { analyzeFundDrawdown } from '@/domains/funds/models/fundDrawdown.ts'
-import type { FundPerformanceChartModel } from '../models/fundPerformance'
+import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart'
 
-export function toFundPerformanceChartModel(
+export function toFundCumulativeReturnsChartModel(
   returns: FundCumulativeReturns,
   referenceIndexName: string,
   rangeLabel: string,
-): FundPerformanceChartModel {
+): FundCumulativeReturnsChartModel {
   const latestPoint = returns.points.at(-1)
   const drawdown = analyzeFundDrawdown(returns.points)
   const maximumDrawdownPercent = returns.maximumDrawdownPercent ?? drawdown?.maximumDrawdownPercent

@@ -1,14 +1,12 @@
-import type {
-  FundCumulativeReturns,
-  FundPerformanceRange,
-} from '../../models/fundCumulativeReturns.ts'
+import type { FundCumulativeReturns } from '../../models/fundCumulativeReturns.ts'
+import type { FundHistoryRange } from '../../models/fundHistoryRange.ts'
 import { createEastmoneyFundCumulativeReturnsRequestUrl } from './createEastmoneyFundCumulativeReturnsRequestUrl.ts'
 import { parseEastmoneyFundCumulativeReturnsResponse } from './parseEastmoneyFundCumulativeReturnsResponse.ts'
 
 export async function fetchEastmoneyFundCumulativeReturns(
   fundCode: string,
   referenceIndexCode: string,
-  range: FundPerformanceRange,
+  range: FundHistoryRange,
   signal?: AbortSignal,
 ): Promise<FundCumulativeReturns> {
   const response = await fetch(

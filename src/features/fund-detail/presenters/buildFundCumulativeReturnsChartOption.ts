@@ -7,9 +7,9 @@ import type {
 } from 'echarts/components'
 import type { ComposeOption } from 'echarts/core'
 
-import type { FundPerformanceChartModel } from '../models/fundPerformance'
+import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart'
 
-export type FundPerformanceChartOption = ComposeOption<
+export type FundCumulativeReturnsChartOption = ComposeOption<
   | LineSeriesOption
   | GridComponentOption
   | LegendComponentOption
@@ -17,7 +17,7 @@ export type FundPerformanceChartOption = ComposeOption<
   | TooltipComponentOption
 >
 
-export interface FundPerformanceChartTheme {
+export interface FundCumulativeReturnsChartTheme {
   readonly annotation?: string
   readonly drawdownLine?: string
   readonly fundLine?: string
@@ -25,15 +25,15 @@ export interface FundPerformanceChartTheme {
   readonly referenceLine?: string
 }
 
-export interface BuildFundPerformanceChartOptionOptions {
+export interface BuildFundCumulativeReturnsChartOptionOptions {
   readonly showLegend?: boolean
-  readonly theme?: FundPerformanceChartTheme
+  readonly theme?: FundCumulativeReturnsChartTheme
 }
 
-export function buildFundPerformanceChartOption(
-  model: FundPerformanceChartModel,
-  options: BuildFundPerformanceChartOptionOptions = {},
-): FundPerformanceChartOption {
+export function buildFundCumulativeReturnsChartOption(
+  model: FundCumulativeReturnsChartModel,
+  options: BuildFundCumulativeReturnsChartOptionOptions = {},
+): FundCumulativeReturnsChartOption {
   const { showLegend = true, theme = {} } = options
   const colors = [theme.fundLine, theme.referenceLine, theme.peerLine]
   const drawdownOverlay = buildFundDrawdownOverlay(model, theme.drawdownLine)
@@ -106,7 +106,7 @@ export function buildFundPerformanceChartOption(
 }
 
 function buildFundDrawdownOverlay(
-  model: FundPerformanceChartModel,
+  model: FundCumulativeReturnsChartModel,
   color?: string,
 ): LineSeriesOption | undefined {
   const drawdown = model.drawdown
