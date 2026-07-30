@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { FundHistoryRangeOption } from '../config/fundHistoryRangeOptions'
-import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart'
-import type { FundReferenceIndexOption } from '../models/fundCumulativeReturnsChart'
+import type {
+  FundCumulativeReturnsChartModel,
+  FundReferenceIndexOption,
+} from '../models/fundCumulativeReturnsChart'
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
 import type { FundNetValueChartModel } from '../models/fundNetValueChart'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
@@ -15,7 +17,7 @@ import FundTradingRules from './FundTradingRules.vue'
 
 const props = defineProps<{
   activePerformanceView: FundPerformanceView
-  activeTab: string
+  activeSection: string
   cumulativeNetValueChart?: FundNetValueChartModel
   cumulativeNetValueError: string
   cumulativeNetValueIsLoading: boolean
@@ -48,7 +50,7 @@ const emit = defineEmits<{
   selectCumulativeNetValueRange: [range: FundHistoryRange]
   selectPerformanceView: [view: FundPerformanceView]
   selectReferenceIndex: [code: string]
-  selectTab: [tab: string]
+  selectSection: [section: string]
   selectUnitNetValueRange: [range: FundHistoryRange]
   toggleDetails: []
 }>()
@@ -57,12 +59,13 @@ const referenceSelectOptions = computed(() =>
   props.referenceIndexOptions.map(({ code, name }) => ({ label: name, value: code })),
 )
 
-const tabs = [
-  { label: '业绩表现', value: 'performance' },
-  { label: '数据指标', value: 'metrics' },
-  { label: '持仓构成', value: 'holdings' },
-  { label: '交易规则', value: 'trading-rules' },
-  { label: '成交记录', value: 'transactions' },
+const sections = [
+  { href: '#fund-detail-overview', label: '基金概览', value: 'overview' },
+  { href: '#fund-detail-performance', label: '业绩表现', value: 'performance' },
+  { href: '#fund-detail-metrics', label: '数据指标', value: 'metrics' },
+  { href: '#fund-detail-holdings', label: '持仓构成', value: 'holdings' },
+  { href: '#fund-detail-trading-rules', label: '交易规则', value: 'trading-rules' },
+  { href: '#fund-detail-transactions', label: '成交记录', value: 'transactions' },
 ] as const
 
 const performanceTabs = [
@@ -71,10 +74,26 @@ const performanceTabs = [
   { label: '累计净值', value: 'cumulative-net-value' },
 ] as const
 
+const scrollContainer = ref<HTMLElement>()
+const sectionTargetOffset = 64
+
 function trendClass(trend: FundDetailTrend): string {
   if (trend === 'up') return 'text-(--td-error-color)'
   if (trend === 'down') return 'text-(--td-success-color)'
   return 'text-(--td-text-color-primary)'
+}
+
+function getScrollContainer(): HTMLElement | undefined {
+  return scrollContainer.value
+}
+
+function syncSectionFromAnchor(href: string): void {
+  const section = sections.find((candidate) => candidate.href === href)
+  if (section) emit('selectSection', section.value)
+}
+
+function preventAnchorHash(context: { e: MouseEvent }): void {
+  context.e.preventDefault()
 }
 </script>
 
@@ -100,108 +119,119 @@ function trendClass(trend: FundDetailTrend): string {
       />
     </template>
 
-    <div class="h-full min-h-0 overflow-x-hidden overflow-y-auto fund-detail-scroll">
-      <div class="grid grid-cols-3 lg:grid-cols-5 lg:gap-5">
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
-          <p class="nav-value">
-            {{ viewModel.navText }}
-          </p>
-          <p class="font-mono text-xs tabular-nums">
-            {{ viewModel.navDateText }}
-          </p>
-        </div>
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">日涨跌幅</p>
-          <p
-            class="mt-1 font-mono text-lg font-medium tabular-nums"
-            :class="trendClass(viewModel.dailyChangeTrend)"
+    <div
+      ref="scrollContainer"
+      class="h-full min-h-0 overflow-x-hidden overflow-y-auto fund-detail-scroll"
+    >
+      <div class="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_9rem] lg:gap-4">
+        <main class="min-w-0">
+          <section
+            id="fund-detail-overview"
+            aria-labelledby="fund-detail-overview-title"
+            class="min-w-0"
           >
-            {{ viewModel.dailyChangePercentText }}
-          </p>
-        </div>
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">近一年收益</p>
-          <p
-            class="mt-1 font-mono text-lg font-medium tabular-nums"
-            :class="trendClass(viewModel.oneYearReturnTrend)"
-          >
-            {{ viewModel.oneYearReturnText }}
-          </p>
-        </div>
-      </div>
+            <h2 id="fund-detail-overview-title" class="section-title">基金概览</h2>
+            <div class="mt-4 grid grid-cols-3 lg:grid-cols-5 lg:gap-5">
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
+                <p class="nav-value">
+                  {{ viewModel.navText }}
+                </p>
+                <p class="font-mono text-xs tabular-nums">
+                  {{ viewModel.navDateText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">日涨跌幅</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.dailyChangeTrend)"
+                >
+                  {{ viewModel.dailyChangePercentText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">近一年收益</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.oneYearReturnTrend)"
+                >
+                  {{ viewModel.oneYearReturnText }}
+                </p>
+              </div>
+            </div>
 
-      <div class="mt-4">
-        <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1, 1]" />
-        <div
-          v-else-if="error"
-          class="rounded-md bg-(--td-error-color-light-9) p-4 text-(--td-error-color)"
-        >
-          <p>{{ error }}</p>
-          <t-button
-            class="mt-2"
-            size="small"
-            theme="danger"
-            variant="outline"
-            @click="emit('retry')"
-          >
-            重试
-          </t-button>
-        </div>
-        <dl v-else class="details-grid">
-          <div>
-            <dt class="text-xs text-(--td-text-color-secondary)">管理人</dt>
-            <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
-              {{ viewModel.companyName }}
-            </dd>
-          </div>
-          <div v-if="viewModel.morningstarRating !== null">
-            <dt class="text-xs text-(--td-text-color-secondary)">晨星评级</dt>
-            <dd class="mt-1">
-              <t-rate :default-value="viewModel.morningstarRating" disabled size="16" />
-            </dd>
-          </div>
-          <div v-if="viewModel.shanghaiRating !== null">
-            <dt class="text-xs text-(--td-text-color-secondary)">上证评级</dt>
-            <dd class="mt-1">
-              <t-rate :default-value="viewModel.shanghaiRating" disabled size="16" />
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs text-(--td-text-color-secondary)">净资产规模</dt>
-            <dd class="mt-1 text-(--td-text-color-primary)">
-              {{ viewModel.netAssetsText }}
-              <span
-                v-if="viewModel.netAssetsDateText !== '--'"
-                class="text-(--td-text-color-secondary)"
+            <div class="mt-4">
+              <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1, 1]" />
+              <div
+                v-else-if="error"
+                class="rounded-md bg-(--td-error-color-light-9) p-4 text-(--td-error-color)"
               >
-                （{{ viewModel.netAssetsDateText }}）
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs text-(--td-text-color-secondary)">成立日期</dt>
-            <dd class="mt-1 text-(--td-text-color-primary)">{{ viewModel.establishedDateText }}</dd>
-          </div>
-          <div v-if="viewModel.trackingIndexName && viewModel.trackingIndexName !== '--'">
-            <dt class="text-xs text-(--td-text-color-secondary)">跟踪指数</dt>
-            <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
-              {{ viewModel.trackingIndexName }}
-            </dd>
-          </div>
-        </dl>
-      </div>
+                <p>{{ error }}</p>
+                <t-button
+                  class="mt-2"
+                  size="small"
+                  theme="danger"
+                  variant="outline"
+                  @click="emit('retry')"
+                >
+                  重试
+                </t-button>
+              </div>
+              <dl v-else class="details-grid">
+                <div>
+                  <dt class="text-xs text-(--td-text-color-secondary)">管理人</dt>
+                  <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
+                    {{ viewModel.companyName }}
+                  </dd>
+                </div>
+                <div v-if="viewModel.morningstarRating !== null">
+                  <dt class="text-xs text-(--td-text-color-secondary)">晨星评级</dt>
+                  <dd class="mt-1">
+                    <t-rate :default-value="viewModel.morningstarRating" disabled size="16" />
+                  </dd>
+                </div>
+                <div v-if="viewModel.shanghaiRating !== null">
+                  <dt class="text-xs text-(--td-text-color-secondary)">上证评级</dt>
+                  <dd class="mt-1">
+                    <t-rate :default-value="viewModel.shanghaiRating" disabled size="16" />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-(--td-text-color-secondary)">净资产规模</dt>
+                  <dd class="mt-1 text-(--td-text-color-primary)">
+                    {{ viewModel.netAssetsText }}
+                    <span
+                      v-if="viewModel.netAssetsDateText !== '--'"
+                      class="text-(--td-text-color-secondary)"
+                    >
+                      （{{ viewModel.netAssetsDateText }}）
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-(--td-text-color-secondary)">成立日期</dt>
+                  <dd class="mt-1 text-(--td-text-color-primary)">
+                    {{ viewModel.establishedDateText }}
+                  </dd>
+                </div>
+                <div v-if="viewModel.trackingIndexName && viewModel.trackingIndexName !== '--'">
+                  <dt class="text-xs text-(--td-text-color-secondary)">跟踪指数</dt>
+                  <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
+                    {{ viewModel.trackingIndexName }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </section>
 
-      <div class="mt-2 min-w-0">
-        <t-tabs :value="activeTab" @update:value="emit('selectTab', String($event))">
-          <t-tab-panel
-            class="mt-4"
-            v-for="tab in tabs"
-            :key="tab.value"
-            :label="tab.label"
-            :value="tab.value"
+          <section
+            id="fund-detail-performance"
+            aria-labelledby="fund-detail-performance-title"
+            class="detail-section min-w-0"
           >
-            <div v-if="tab.value === 'performance'" class="min-w-0">
+            <h2 id="fund-detail-performance-title" class="section-title">业绩表现</h2>
+            <div class="mt-2 min-w-0">
               <t-tabs
                 :value="activePerformanceView"
                 @update:value="emit('selectPerformanceView', String($event) as FundPerformanceView)"
@@ -235,7 +265,7 @@ function trendClass(trend: FundDetailTrend): string {
                       :model="cumulativeReturnsChart"
                       :visible="
                         visible &&
-                        activeTab === 'performance' &&
+                        activeSection === 'performance' &&
                         activePerformanceView === 'cumulative-returns'
                       "
                       @retry="emit('retryCumulativeReturns')"
@@ -259,7 +289,7 @@ function trendClass(trend: FundDetailTrend): string {
                       view="unit-net-value"
                       :visible="
                         visible &&
-                        activeTab === 'performance' &&
+                        activeSection === 'performance' &&
                         activePerformanceView === 'unit-net-value'
                       "
                       @retry="emit('retryUnitNetValue')"
@@ -283,7 +313,7 @@ function trendClass(trend: FundDetailTrend): string {
                       view="cumulative-net-value"
                       :visible="
                         visible &&
-                        activeTab === 'performance' &&
+                        activeSection === 'performance' &&
                         activePerformanceView === 'cumulative-net-value'
                       "
                       @retry="emit('retryCumulativeNetValue')"
@@ -292,18 +322,70 @@ function trendClass(trend: FundDetailTrend): string {
                 </t-tab-panel>
               </t-tabs>
             </div>
+          </section>
+
+          <section
+            id="fund-detail-metrics"
+            aria-labelledby="fund-detail-metrics-title"
+            class="detail-section"
+          >
+            <h2 id="fund-detail-metrics-title" class="section-title">数据指标</h2>
+            <p class="section-placeholder">数据指标功能后续开发</p>
+          </section>
+
+          <section
+            id="fund-detail-holdings"
+            aria-labelledby="fund-detail-holdings-title"
+            class="detail-section"
+          >
+            <h2 id="fund-detail-holdings-title" class="section-title">持仓构成</h2>
+            <p class="section-placeholder">持仓构成功能后续开发</p>
+          </section>
+
+          <section
+            id="fund-detail-trading-rules"
+            aria-labelledby="fund-detail-trading-rules-title"
+            class="detail-section"
+          >
+            <h2 id="fund-detail-trading-rules-title" class="section-title">交易规则</h2>
             <FundTradingRules
-              v-else-if="tab.value === 'trading-rules' && viewModel.tradingRules"
+              class="mt-4"
+              v-if="viewModel.tradingRules"
               :rules="viewModel.tradingRules"
             />
-            <div
-              v-else-if="tab.value !== 'trading-rules'"
-              class="flex min-h-56 items-center justify-center py-8"
-            >
-              <t-empty :description="`${tab.label}功能后续开发`" />
-            </div>
-          </t-tab-panel>
-        </t-tabs>
+            <p v-else class="section-placeholder">暂无交易规则</p>
+          </section>
+
+          <section
+            id="fund-detail-transactions"
+            aria-labelledby="fund-detail-transactions-title"
+            class="detail-section"
+          >
+            <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
+            <p class="section-placeholder">成交记录功能后续开发</p>
+          </section>
+        </main>
+
+        <aside
+          v-if="scrollContainer"
+          class="sticky top-1 hidden self-start lg:block"
+          aria-label="基金详情章节导航"
+        >
+          <t-anchor
+            size="small"
+            :container="getScrollContainer"
+            :target-offset="sectionTargetOffset"
+            @change="syncSectionFromAnchor"
+            @click="preventAnchorHash"
+          >
+            <t-anchor-item
+              v-for="section in sections"
+              :key="section.value"
+              :href="section.href"
+              :title="section.label"
+            />
+          </t-anchor>
+        </aside>
       </div>
     </div>
   </t-drawer>
@@ -311,10 +393,6 @@ function trendClass(trend: FundDetailTrend): string {
 
 <style scoped>
 @reference '@/style.css';
-
-.details-toggle {
-  @apply flex w-full items-center justify-between gap-3 text-left;
-}
 
 .nav-value {
   @apply mt-1 font-mono text-lg font-medium tabular-nums text-(--td-text-color-primary);
@@ -324,12 +402,24 @@ function trendClass(trend: FundDetailTrend): string {
   @apply grid grid-cols-3 lg:grid-cols-5;
 }
 
+.detail-section {
+  @apply mt-4 pt-4 border-t border-(--td-component-border);
+}
+
 .fund-detail-scroll {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 .performance-filters {
   @apply mb-4 flex w-full sm:w-55 flex-col gap-2 sm:flex-row;
+}
+
+.section-placeholder {
+  @apply mt-4 rounded-md bg-(--td-bg-color-secondarycontainer) px-4 py-3 text-sm text-(--td-text-color-secondary);
+}
+
+.section-title {
+  @apply text-lg font-medium text-(--td-text-color-primary);
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {

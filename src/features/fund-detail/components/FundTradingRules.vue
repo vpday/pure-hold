@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useBreakpoints } from '@/shared/composables/useBreakpoints'
+
 import type {
   FundTradingRulesViewModel,
   FundTradingStatusTone,
@@ -7,6 +9,8 @@ import type {
 defineProps<{
   rules: FundTradingRulesViewModel
 }>()
+
+const { isSmUp } = useBreakpoints()
 
 function statusClass(tone: FundTradingStatusTone): string {
   if (tone === 'success') return 'text-(--td-success-color)'
@@ -17,116 +21,89 @@ function statusClass(tone: FundTradingStatusTone): string {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <section class="rules-card" aria-labelledby="trading-limits-title">
-      <h3 id="trading-limits-title" class="rules-heading">交易状态</h3>
-      <dl class="limits-grid">
-        <div>
-          <dt class="rule-label">申购状态</dt>
-          <dd class="rule-value" :class="statusClass(rules.purchaseStatusTone)">
-            {{ rules.purchaseStatusText }}
-          </dd>
-        </div>
-        <div>
-          <dt class="rule-label">赎回状态</dt>
-          <dd class="rule-value" :class="statusClass(rules.redemptionStatusTone)">
-            {{ rules.redemptionStatusText }}
-          </dd>
-        </div>
-        <div>
-          <dt class="rule-label">申购起点</dt>
-          <dd class="rule-value">{{ rules.minimumPurchaseAmountText }}</dd>
-        </div>
-        <div>
-          <dt class="rule-label">日累计申购限额</dt>
-          <dd class="rule-value">{{ rules.dailyPurchaseLimitText }}</dd>
-        </div>
-      </dl>
-    </section>
+  <div class="flex flex-col gap-4">
+    <t-descriptions
+      bordered
+      size="small"
+      :column="isSmUp ? 4 : 2"
+      item-layout="vertical"
+      title="交易状态"
+    >
+      <t-descriptions-item label="申购状态">
+        <span class="font-medium" :class="statusClass(rules.purchaseStatusTone)">
+          {{ rules.purchaseStatusText }}
+        </span>
+      </t-descriptions-item>
+      <t-descriptions-item label="赎回状态">
+        <span class="font-medium" :class="statusClass(rules.redemptionStatusTone)">
+          {{ rules.redemptionStatusText }}
+        </span>
+      </t-descriptions-item>
+      <t-descriptions-item label="申购起点">
+        <span class="font-medium">{{ rules.minimumPurchaseAmountText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="日累计申购限额">
+        <span class="font-medium">{{ rules.dailyPurchaseLimitText }}</span>
+      </t-descriptions-item>
+    </t-descriptions>
 
-    <section class="rules-card" aria-labelledby="trading-cost-title">
-      <h3 id="trading-cost-title" class="rules-heading">运作费用</h3>
-      <dl class="cost-grid">
-        <div>
-          <dt class="rule-label">申购费率</dt>
-          <dd class="fee-value">
-            <span>{{ rules.purchaseFeeText }}</span>
-            <s v-if="rules.standardPurchaseFeeText" class="standard-fee">
-              {{ rules.standardPurchaseFeeText }}
-            </s>
-            <span v-if="rules.purchaseDiscountText" class="discount">
-              {{ rules.purchaseDiscountText }}
-            </span>
-          </dd>
-        </div>
-        <div>
-          <dt class="rule-label">管理费率</dt>
-          <dd class="rule-value">{{ rules.managementFeeText }}</dd>
-        </div>
-        <div>
-          <dt class="rule-label">托管费率</dt>
-          <dd class="rule-value">{{ rules.custodyFeeText }}</dd>
-        </div>
-        <div>
-          <dt class="rule-label">销售服务费率</dt>
-          <dd class="rule-value">{{ rules.salesServiceFeeText }}</dd>
-        </div>
-      </dl>
-    </section>
+    <t-descriptions
+      bordered
+      size="small"
+      :column="isSmUp ? 4 : 2"
+      item-layout="vertical"
+      title="运作费用"
+    >
+      <t-descriptions-item label="申购费率">
+        <span class="fee-value">
+          <span>{{ rules.purchaseFeeText }}</span>
+          <s v-if="rules.standardPurchaseFeeText" class="standard-fee">
+            {{ rules.standardPurchaseFeeText }}
+          </s>
+          <span v-if="rules.purchaseDiscountText" class="discount">
+            {{ rules.purchaseDiscountText }}
+          </span>
+        </span>
+      </t-descriptions-item>
+      <t-descriptions-item label="管理费率">
+        <span class="font-medium">{{ rules.managementFeeText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="托管费率">
+        <span class="font-medium">{{ rules.custodyFeeText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="销售服务费率">
+        <span class="font-medium">{{ rules.salesServiceFeeText }}</span>
+      </t-descriptions-item>
+    </t-descriptions>
 
-    <section class="rules-card" aria-labelledby="trading-confirmation-title">
-      <h3 id="trading-confirmation-title" class="rules-heading">交易确认日</h3>
-      <dl class="confirmation-grid">
-        <div>
-          <dt class="rule-label">申购确认</dt>
-          <dd class="rule-value">{{ rules.purchaseConfirmationText }}</dd>
-        </div>
-        <div>
-          <dt class="rule-label">赎回确认</dt>
-          <dd class="rule-value">{{ rules.redemptionConfirmationText }}</dd>
-        </div>
-        <div>
-          <dt class="rule-label">赎回资金到账</dt>
-          <dd class="rule-value">{{ rules.redemptionFundsArrivalText }}</dd>
-        </div>
-      </dl>
-      <p class="confirmation-note">
-        注：T日指交易日，15:00前提交的申请按当日净值计算，15:00后按下一交易日计算。
-      </p>
-    </section>
+    <t-descriptions
+      bordered
+      size="small"
+      :column="isSmUp ? 3 : 2"
+      item-layout="vertical"
+      title="交易确认日"
+    >
+      <t-descriptions-item label="申购确认">
+        <span class="font-medium">{{ rules.purchaseConfirmationText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="赎回确认">
+        <span class="font-medium">{{ rules.redemptionConfirmationText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="赎回资金到账">
+        <span class="font-medium">{{ rules.redemptionFundsArrivalText }}</span>
+      </t-descriptions-item>
+      <t-descriptions-item label="说明" :span="isSmUp ? 3 : 2">
+        T日指交易日，15:00前提交的申请按当日净值计算，15:00后按下一交易日计算。
+      </t-descriptions-item>
+    </t-descriptions>
   </div>
 </template>
 
 <style scoped>
 @reference '@/style.css';
 
-.rules-card {
-  @apply rounded-md border border-(--td-component-border) bg-(--td-bg-color-container) p-4;
-}
-
-.rules-heading {
-  @apply mb-4 text-base font-medium text-(--td-text-color-primary);
-}
-
-.cost-grid,
-.limits-grid {
-  @apply grid grid-cols-1 gap-4 sm:grid-cols-4;
-}
-
-.confirmation-grid {
-  @apply grid grid-cols-1 gap-4 sm:grid-cols-3;
-}
-
-.rule-label {
-  @apply text-xs text-(--td-text-color-secondary);
-}
-
-.rule-value {
-  @apply mt-1 wrap-break-word font-medium;
-}
-
 .fee-value {
-  @apply mt-1 flex flex-wrap items-baseline gap-2 font-medium text-(--td-text-color-primary);
+  @apply flex flex-wrap items-baseline gap-2 font-medium text-(--td-text-color-primary);
 }
 
 .standard-fee {
@@ -135,9 +112,5 @@ function statusClass(tone: FundTradingStatusTone): string {
 
 .discount {
   @apply rounded-sm bg-(--td-warning-color-light-9) px-1.5 py-0.5 text-xs text-(--td-warning-color);
-}
-
-.confirmation-note {
-  @apply mt-4 border-t border-(--td-component-stroke) pt-3 text-xs text-(--td-text-color-secondary);
 }
 </style>

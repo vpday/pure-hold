@@ -12,6 +12,8 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     TAlert: typeof import('tdesign-vue-next')['Alert']
+    TAnchor: typeof import('tdesign-vue-next')['Anchor']
+    TAnchorItem: typeof import('tdesign-vue-next')['AnchorItem']
     TButton: typeof import('tdesign-vue-next')['Button']
     TCard: typeof import('tdesign-vue-next')['Card']
     TCheckbox: typeof import('tdesign-vue-next')['Checkbox']
@@ -20,6 +22,8 @@ declare module 'vue' {
     TConfigProvider: typeof import('tdesign-vue-next')['ConfigProvider']
     TContent: typeof import('tdesign-vue-next')['Content']
     TDatePicker: typeof import('tdesign-vue-next')['DatePicker']
+    TDescriptions: typeof import('tdesign-vue-next')['Descriptions']
+    TDescriptionsItem: typeof import('tdesign-vue-next')['DescriptionsItem']
     TDialog: typeof import('tdesign-vue-next')['Dialog']
     TDrawer: typeof import('tdesign-vue-next')['Drawer']
     TDropdown: typeof import('tdesign-vue-next')['Dropdown']

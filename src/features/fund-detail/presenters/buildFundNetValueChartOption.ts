@@ -22,11 +22,11 @@ export function buildFundNetValueChartOption(
   return {
     animationDuration: 250,
     grid: {
-      bottom: 20,
+      bottom: 0,
       containLabel: true,
       left: 0,
-      right: 0,
-      top: 16,
+      right: 10,
+      top: 0,
     },
     series: [
       {

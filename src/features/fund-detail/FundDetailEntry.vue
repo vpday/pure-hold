@@ -22,7 +22,7 @@ const { isSmUp } = useBreakpoints()
 const detail = useFundDetail()
 const cumulativeReturns = useFundCumulativeReturns()
 const netValueHistory = useFundNetValueHistory()
-const activeTab = ref('performance')
+const activeSection = ref('overview')
 const activePerformanceView = ref<FundPerformanceView>('cumulative-returns')
 const snapshot = computed(() => {
   const code = detail.currentCode.value
@@ -61,15 +61,9 @@ const cumulativeNetValueChart = computed(() => {
 })
 
 watch(
-  [detail.visible, detail.currentCode, detail.basicInfo, activeTab, activePerformanceView],
-  ([visible, code, basicInfo, tab, performanceView]) => {
-    if (
-      visible &&
-      code &&
-      basicInfo &&
-      tab === 'performance' &&
-      performanceView === 'cumulative-returns'
-    ) {
+  [detail.visible, detail.currentCode, detail.basicInfo, activePerformanceView],
+  ([visible, code, basicInfo, performanceView]) => {
+    if (visible && code && basicInfo && performanceView === 'cumulative-returns') {
       void cumulativeReturns.initialize(code, basicInfo)
     }
   },
@@ -92,7 +86,7 @@ function open(code: string): void {
     MessagePlugin.error('基金不存在，无法查看详情')
     return
   }
-  activeTab.value = 'performance'
+  activeSection.value = 'overview'
   activePerformanceView.value = 'cumulative-returns'
   cumulativeReturns.close()
   netValueHistory.close()
@@ -115,7 +109,7 @@ async function selectPerformanceView(view: FundPerformanceView): Promise<void> {
 
 async function refresh(): Promise<void> {
   const requests: Promise<void>[] = [detail.refresh()]
-  if (detail.visible.value && activeTab.value === 'performance') {
+  if (detail.visible.value && activeSection.value === 'performance') {
     const view = activePerformanceView.value
     requests.push(
       view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh(view),
@@ -144,7 +138,7 @@ defineExpose({ open })
   <FundDetailDrawer
     v-if="viewModel"
     :active-performance-view="activePerformanceView"
-    :active-tab="activeTab"
+    :active-section="activeSection"
     :cumulative-net-value-chart="cumulativeNetValueChart"
     :cumulative-net-value-error="netValueHistory.error['cumulative-net-value'].value"
     :cumulative-net-value-is-loading="netValueHistory.isLoading['cumulative-net-value'].value"
@@ -177,7 +171,7 @@ defineExpose({ open })
     @select-cumulative-net-value-range="selectNetValueRange('cumulative-net-value', $event)"
     @select-performance-view="selectPerformanceView"
     @select-reference-index="cumulativeReturns.selectReferenceIndex"
-    @select-tab="activeTab = $event"
+    @select-section="activeSection = $event"
     @select-unit-net-value-range="selectNetValueRange('unit-net-value', $event)"
   />
 </template>

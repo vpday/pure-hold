@@ -71,10 +71,10 @@ export function buildFundCumulativeReturnsChartOption(
   return {
     animationDuration: 250,
     grid: {
-      bottom: 20,
+      bottom: 0,
       containLabel: true,
       left: 0,
-      right: 0,
+      right: 10,
       top: showLegend ? 36 : 16,
     },
     legend: {
