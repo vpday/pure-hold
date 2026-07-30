@@ -1,24 +1,11 @@
 <script setup lang="ts">
 import type { FundSearchItem } from '@/domains/funds/models/fundSearch'
-import type { FundHoldingDraft, FundHoldingDraftErrors } from '../models/fundHoldingDraft'
+import type { FundAdditionContentModel } from '../models/fundAdditionSessionModel'
 import FundHoldingForm from './FundHoldingForm.vue'
 import FundSearchResults from './FundSearchResults.vue'
 import SelectedFundsPanel from './SelectedFundsPanel.vue'
 
-defineProps<{
-  error: string
-  existingCodes: ReadonlySet<string>
-  hasMore: boolean
-  holdingDrafts: FundHoldingDraft[]
-  holdingErrors: Readonly<Record<string, FundHoldingDraftErrors>>
-  isLoading: boolean
-  items: readonly FundSearchItem[]
-  keyword: string
-  selected: readonly FundSearchItem[]
-  selectedExpanded: boolean
-  step: 'holdings' | 'search'
-  submitError: string
-}>()
+defineProps<{ model: FundAdditionContentModel }>()
 
 const emit = defineEmits<{
   loadMore: []
@@ -32,11 +19,11 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex h-full min-h-0 flex-col gap-3">
-    <t-alert v-if="submitError" theme="error" :message="submitError" />
+    <t-alert v-if="model.submitError" theme="error" :message="model.submitError" />
 
-    <template v-if="step === 'search'">
+    <template v-if="model.step === 'search'">
       <t-input
-        :value="keyword"
+        :value="model.search.keyword"
         clearable
         type="search"
         placeholder="输入基金代码或简称"
@@ -45,26 +32,26 @@ const emit = defineEmits<{
         <template #prefix-icon><t-icon name="search" /></template>
       </t-input>
       <FundSearchResults
-        :error="error"
-        :existing-codes="existingCodes"
-        :has-more="hasMore"
-        :is-loading="isLoading"
-        :items="items"
-        :selected-codes="new Set(selected.map(({ code }) => code))"
+        :error="model.search.error"
+        :existing-codes="model.search.existingCodes"
+        :has-more="model.search.hasMore"
+        :is-loading="model.search.isLoading"
+        :items="model.search.items"
+        :selected-codes="new Set(model.search.selected.map(({ code }) => code))"
         @load-more="emit('loadMore')"
         @retry="emit('retry')"
         @toggle="emit('toggle', $event)"
       />
       <SelectedFundsPanel
-        :expanded="selectedExpanded"
-        :items="selected"
+        :expanded="model.search.selectedExpanded"
+        :items="model.search.selected"
         @remove="emit('remove', $event)"
         @toggle-expanded="emit('toggleSelected')"
       />
     </template>
 
     <template v-else>
-      <FundHoldingForm :drafts="holdingDrafts" :errors="holdingErrors" />
+      <FundHoldingForm :drafts="model.holdings.drafts" :errors="model.holdings.errors" />
     </template>
   </div>
 </template>

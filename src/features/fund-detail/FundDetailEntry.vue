@@ -6,24 +6,19 @@ import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
-import { fundHistoryRangeOptions } from './config/fundHistoryRangeOptions'
+import FundPerformanceSection from './components/FundPerformanceSection.vue'
 import { useFundDetail } from './composables/useFundDetail'
-import { useFundCumulativeReturns } from './composables/useFundCumulativeReturns'
-import { useFundNetValueHistory } from './composables/useFundNetValueHistory'
-import type { FundPerformanceView } from './models/fundPerformanceView'
-import type { FundNetValueView } from './models/fundNetValueChart'
-import { toFundCumulativeReturnsChartModel } from './presenters/toFundCumulativeReturnsChartModel'
+import { useFundPerformance } from './composables/useFundPerformance'
 import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
-import { toFundNetValueChartModel } from './presenters/toFundNetValueChartModel'
 
 const emit = defineEmits<{ edit: [code: string] }>()
 const store = useFundsStore()
 const { isSmUp } = useBreakpoints()
 const detail = useFundDetail()
-const cumulativeReturns = useFundCumulativeReturns()
-const netValueHistory = useFundNetValueHistory()
 const activeSection = ref('overview')
-const activePerformanceView = ref<FundPerformanceView>('cumulative-returns')
+const performance = useFundPerformance(
+  () => detail.visible.value && activeSection.value === 'performance',
+)
 const snapshot = computed(() => {
   const code = detail.currentCode.value
   return code ? store.snapshotsByCode[code] : undefined
@@ -35,39 +30,12 @@ const viewModel = computed(() => {
     : undefined
 })
 const drawerSize = computed(() => (isSmUp.value ? '90dvh' : '100dvh'))
-const selectedReferenceIndex = computed(() =>
-  cumulativeReturns.referenceIndexOptions.value.find(
-    ({ code }) => code === cumulativeReturns.selectedReferenceIndexCode.value,
-  ),
-)
-const selectedRangeOption = computed(() =>
-  fundHistoryRangeOptions.find(({ value }) => value === cumulativeReturns.selectedRange.value),
-)
-const cumulativeReturnsChart = computed(() => {
-  const returns = cumulativeReturns.data.value
-  const referenceIndex = selectedReferenceIndex.value
-  const rangeOption = selectedRangeOption.value
-  return returns && referenceIndex && rangeOption
-    ? toFundCumulativeReturnsChartModel(returns, referenceIndex.name, rangeOption.label)
-    : undefined
-})
-const unitNetValueChart = computed(() => {
-  const history = netValueHistory.data['unit-net-value'].value
-  return history ? toFundNetValueChartModel(history, 'unit-net-value') : undefined
-})
-const cumulativeNetValueChart = computed(() => {
-  const history = netValueHistory.data['cumulative-net-value'].value
-  return history ? toFundNetValueChartModel(history, 'cumulative-net-value') : undefined
-})
 
-watch(
-  [detail.visible, detail.currentCode, detail.basicInfo, activePerformanceView],
-  ([visible, code, basicInfo, performanceView]) => {
-    if (visible && code && basicInfo && performanceView === 'cumulative-returns') {
-      void cumulativeReturns.initialize(code, basicInfo)
-    }
-  },
-)
+watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, basicInfo]) => {
+  if (visible && code && basicInfo) {
+    void performance.updateBasicInfo(code, basicInfo)
+  }
+})
 
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {
@@ -75,8 +43,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   unsubscribeRefresh?.()
-  cumulativeReturns.close()
-  netValueHistory.close()
+  performance.close()
 })
 
 function open(code: string): void {
@@ -87,42 +54,17 @@ function open(code: string): void {
     return
   }
   activeSection.value = 'overview'
-  activePerformanceView.value = 'cumulative-returns'
-  cumulativeReturns.close()
-  netValueHistory.close()
-  netValueHistory.initialize(code)
+  performance.open(code)
   void detail.open(code)
 }
 
 function close(): void {
   detail.close()
-  cumulativeReturns.close()
-  netValueHistory.close()
-}
-
-async function selectPerformanceView(view: FundPerformanceView): Promise<void> {
-  activePerformanceView.value = view
-  if (view !== 'cumulative-returns') {
-    await netValueHistory.activate(view)
-  }
+  performance.close()
 }
 
 async function refresh(): Promise<void> {
-  const requests: Promise<void>[] = [detail.refresh()]
-  if (detail.visible.value && activeSection.value === 'performance') {
-    const view = activePerformanceView.value
-    requests.push(
-      view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh(view),
-    )
-  }
-  await Promise.all(requests)
-}
-
-function selectNetValueRange(
-  view: FundNetValueView,
-  range: Parameters<typeof netValueHistory.selectRange>[1],
-): void {
-  void netValueHistory.selectRange(view, range)
+  await Promise.all([detail.refresh(), performance.refresh()])
 }
 
 async function edit(code: string): Promise<void> {
@@ -137,41 +79,25 @@ defineExpose({ open })
 <template>
   <FundDetailDrawer
     v-if="viewModel"
-    :active-performance-view="activePerformanceView"
     :active-section="activeSection"
-    :cumulative-net-value-chart="cumulativeNetValueChart"
-    :cumulative-net-value-error="netValueHistory.error['cumulative-net-value'].value"
-    :cumulative-net-value-is-loading="netValueHistory.isLoading['cumulative-net-value'].value"
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
-    :cumulative-returns-chart="cumulativeReturnsChart"
-    :cumulative-returns-error="cumulativeReturns.error.value"
-    :cumulative-returns-is-loading="cumulativeReturns.isLoading.value"
-    :history-range-options="fundHistoryRangeOptions"
-    :reference-index-options="cumulativeReturns.referenceIndexOptions.value"
-    :selected-cumulative-returns-range="cumulativeReturns.selectedRange.value"
-    :selected-cumulative-net-value-range="
-      netValueHistory.selectedRanges['cumulative-net-value'].value
-    "
-    :selected-reference-index-code="cumulativeReturns.selectedReferenceIndexCode.value"
-    :selected-unit-net-value-range="netValueHistory.selectedRanges['unit-net-value'].value"
     :size="drawerSize"
-    :unit-net-value-chart="unitNetValueChart"
-    :unit-net-value-error="netValueHistory.error['unit-net-value'].value"
-    :unit-net-value-is-loading="netValueHistory.isLoading['unit-net-value'].value"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"
     @edit="edit"
-    @retry-cumulative-returns="cumulativeReturns.retry"
-    @retry-cumulative-net-value="netValueHistory.retry('cumulative-net-value')"
     @retry="detail.retry"
-    @retry-unit-net-value="netValueHistory.retry('unit-net-value')"
-    @select-cumulative-returns-range="cumulativeReturns.selectRange"
-    @select-cumulative-net-value-range="selectNetValueRange('cumulative-net-value', $event)"
-    @select-performance-view="selectPerformanceView"
-    @select-reference-index="cumulativeReturns.selectReferenceIndex"
     @select-section="activeSection = $event"
-    @select-unit-net-value-range="selectNetValueRange('unit-net-value', $event)"
-  />
+  >
+    <template #performance>
+      <FundPerformanceSection
+        :model="performance.model.value"
+        @retry="performance.retry"
+        @select-range="performance.selectRange"
+        @select-reference-index="performance.selectReferenceIndex"
+        @select-view="performance.selectView"
+      />
+    </template>
+  </FundDetailDrawer>
 </template>

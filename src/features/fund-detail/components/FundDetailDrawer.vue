@@ -1,63 +1,24 @@
 <script setup lang="ts">
-import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
-import type { FundHistoryRangeOption } from '../config/fundHistoryRangeOptions'
-import type {
-  FundCumulativeReturnsChartModel,
-  FundReferenceIndexOption,
-} from '../models/fundCumulativeReturnsChart'
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
-import type { FundNetValueChartModel } from '../models/fundNetValueChart'
-import type { FundPerformanceView } from '../models/fundPerformanceView'
-import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
 import FundDetailHeader from './FundDetailHeader.vue'
-import FundNetValueChart from './FundNetValueChart.vue'
 import FundTradingRules from './FundTradingRules.vue'
 
-const props = defineProps<{
-  activePerformanceView: FundPerformanceView
+defineProps<{
   activeSection: string
-  cumulativeNetValueChart?: FundNetValueChartModel
-  cumulativeNetValueError: string
-  cumulativeNetValueIsLoading: boolean
   error: string
   isLoading: boolean
-  cumulativeReturnsChart?: FundCumulativeReturnsChartModel
-  cumulativeReturnsError: string
-  cumulativeReturnsIsLoading: boolean
-  historyRangeOptions: readonly FundHistoryRangeOption[]
-  referenceIndexOptions: readonly FundReferenceIndexOption[]
-  selectedCumulativeReturnsRange: FundHistoryRange
-  selectedCumulativeNetValueRange: FundHistoryRange
-  selectedReferenceIndexCode: string
-  selectedUnitNetValueRange: FundHistoryRange
   size: string
-  unitNetValueChart?: FundNetValueChartModel
-  unitNetValueError: string
-  unitNetValueIsLoading: boolean
   viewModel: FundDetailViewModel
   visible: boolean
 }>()
 const emit = defineEmits<{
   close: []
   edit: [code: string]
-  retryCumulativeReturns: []
-  retryCumulativeNetValue: []
   retry: []
-  retryUnitNetValue: []
-  selectCumulativeReturnsRange: [range: FundHistoryRange]
-  selectCumulativeNetValueRange: [range: FundHistoryRange]
-  selectPerformanceView: [view: FundPerformanceView]
-  selectReferenceIndex: [code: string]
   selectSection: [section: string]
-  selectUnitNetValueRange: [range: FundHistoryRange]
-  toggleDetails: []
 }>()
-
-const referenceSelectOptions = computed(() =>
-  props.referenceIndexOptions.map(({ code, name }) => ({ label: name, value: code })),
-)
 
 const sections = [
   { href: '#fund-detail-overview', label: '基金概览', value: 'overview' },
@@ -66,12 +27,6 @@ const sections = [
   { href: '#fund-detail-holdings', label: '持仓构成', value: 'holdings' },
   { href: '#fund-detail-trading-rules', label: '交易规则', value: 'trading-rules' },
   { href: '#fund-detail-transactions', label: '成交记录', value: 'transactions' },
-] as const
-
-const performanceTabs = [
-  { label: '累计收益', value: 'cumulative-returns' },
-  { label: '单位净值', value: 'unit-net-value' },
-  { label: '累计净值', value: 'cumulative-net-value' },
 ] as const
 
 const scrollContainer = ref<HTMLElement>()
@@ -231,97 +186,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             class="detail-section min-w-0"
           >
             <h2 id="fund-detail-performance-title" class="section-title">业绩表现</h2>
-            <div class="mt-2 min-w-0">
-              <t-tabs
-                :value="activePerformanceView"
-                @update:value="emit('selectPerformanceView', String($event) as FundPerformanceView)"
-              >
-                <t-tab-panel
-                  v-for="performanceTab in performanceTabs"
-                  :key="performanceTab.value"
-                  :label="performanceTab.label"
-                  :value="performanceTab.value"
-                >
-                  <div v-if="performanceTab.value === 'cumulative-returns'" class="pt-4">
-                    <div class="performance-filters">
-                      <t-select
-                        label="日期范围："
-                        :options="historyRangeOptions"
-                        :value="selectedCumulativeReturnsRange"
-                        @update:value="
-                          emit('selectCumulativeReturnsRange', String($event) as FundHistoryRange)
-                        "
-                      />
-                      <t-select
-                        label="参考指数："
-                        :options="referenceSelectOptions"
-                        :value="selectedReferenceIndexCode"
-                        @update:value="emit('selectReferenceIndex', String($event))"
-                      />
-                    </div>
-                    <FundCumulativeReturnsChart
-                      :error="cumulativeReturnsError"
-                      :is-loading="cumulativeReturnsIsLoading"
-                      :model="cumulativeReturnsChart"
-                      :visible="
-                        visible &&
-                        activeSection === 'performance' &&
-                        activePerformanceView === 'cumulative-returns'
-                      "
-                      @retry="emit('retryCumulativeReturns')"
-                    />
-                  </div>
-                  <div v-else-if="performanceTab.value === 'unit-net-value'" class="pt-4">
-                    <div class="performance-filters">
-                      <t-select
-                        label="日期范围："
-                        :options="historyRangeOptions"
-                        :value="selectedUnitNetValueRange"
-                        @update:value="
-                          emit('selectUnitNetValueRange', String($event) as FundHistoryRange)
-                        "
-                      />
-                    </div>
-                    <FundNetValueChart
-                      :error="unitNetValueError"
-                      :is-loading="unitNetValueIsLoading"
-                      :model="unitNetValueChart"
-                      view="unit-net-value"
-                      :visible="
-                        visible &&
-                        activeSection === 'performance' &&
-                        activePerformanceView === 'unit-net-value'
-                      "
-                      @retry="emit('retryUnitNetValue')"
-                    />
-                  </div>
-                  <div v-else class="pt-4">
-                    <div class="performance-filters">
-                      <t-select
-                        label="日期范围："
-                        :options="historyRangeOptions"
-                        :value="selectedCumulativeNetValueRange"
-                        @update:value="
-                          emit('selectCumulativeNetValueRange', String($event) as FundHistoryRange)
-                        "
-                      />
-                    </div>
-                    <FundNetValueChart
-                      :error="cumulativeNetValueError"
-                      :is-loading="cumulativeNetValueIsLoading"
-                      :model="cumulativeNetValueChart"
-                      view="cumulative-net-value"
-                      :visible="
-                        visible &&
-                        activeSection === 'performance' &&
-                        activePerformanceView === 'cumulative-net-value'
-                      "
-                      @retry="emit('retryCumulativeNetValue')"
-                    />
-                  </div>
-                </t-tab-panel>
-              </t-tabs>
-            </div>
+            <slot name="performance" />
           </section>
 
           <section
@@ -408,10 +273,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 
 .fund-detail-scroll {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-.performance-filters {
-  @apply mb-4 flex w-full sm:w-55 flex-col gap-2 sm:flex-row;
 }
 
 .section-placeholder {

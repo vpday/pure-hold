@@ -80,3 +80,34 @@ pnpm lint:fix        # 应用 oxlint 自动修复
 ExecPlan 或高影响改动开始前，运行最终验收会使用的同一组相关命令并记录基线，不只运行测试。若命令已有失败，修改前记录具体命令、文件和错误原因；结束时区分“本次目标检查通过”和“全仓验收通过”，任何规定的全仓命令仍失败时不得声明完整验收通过。
 
 格式检查命中用户未跟踪文件、生成文件或其他无关改动时，不得为了获得绿灯而越权格式化。保留这些文件，运行本次修改文件的目标格式检查作为补充证据，并明确报告全仓格式检查仍未满足，由用户决定修复配置、忽略范围或处理对应文件。
+
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **pure-hold** (1434 symbols, 3369 relationships, 112 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/pure-hold/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/pure-hold/clusters` | All functional areas |
+| `gitnexus://repo/pure-hold/processes` | All execution flows |
+| `gitnexus://repo/pure-hold/process/{name}` | Step-by-step execution trace |
