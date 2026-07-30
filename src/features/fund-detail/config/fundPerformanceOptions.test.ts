@@ -31,8 +31,8 @@ test('uses the fixed index order when the tracking index pair is invalid', () =>
   )
 })
 
-test('defines all performance ranges and defaults to the recent month', () => {
-  assert.equal(defaultFundPerformanceRange, 'y')
+test('defines all performance ranges and defaults to the recent six months', () => {
+  assert.equal(defaultFundPerformanceRange, '6y')
   assert.deepEqual(
     fundPerformanceRangeOptions.map(({ label, value }) => [label, value]),
     [

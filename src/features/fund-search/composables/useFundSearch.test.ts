@@ -3,7 +3,7 @@ import test from 'node:test'
 import { setTimeout as delay } from 'node:timers/promises'
 import { effectScope } from 'vue'
 
-import type { FundSearchPage } from '../../../domains/funds/models/fundSearch.ts'
+import type { FundSearchPage } from '@/domains/funds/models/fundSearch.ts'
 import { useFundSearch } from './useFundSearch.ts'
 
 test('search debounces 300ms, trims input and only requests the latest keyword', async () => {

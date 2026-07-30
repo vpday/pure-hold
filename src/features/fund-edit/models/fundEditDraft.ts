@@ -1,5 +1,5 @@
-import type { FundGroupDefinition } from '../../../domains/funds/models/fundGroupDefinition.ts'
-import type { FundHolding } from '../../../domains/funds/models/fundHolding.ts'
+import type { FundGroupDefinition } from '@/domains/funds/models/fundGroupDefinition.ts'
+import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
 import {
   createEmptyFundHoldingDraft,
   createFundHoldingDraft,

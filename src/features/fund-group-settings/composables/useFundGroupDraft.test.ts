@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { fundStateStorageKey } from '../../../domains/funds/services/persistence/fundStateSchemaVersion.ts'
-import { saveFundState } from '../../../domains/funds/services/persistence/saveFundState.ts'
-import { useFundsStore } from '../../../domains/funds/stores/useFundsStore.ts'
-import { createTestFundSnapshot } from '../../../domains/funds/testing/createTestFundSnapshot.ts'
+import { fundStateStorageKey } from '@/domains/funds/services/persistence/fundStateSchemaVersion.ts'
+import { saveFundState } from '@/domains/funds/services/persistence/saveFundState.ts'
+import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
+import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import { useFundGroupDraft } from './useFundGroupDraft.ts'
 
 test('fund group draft adds, renames, removes, reorders and commits an empty list', () => {

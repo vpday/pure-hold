@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, ref, shallowRef } from 'vue'
 
-import type { FundSearchItem, FundSearchPage } from '../../../domains/funds/models/fundSearch.ts'
-import { fetchEastmoneyFundSearchPage } from '../../../domains/funds/services/eastmoney/fetchEastmoneyFundSearchPage.ts'
+import type { FundSearchItem, FundSearchPage } from '@/domains/funds/models/fundSearch.ts'
+import { fetchEastmoneyFundSearchPage } from '@/domains/funds/services/eastmoney/fetchEastmoneyFundSearchPage.ts'
 import { removeFundSelection, toggleFundSelection } from '../models/fundSelectionDraft.ts'
 
 type SearchFundPage = (

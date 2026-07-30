@@ -19,8 +19,8 @@ test('initializes index funds with their own index and the default range', async
 
   assert.equal(performance.selectedReferenceIndexCode.value, '399997')
   assert.equal(performance.referenceIndexOptions.value[0]?.name, '中证白酒指数')
-  assert.equal(performance.selectedRange.value, 'y')
-  assert.deepEqual(calls[0]?.slice(0, 3), ['161725', '399997', 'y'])
+  assert.equal(performance.selectedRange.value, '6y')
+  assert.deepEqual(calls[0]?.slice(0, 3), ['161725', '399997', '6y'])
 })
 
 test('keeps old data while switching and caches every combination independently', async () => {
@@ -32,7 +32,7 @@ test('keeps old data while switching and caches every combination independently'
   })
 
   const initial = performance.initialize('161725', basicInfo('161725'))
-  requests[0]?.pending.resolve(result('161725', '000001', 'y'))
+  requests[0]?.pending.resolve(result('161725', '000001', '6y'))
   await initial
   const original = performance.data.value
 
@@ -42,13 +42,13 @@ test('keeps old data while switching and caches every combination independently'
   requests[1]?.pending.resolve(result('161725', '000001', '3y'))
   await switching
 
-  await performance.selectRange('y')
+  await performance.selectRange('6y')
   assert.equal(requests.length, 2)
-  assert.equal(performance.data.value?.range, 'y')
+  assert.equal(performance.data.value?.range, '6y')
 
   performance.close()
   const anotherFund = performance.initialize('000001', basicInfo('000001'))
-  requests[2]?.pending.resolve(result('000001', '000001', 'y'))
+  requests[2]?.pending.resolve(result('000001', '000001', '6y'))
   await anotherFund
   assert.equal(requests.length, 3)
 })
@@ -64,8 +64,8 @@ test('aborts obsolete requests and ignores their late responses', async () => {
   const initial = performance.initialize('161725', basicInfo('161725'))
   const switched = performance.selectReferenceIndex('399001')
   assert.equal(requests[0]?.signal?.aborted, true)
-  requests[0]?.pending.resolve(result('161725', '000001', 'y'))
-  requests[1]?.pending.resolve(result('161725', '399001', 'y'))
+  requests[0]?.pending.resolve(result('161725', '000001', '6y'))
+  requests[1]?.pending.resolve(result('161725', '399001', '6y'))
   await Promise.all([initial, switched])
   assert.equal(performance.data.value?.referenceIndexCode, '399001')
 
@@ -108,7 +108,7 @@ test('global refresh clears cached combinations and reloads only an active sessi
 
   await performance.initialize('161725', basicInfo('161725'))
   await performance.selectRange('3y')
-  await performance.selectRange('y')
+  await performance.selectRange('6y')
   assert.equal(calls.length, 2)
   await performance.refresh()
   assert.equal(calls.length, 3)

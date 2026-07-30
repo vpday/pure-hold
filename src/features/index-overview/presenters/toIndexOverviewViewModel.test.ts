@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { IndexDefinition } from '../../../domains/indices/models/indexDefinition.ts'
-import type { IndexGroupDefinition } from '../../../domains/indices/models/indexGroupDefinition.ts'
-import type { IndexQuoteSnapshot } from '../../../domains/indices/models/indexQuote.ts'
+import type { IndexDefinition } from '@/domains/indices/models/indexDefinition.ts'
+import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
+import type { IndexQuoteSnapshot } from '@/domains/indices/models/indexQuote.ts'
 import { toIndexOverviewViewModel } from './toIndexOverviewViewModel.ts'
 
 const definitions: readonly IndexDefinition[] = [

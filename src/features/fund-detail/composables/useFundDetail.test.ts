@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundBasicInfo } from '../../../domains/funds/models/fundBasicInfo.ts'
+import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
 import { useFundDetail } from './useFundDetail.ts'
 
 test('loads once, caches successful results and forces retry', async () => {

@@ -1,7 +1,7 @@
 import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 
-import type { FundBasicInfo } from '../../../domains/funds/models/fundBasicInfo.ts'
-import { fetchTiantianFundBasicInfo } from '../../../domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
+import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
+import { fetchTiantianFundBasicInfo } from '@/domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
 
 export type LoadFundBasicInfo = (code: string, signal?: AbortSignal) => Promise<FundBasicInfo>
 

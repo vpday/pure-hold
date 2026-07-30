@@ -1,4 +1,4 @@
-import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns'
+import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns.ts'
 import { analyzeFundDrawdown } from '@/domains/funds/models/fundDrawdown.ts'
 import type { FundPerformanceChartModel } from '../models/fundPerformance'
 

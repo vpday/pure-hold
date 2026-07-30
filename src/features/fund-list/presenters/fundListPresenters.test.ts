@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundSnapshot } from '../../../domains/funds/models/fundSnapshot.ts'
-import { createTestFundSnapshot } from '../../../domains/funds/testing/createTestFundSnapshot.ts'
+import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
+import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import { sortFundSnapshots } from './sortFundSnapshots.ts'
 import { toFundListViewModel } from './toFundListViewModel.ts'
 

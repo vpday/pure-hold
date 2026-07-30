@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundBasicInfo } from '../../../domains/funds/models/fundBasicInfo.ts'
-import { createTestFundSnapshot } from '../../../domains/funds/testing/createTestFundSnapshot.ts'
+import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
+import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import { toFundDetailViewModel } from './toFundDetailViewModel.ts'
 
 test('formats snapshot quotes and complete basic information', () => {

@@ -1,4 +1,4 @@
-import type { FundSearchItem } from '../../../domains/funds/models/fundSearch.ts'
+import type { FundSearchItem } from '@/domains/funds/models/fundSearch.ts'
 
 export function toggleFundSelection(
   selection: readonly FundSearchItem[],

@@ -1,4 +1,4 @@
-import type { FundDividendMode, FundHolding } from '../../../domains/funds/models/fundHolding.ts'
+import type { FundDividendMode, FundHolding } from '@/domains/funds/models/fundHolding.ts'
 
 export type FundHoldingTimeMode = 'date' | 'days'
 

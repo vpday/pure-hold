@@ -1,5 +1,5 @@
-import type { FundAddition } from '../../../domains/funds/models/fundAddition.ts'
-import type { FundSearchItem } from '../../../domains/funds/models/fundSearch.ts'
+import type { FundAddition } from '@/domains/funds/models/fundAddition.ts'
+import type { FundSearchItem } from '@/domains/funds/models/fundSearch.ts'
 import {
   createEmptyFundHoldingDraft,
   type FundHoldingDraft as HoldingFieldsDraft,
