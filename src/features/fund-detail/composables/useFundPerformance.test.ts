@@ -4,8 +4,8 @@ import test from 'node:test'
 import type {
   FundCumulativeReturns,
   FundPerformanceRange,
-} from '../../../domains/funds/models/fundCumulativeReturns.ts'
-import type { FundBasicInfo } from '../../../domains/funds/models/fundBasicInfo.ts'
+} from '@/domains/funds/models/fundCumulativeReturns.ts'
+import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
 import { useFundPerformance } from './useFundPerformance.ts'
 
 test('initializes index funds with their own index and the default range', async () => {

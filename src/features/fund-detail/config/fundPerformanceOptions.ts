@@ -3,7 +3,7 @@ import type {
   FundReferenceIndexOption,
 } from '../models/fundPerformance'
 
-export const defaultFundPerformanceRange = 'y' as const
+export const defaultFundPerformanceRange = '6y' as const
 
 export const fundPerformanceRangeOptions: readonly FundPerformanceRangeOption[] = [
   { label: '近1月', value: 'y' },

@@ -3,9 +3,9 @@ import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import type {
   FundCumulativeReturns,
   FundPerformanceRange,
-} from '../../../domains/funds/models/fundCumulativeReturns.ts'
-import type { FundBasicInfo } from '../../../domains/funds/models/fundBasicInfo.ts'
-import { fetchEastmoneyFundCumulativeReturns } from '../../../domains/funds/services/eastmoney/fetchEastmoneyFundCumulativeReturns.ts'
+} from '@/domains/funds/models/fundCumulativeReturns.ts'
+import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
+import { fetchEastmoneyFundCumulativeReturns } from '@/domains/funds/services/eastmoney/fetchEastmoneyFundCumulativeReturns.ts'
 import {
   buildFundReferenceIndexOptions,
   defaultFundPerformanceRange,

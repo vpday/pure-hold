@@ -26,8 +26,14 @@ export interface FundPerformanceSummaryItem {
   readonly valueText: string
 }
 
+export interface FundPerformanceDrawdownModel {
+  readonly peakIndex: number
+  readonly troughIndex: number
+}
+
 export interface FundPerformanceChartModel {
   readonly dates: readonly string[]
+  readonly drawdown?: FundPerformanceDrawdownModel
   readonly series: readonly [
     FundPerformanceChartSeries,
     FundPerformanceChartSeries,

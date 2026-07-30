@@ -80,7 +80,7 @@ function trendClass(trend: FundDetailTrend): string {
     </template>
 
     <div class="h-full min-h-0 overflow-x-hidden overflow-y-auto fund-detail-scroll">
-      <div class="grid grid-cols-4 gap-4">
+      <div class="grid grid-cols-3 lg:grid-cols-5 lg:gap-5">
         <div>
           <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
           <p class="nav-value">
@@ -168,12 +168,6 @@ function trendClass(trend: FundDetailTrend): string {
               {{ viewModel.trackingIndexName }}
             </dd>
           </div>
-          <div v-if="viewModel.trackingErrorText && viewModel.trackingErrorText !== '--'">
-            <dt class="text-xs text-(--td-text-color-secondary)">跟踪误差</dt>
-            <dd class="mt-1 font-mono tabular-nums text-(--td-text-color-primary)">
-              {{ viewModel.trackingErrorText }}
-            </dd>
-          </div>
         </dl>
       </div>
 
@@ -240,7 +234,7 @@ function trendClass(trend: FundDetailTrend): string {
 }
 
 .details-grid {
-  @apply grid grid-cols-3 gap-x-8 gap-y-4 lg:grid-cols-4;
+  @apply grid grid-cols-3 lg:grid-cols-5;
 }
 
 .fund-detail-scroll {

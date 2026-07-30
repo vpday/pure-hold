@@ -1,4 +1,5 @@
 import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns'
+import { analyzeFundDrawdown } from '@/domains/funds/models/fundDrawdown.ts'
 import type { FundPerformanceChartModel } from '../models/fundPerformance'
 
 export function toFundPerformanceChartModel(
@@ -7,8 +8,18 @@ export function toFundPerformanceChartModel(
   rangeLabel: string,
 ): FundPerformanceChartModel {
   const latestPoint = returns.points.at(-1)
+  const drawdown = analyzeFundDrawdown(returns.points)
+  const maximumDrawdownPercent = returns.maximumDrawdownPercent ?? drawdown?.maximumDrawdownPercent
   return {
     dates: returns.points.map(({ date }) => date),
+    ...(drawdown
+      ? {
+          drawdown: {
+            peakIndex: drawdown.peakIndex,
+            troughIndex: drawdown.troughIndex,
+          },
+        }
+      : {}),
     series: [
       {
         name: '基金累计收益',
@@ -42,7 +53,7 @@ export function toFundPerformanceChartModel(
       {
         color: 'drawdown',
         label: '最大回撤',
-        valueText: formatPercent(returns.maximumDrawdownPercent),
+        valueText: formatPercent(maximumDrawdownPercent),
       },
     ],
   }

@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { LineChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import {
+  GridComponent,
+  LegendComponent,
+  MarkPointComponent,
+  TooltipComponent,
+} from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -13,6 +18,7 @@ import { buildFundPerformanceChartOption } from '../presenters/buildFundPerforma
 echarts.use([
   LineChart,
   TooltipComponent,
+  MarkPointComponent,
   GridComponent,
   LegendComponent,
   UniversalTransition,
@@ -27,7 +33,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ retry: [] }>()
 const container = ref<HTMLDivElement>()
-const { isSmUp } = useBreakpoints()
+const { isLgUp } = useBreakpoints()
 
 let chart: echarts.ECharts | undefined
 let resizeObserver: ResizeObserver | undefined
@@ -35,15 +41,16 @@ let resizeObserver: ResizeObserver | undefined
 function render(): void {
   if (!chart || !props.model) return
   chart.setOption(
-    buildFundPerformanceChartOption(
-      props.model,
-      [
-        themeColor('--td-error-color'),
-        themeColor('--td-warning-color'),
-        themeColor('--td-success-color'),
-      ],
-      isSmUp.value,
-    ),
+    buildFundPerformanceChartOption(props.model, {
+      showLegend: isLgUp.value,
+      theme: {
+        annotation: themeColor('--td-font-gray-3'),
+        drawdownLine: themeColor('--td-success-color-5'),
+        fundLine: themeColor('--td-error-color-6'),
+        peerLine: themeColor('--td-gray-color-5'),
+        referenceLine: themeColor('--td-brand-color-4'),
+      },
+    }),
     true,
   )
 }
@@ -54,9 +61,17 @@ function themeColor(name: string): string | undefined {
 }
 
 function summaryColor(color: FundPerformanceChartModel['summary'][number]['color']): string {
-  if (color === 'fund') return 'var(--td-error-color)'
-  if (color === 'reference') return 'var(--td-warning-color)'
+  if (color === 'fund') return 'var(--td-error-color-6)'
+  if (color === 'peer') return 'var(--td-gray-color-5)'
+  if (color === 'reference') return 'var(--td-brand-color-4)'
   return 'var(--td-success-color)'
+}
+
+function summaryValueColor(valueText: string): string | undefined {
+  const value = Number.parseFloat(valueText)
+  if (value < 0) return 'var(--td-success-color)'
+  if (value > 0) return 'var(--td-error-color)'
+  return undefined
 }
 
 onMounted(() => {
@@ -72,7 +87,7 @@ watch(
   () => props.model,
   () => render(),
 )
-watch(isSmUp, () => render())
+watch(isLgUp, () => render())
 watch(
   () => props.visible,
   async (visible) => {
@@ -95,7 +110,11 @@ onBeforeUnmount(() => {
     <div v-if="model" class="summary-grid">
       <div v-for="item in model.summary" :key="item.label" class="summary-item">
         <span class="summary-dot" :style="{ backgroundColor: summaryColor(item.color) }" />
-        <span class="truncate">{{ item.label }}：{{ item.valueText }}</span>
+        <span class="truncate">
+          {{ item.label }}：<span :style="{ color: summaryValueColor(item.valueText) }">
+            {{ item.valueText }}
+          </span>
+        </span>
       </div>
     </div>
     <div v-show="model" ref="container" class="h-90 w-full" />
@@ -133,7 +152,8 @@ onBeforeUnmount(() => {
 }
 
 .summary-grid {
-  @apply grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-(--td-text-color-primary) sm:absolute sm:top-0 sm:left-0 sm:z-10 sm:flex sm:flex-nowrap sm:gap-3 sm:text-sm;
+  @apply grid grid-cols-2 text-xs text-(--td-text-color-primary) lg:absolute lg:top-0 lg:left-0 lg:z-10 lg:flex
+  lg:flex-nowrap lg:gap-3;
 }
 
 .summary-item {
