@@ -69,7 +69,6 @@ Start here when exploring this area:
 | -------------------------------- | --------------- | ----- |
 | `ViewModel → FormatSignedNumber` | intra_community | 4     |
 | `ViewModel → ToTrend`            | intra_community | 4     |
-| `ViewModel → FormatPercent`      | intra_community | 3     |
 
 ## How to Explore
 
