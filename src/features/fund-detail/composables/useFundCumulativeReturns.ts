@@ -3,7 +3,7 @@ import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns.ts'
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange.ts'
-import { fetchEastmoneyFundCumulativeReturns } from '@/domains/funds/services/eastmoney/fetchEastmoneyFundCumulativeReturns.ts'
+import { fetchTiantianFundCumulativeReturns } from '@/domains/funds/services/tiantian/fetchTiantianFundCumulativeReturns.ts'
 import { buildFundReferenceIndexOptions } from '../config/fundCumulativeReturnsOptions.ts'
 import { defaultFundHistoryRange } from '../config/fundHistoryRangeOptions.ts'
 import type {
@@ -12,7 +12,7 @@ import type {
 } from '../models/fundCumulativeReturnsChart'
 
 export function useFundCumulativeReturns(
-  load: LoadFundCumulativeReturns = fetchEastmoneyFundCumulativeReturns,
+  load: LoadFundCumulativeReturns = fetchTiantianFundCumulativeReturns,
 ) {
   const currentFundCode = ref<string>()
   const referenceIndexOptions = shallowRef<readonly FundReferenceIndexOption[]>([])

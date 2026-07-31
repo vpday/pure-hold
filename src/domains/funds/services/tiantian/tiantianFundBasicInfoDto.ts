@@ -24,9 +24,3 @@ export interface TiantianFundBasicInfoDto {
   readonly TRKERROR?: unknown
   readonly TRUSTEXP?: unknown
 }
-
-export interface TiantianFundBasicInfoResponse {
-  readonly data?: unknown
-  readonly errorCode?: unknown
-  readonly success?: unknown
-}

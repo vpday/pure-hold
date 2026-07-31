@@ -1,3 +1,5 @@
+import { createTiantianRequestParams } from './createTiantianRequestParams.ts'
+
 const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/FundMNewApi/FundBonusDetail'
 
 export function createTiantianFundDistributionRequestUrl(fundCode: string): URL {
@@ -6,12 +8,8 @@ export function createTiantianFundDistributionRequestUrl(fundCode: string): URL 
   }
 
   const url = new URL(endpoint)
-  url.search = new URLSearchParams({
+  url.search = createTiantianRequestParams({
     FCODE: fundCode,
-    deviceid: crypto.randomUUID(),
-    plat: 'Web',
-    product: 'EFund',
-    version: '6.5.5',
   }).toString()
   return url
 }

@@ -1,4 +1,5 @@
 import { fundHistoryRanges, type FundHistoryRange } from '../../models/fundHistoryRange.ts'
+import { createTiantianRequestParams } from './createTiantianRequestParams.ts'
 
 const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/newCore/FundVPageDiagramNew'
 
@@ -14,14 +15,10 @@ export function createTiantianFundNetValueHistoryRequestUrl(
   }
 
   const url = new URL(endpoint)
-  url.search = new URLSearchParams({
+  url.search = createTiantianRequestParams({
     FCODE: fundCode,
     POINTCOUNT: '',
     RANGE: range,
-    deviceid: crypto.randomUUID(),
-    plat: 'Web',
-    product: 'EFund',
-    version: '6.5.5',
   }).toString()
   return url
 }

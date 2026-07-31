@@ -1,8 +1,9 @@
 import { fundHistoryRanges, type FundHistoryRange } from '../../models/fundHistoryRange.ts'
+import { createTiantianRequestParams } from './createTiantianRequestParams.ts'
 
-const endpoint = 'https://fundcomapi.eastmoney.com/mm/newCore/FundVPageAccV2'
+const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/newCore/FundVPageAccV2'
 
-export function createEastmoneyFundCumulativeReturnsRequestUrl(
+export function createTiantianFundCumulativeReturnsRequestUrl(
   fundCode: string,
   referenceIndexCode: string,
   range: FundHistoryRange,
@@ -14,16 +15,12 @@ export function createEastmoneyFundCumulativeReturnsRequestUrl(
   }
 
   const url = new URL(endpoint)
-  url.search = new URLSearchParams({
+  url.search = createTiantianRequestParams({
     FCODE: fundCode,
     INDEXCODE: referenceIndexCode,
     POINTCOUNT: '',
     RANGE: range,
-    deviceid: crypto.randomUUID(),
-    plat: 'Web',
-    product: 'EFund',
     startDate: '',
-    version: '6.5.5',
   }).toString()
   return url
 }

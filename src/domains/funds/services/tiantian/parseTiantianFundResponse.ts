@@ -1,7 +1,8 @@
 import type { FundSnapshot } from '../../models/fundSnapshot.ts'
 import type { FundRefreshIssue } from './fundRefreshIssue.ts'
 import { mapTiantianFundSnapshot } from './mapTiantianFundSnapshot.ts'
-import type { TiantianFundDto, TiantianFundResponse } from './tiantianFundDto.ts'
+import type { TiantianFundDto } from './tiantianFundDto.ts'
+import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export interface ParsedTiantianFundResponse {
   readonly issues: readonly FundRefreshIssue[]
@@ -13,7 +14,13 @@ export function parseTiantianFundResponse(
   requestedCodes: readonly string[],
   fetchedAt: number,
 ): ParsedTiantianFundResponse {
-  if (!isSuccessfulResponse(value)) {
+  if (
+    !isSuccessfulTiantianResponse(value) ||
+    !Array.isArray(value.data) ||
+    typeof value.totalCount !== 'number' ||
+    !Number.isFinite(value.totalCount) ||
+    value.totalCount < 0
+  ) {
     return {
       issues: requestedCodes.map((fundCode) => ({
         code: 'business-response-failed',
@@ -62,23 +69,6 @@ export function parseTiantianFundResponse(
   const order = new Map(requestedCodes.map((code, index) => [code, index]))
   snapshots.sort((left, right) => (order.get(left.code) ?? 0) - (order.get(right.code) ?? 0))
   return { issues, snapshots }
-}
-
-function isSuccessfulResponse(value: unknown): value is TiantianFundResponse & {
-  readonly data: readonly unknown[]
-  readonly errorCode: 0
-  readonly success: true
-  readonly totalCount: number
-} {
-  return (
-    isRecord(value) &&
-    value.success === true &&
-    value.errorCode === 0 &&
-    Array.isArray(value.data) &&
-    typeof value.totalCount === 'number' &&
-    Number.isFinite(value.totalCount) &&
-    value.totalCount >= 0
-  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -7,17 +7,13 @@ import type {
   TiantianFundDistributionDataDto,
   TiantianFundDistributionRecordDto,
 } from './tiantianFundDistributionDto.ts'
+import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export function parseTiantianFundDistributionResponse(
   value: unknown,
   fundCode: string,
 ): FundDistributionHistory {
-  if (
-    !isRecord(value) ||
-    value.success !== true ||
-    value.errorCode !== 0 ||
-    !isRecord(value.data)
-  ) {
+  if (!isSuccessfulTiantianResponse(value) || !isRecord(value.data)) {
     throw new TypeError('基金分红送配服务返回了无效数据')
   }
 

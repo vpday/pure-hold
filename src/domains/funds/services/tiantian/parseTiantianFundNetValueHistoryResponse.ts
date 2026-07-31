@@ -1,28 +1,20 @@
 import type { FundNetValueHistory, FundNetValuePoint } from '../../models/fundNetValueHistory.ts'
 import type { FundHistoryRange } from '../../models/fundHistoryRange.ts'
-import type {
-  TiantianFundNetValueHistoryResponse,
-  TiantianFundNetValuePointDto,
-} from './tiantianFundNetValueHistoryDto.ts'
+import type { TiantianFundNetValuePointDto } from './tiantianFundNetValueHistoryDto.ts'
+import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export function parseTiantianFundNetValueHistoryResponse(
   value: unknown,
   fundCode: string,
   range: FundHistoryRange,
 ): FundNetValueHistory {
-  if (
-    !isRecord(value) ||
-    value.success !== true ||
-    value.errorCode !== 0 ||
-    !Array.isArray(value.data)
-  ) {
+  if (!isSuccessfulTiantianResponse(value) || !Array.isArray(value.data)) {
     throw new TypeError('基金净值历史服务返回了无效数据')
   }
 
-  const response = value as TiantianFundNetValueHistoryResponse
   const pointsByDate = new Map<string, FundNetValuePoint>()
-  for (const value of response.data as unknown[]) {
-    const point = mapPoint(value)
+  for (const item of value.data) {
+    const point = mapPoint(item)
     if (point) pointsByDate.set(point.date, point)
   }
   const points = [...pointsByDate.values()].sort((left, right) =>

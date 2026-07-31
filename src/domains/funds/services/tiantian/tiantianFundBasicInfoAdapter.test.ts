@@ -13,7 +13,7 @@ test('creates the fixed basic info form fields and a fresh UUID', () => {
   assert.equal(first.get('FCODES'), '161725')
   assert.equal(first.get('plat'), 'Web')
   assert.equal(first.get('product'), 'EFund')
-  assert.equal(first.get('version'), '6.8.3')
+  assert.equal(first.get('version'), '6.5.5')
   for (const field of [
     'DRAWCFMDATA',
     'MAXSG',

@@ -1,39 +1,39 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createEastmoneyFundCumulativeReturnsRequestUrl } from './createEastmoneyFundCumulativeReturnsRequestUrl.ts'
-import { fetchEastmoneyFundCumulativeReturns } from './fetchEastmoneyFundCumulativeReturns.ts'
-import { parseEastmoneyFundCumulativeReturnsResponse } from './parseEastmoneyFundCumulativeReturnsResponse.ts'
+import { createTiantianFundCumulativeReturnsRequestUrl } from './createTiantianFundCumulativeReturnsRequestUrl.ts'
+import { fetchTiantianFundCumulativeReturns } from './fetchTiantianFundCumulativeReturns.ts'
+import { parseTiantianFundCumulativeReturnsResponse } from './parseTiantianFundCumulativeReturnsResponse.ts'
 
 test('creates cumulative return parameters with a fresh device id', () => {
-  const first = createEastmoneyFundCumulativeReturnsRequestUrl('161725', '399997', 'y')
-  const second = createEastmoneyFundCumulativeReturnsRequestUrl('161725', '399997', 'y')
+  const first = createTiantianFundCumulativeReturnsRequestUrl('161725', '399997', 'y')
+  const second = createTiantianFundCumulativeReturnsRequestUrl('161725', '399997', 'y')
 
   assert.equal(
     first.origin + first.pathname,
-    'https://fundcomapi.eastmoney.com/mm/newCore/FundVPageAccV2',
+    'https://fundcomapi.tiantianfunds.com/mm/newCore/FundVPageAccV2',
   )
   assert.equal(first.searchParams.get('FCODE'), '161725')
   assert.equal(first.searchParams.get('INDEXCODE'), '399997')
   assert.equal(first.searchParams.get('POINTCOUNT'), '')
   assert.equal(first.searchParams.get('RANGE'), 'y')
-  assert.equal(first.searchParams.get('plat'), 'Iphone')
+  assert.equal(first.searchParams.get('plat'), 'Web')
   assert.equal(first.searchParams.get('product'), 'EFund')
   assert.equal(first.searchParams.get('startDate'), '')
-  assert.equal(first.searchParams.get('version'), '6.8.4')
+  assert.equal(first.searchParams.get('version'), '6.5.5')
   assert.notEqual(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
   assert.throws(
-    () => createEastmoneyFundCumulativeReturnsRequestUrl('16172', '399997', 'y'),
+    () => createTiantianFundCumulativeReturnsRequestUrl('16172', '399997', 'y'),
     /exactly 6 digits/,
   )
   assert.throws(
-    () => createEastmoneyFundCumulativeReturnsRequestUrl('161725', '39999x', 'y'),
+    () => createTiantianFundCumulativeReturnsRequestUrl('161725', '39999x', 'y'),
     /exactly 6 digits/,
   )
 })
 
 test('maps, sorts and deduplicates cumulative return points while preserving holes', () => {
-  const result = parseEastmoneyFundCumulativeReturnsResponse(
+  const result = parseTiantianFundCumulativeReturnsResponse(
     successful(
       [
         { PDATE: '2026-07-29', YIELD: '127.43', INDEXYIELD: 104.35, FUNDTYPEYIELD: null },
@@ -80,7 +80,7 @@ test('maps, sorts and deduplicates cumulative return points while preserving hol
 
 test('normalizes missing, invalid and negative maximum drawdown values', () => {
   for (const expansion of [undefined, null, {}, { MAXRETRA: 'bad' }, { MAXRETRA: -1 }]) {
-    const result = parseEastmoneyFundCumulativeReturnsResponse(
+    const result = parseTiantianFundCumulativeReturnsResponse(
       successful([{ PDATE: '2026-07-29', YIELD: 1 }], expansion),
       '161725',
       '399997',
@@ -98,7 +98,7 @@ test('rejects unsuccessful, malformed and empty cumulative return responses', ()
     successful([{ PDATE: 'not-a-date', YIELD: 1 }]),
   ]) {
     assert.throws(() =>
-      parseEastmoneyFundCumulativeReturnsResponse(response, '161725', '399997', 'y'),
+      parseTiantianFundCumulativeReturnsResponse(response, '161725', '399997', 'y'),
     )
   }
 })
@@ -110,7 +110,7 @@ test('fetch rejects HTTP failures and propagates caller cancellation', async (co
   })
 
   globalThis.fetch = async () => new Response(null, { status: 503 })
-  await assert.rejects(fetchEastmoneyFundCumulativeReturns('161725', '399997', 'y'), {
+  await assert.rejects(fetchTiantianFundCumulativeReturns('161725', '399997', 'y'), {
     message: '累计收益服务暂时不可用',
   })
 
@@ -126,7 +126,7 @@ test('fetch rejects HTTP failures and propagates caller cancellation', async (co
       )
     })
   }
-  const request = fetchEastmoneyFundCumulativeReturns('161725', '399997', 'y', controller.signal)
+  const request = fetchTiantianFundCumulativeReturns('161725', '399997', 'y', controller.signal)
   controller.abort()
   await assert.rejects(request, { name: 'AbortError' })
   assert.equal(requestedSignal, controller.signal)

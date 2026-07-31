@@ -3,30 +3,22 @@ import type {
   FundCumulativeReturns,
 } from '../../models/fundCumulativeReturns.ts'
 import type { FundHistoryRange } from '../../models/fundHistoryRange.ts'
-import type {
-  EastmoneyFundCumulativeReturnDto,
-  EastmoneyFundCumulativeReturnsResponse,
-} from './eastmoneyFundCumulativeReturnsDto.ts'
+import type { TiantianFundCumulativeReturnDto } from './tiantianFundCumulativeReturnsDto.ts'
+import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
-export function parseEastmoneyFundCumulativeReturnsResponse(
+export function parseTiantianFundCumulativeReturnsResponse(
   value: unknown,
   fundCode: string,
   referenceIndexCode: string,
   range: FundHistoryRange,
 ): FundCumulativeReturns {
-  if (
-    !isRecord(value) ||
-    value.success !== true ||
-    value.errorCode !== 0 ||
-    !Array.isArray(value.data)
-  ) {
+  if (!isSuccessfulTiantianResponse(value) || !Array.isArray(value.data)) {
     throw new TypeError('累计收益服务返回了无效数据')
   }
 
-  const response = value as EastmoneyFundCumulativeReturnsResponse
   const pointsByDate = new Map<string, FundCumulativeReturnPoint>()
-  for (const value of response.data as unknown[]) {
-    const point = mapPoint(value)
+  for (const item of value.data) {
+    const point = mapPoint(item)
     if (point) pointsByDate.set(point.date, point)
   }
   const points = [...pointsByDate.values()].sort((left, right) =>
@@ -36,15 +28,15 @@ export function parseEastmoneyFundCumulativeReturnsResponse(
     throw new TypeError('累计收益数据为空')
   }
 
-  const maximumDrawdownPercent = isRecord(response.expansion)
-    ? toNullableNonNegativeNumber(response.expansion.MAXRETRA)
+  const maximumDrawdownPercent = isRecord(value.expansion)
+    ? toNullableNonNegativeNumber(value.expansion.MAXRETRA)
     : null
   return { fundCode, maximumDrawdownPercent, points, range, referenceIndexCode }
 }
 
 function mapPoint(value: unknown): FundCumulativeReturnPoint | undefined {
   if (!isRecord(value)) return undefined
-  const dto = value as EastmoneyFundCumulativeReturnDto
+  const dto = value as TiantianFundCumulativeReturnDto
   if (!isValidDate(dto.PDATE)) return undefined
   return {
     date: dto.PDATE,

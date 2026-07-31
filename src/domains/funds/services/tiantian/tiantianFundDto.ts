@@ -20,11 +20,3 @@ export interface TiantianFundDto {
   readonly SYL_Z?: unknown
   readonly SYRQ?: unknown
 }
-
-export interface TiantianFundResponse {
-  readonly data?: unknown
-  readonly errorCode?: unknown
-  readonly firstError?: unknown
-  readonly success?: unknown
-  readonly totalCount?: unknown
-}

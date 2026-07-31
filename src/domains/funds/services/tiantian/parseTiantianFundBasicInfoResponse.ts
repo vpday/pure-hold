@@ -1,14 +1,16 @@
 import type { FundBasicInfo } from '../../models/fundBasicInfo.ts'
-import type {
-  TiantianFundBasicInfoDto,
-  TiantianFundBasicInfoResponse,
-} from './tiantianFundBasicInfoDto.ts'
+import type { TiantianFundBasicInfoDto } from './tiantianFundBasicInfoDto.ts'
+import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export function parseTiantianFundBasicInfoResponse(
   value: unknown,
   requestedCode: string,
 ): FundBasicInfo {
-  if (!isSuccessfulResponse(value)) {
+  if (
+    !isSuccessfulTiantianResponse(value) ||
+    !Array.isArray(value.data) ||
+    value.data.length === 0
+  ) {
     throw new Error('Tiantian fund basic info business response failed')
   }
 
@@ -47,20 +49,6 @@ export function parseTiantianFundBasicInfoResponse(
     trackingIndexCode: trackingIndex.code,
     trackingIndexName: trackingIndex.name,
   }
-}
-
-function isSuccessfulResponse(value: unknown): value is TiantianFundBasicInfoResponse & {
-  readonly data: readonly unknown[]
-  readonly errorCode: 0
-  readonly success: true
-} {
-  return (
-    isRecord(value) &&
-    value.success === true &&
-    value.errorCode === 0 &&
-    Array.isArray(value.data) &&
-    value.data.length > 0
-  )
 }
 
 function toText(value: unknown): string | null {

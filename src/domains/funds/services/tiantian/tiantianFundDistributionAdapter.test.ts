@@ -21,9 +21,9 @@ test('creates exact distribution parameters with a fresh device id', () => {
     'version',
   ])
   assert.equal(first.searchParams.get('FCODE'), '161725')
-  assert.equal(first.searchParams.get('plat'), 'Iphone')
+  assert.equal(first.searchParams.get('plat'), 'Web')
   assert.equal(first.searchParams.get('product'), 'EFund')
-  assert.equal(first.searchParams.get('version'), '6.8.11')
+  assert.equal(first.searchParams.get('version'), '6.5.5')
   assert.match(first.searchParams.get('deviceid') ?? '', /^[0-9a-f-]{36}$/i)
   assert.notEqual(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
   assert.throws(() => createTiantianFundDistributionRequestUrl('16172'), /6 digits/)
