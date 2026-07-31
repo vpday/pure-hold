@@ -20,10 +20,10 @@ export function createEastmoneyFundCumulativeReturnsRequestUrl(
     POINTCOUNT: '',
     RANGE: range,
     deviceid: crypto.randomUUID(),
-    plat: 'Iphone',
+    plat: 'Web',
     product: 'EFund',
     startDate: '',
-    version: '6.8.4',
+    version: '6.5.5',
   }).toString()
   return url
 }

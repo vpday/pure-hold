@@ -4,6 +4,7 @@ import type {
   FundCumulativeReturnsChartModel,
   FundReferenceIndexOption,
 } from './fundCumulativeReturnsChart'
+import type { FundDistributionTableModel } from './fundDistributionTableModel'
 import type { FundNetValueChartModel } from './fundNetValueChart'
 import type { FundPerformanceView } from './fundPerformanceView'
 
@@ -23,10 +24,17 @@ interface FundNetValuePanelModel extends FundChartState<FundNetValueChartModel> 
   readonly selectedRange: FundHistoryRange
 }
 
+interface FundDistributionPanelModel extends FundDistributionTableModel {
+  readonly error: string
+  readonly hasLoaded: boolean
+  readonly isLoading: boolean
+}
+
 export interface FundPerformanceSectionModel {
   readonly activeView: FundPerformanceView
   readonly cumulativeNetValue: FundNetValuePanelModel
   readonly cumulativeReturns: FundCumulativeReturnsPanelModel
+  readonly distribution: FundDistributionPanelModel
   readonly isVisible: boolean
   readonly unitNetValue: FundNetValuePanelModel
 }

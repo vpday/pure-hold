@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { TableProps } from 'tdesign-vue-next'
 
 import { fundHistoryRangeOptions } from '../config/fundHistoryRangeOptions'
+import type {
+  FundConversionTableRow,
+  FundDividendTableRow,
+} from '../models/fundDistributionTableModel'
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
@@ -10,7 +15,9 @@ import FundNetValueChart from './FundNetValueChart.vue'
 
 const props = defineProps<{ model: FundPerformanceSectionModel }>()
 const emit = defineEmits<{
+  activateDistribution: []
   retry: [view: FundPerformanceView]
+  retryDistribution: []
   selectRange: [view: FundPerformanceView, range: FundHistoryRange]
   selectReferenceIndex: [code: string]
   selectView: [view: FundPerformanceView]
@@ -21,6 +28,23 @@ const performanceTabs = [
   { label: '单位净值', value: 'unit-net-value' },
   { label: '累计净值', value: 'cumulative-net-value' },
 ] as const
+const activeTab = ref<FundPerformanceView | 'distribution'>(props.model.activeView)
+const sectionElement = ref<HTMLElement>()
+const dividendColumns: TableProps<FundDividendTableRow>['columns'] = [
+  { colKey: 'equityRecordDate', title: '权益登记日' },
+  { colKey: 'exDividendDate', title: '除息日' },
+  {
+    cell: 'dividend-per-ten-units',
+    colKey: 'dividendPerTenUnits',
+    title: '每10份分红',
+  },
+  { colKey: 'paymentDate', title: '分红发放日' },
+]
+const conversionColumns: TableProps<FundConversionTableRow>['columns'] = [
+  { colKey: 'conversionDate', title: '拆分折算日' },
+  { colKey: 'conversionType', title: '拆分类型' },
+  { cell: 'ratio', colKey: 'ratio', title: '拆分折算比例' },
+]
 
 const referenceSelectOptions = computed(() =>
   props.model.cumulativeReturns.referenceIndexOptions.map(({ code, name }) => ({
@@ -28,14 +52,34 @@ const referenceSelectOptions = computed(() =>
     value: code,
   })),
 )
+
+function selectTab(value: string): void {
+  activeTab.value = value as FundPerformanceView | 'distribution'
+  if (activeTab.value !== 'distribution') emit('selectView', activeTab.value)
+}
+
+let observer: IntersectionObserver | undefined
+onMounted(() => {
+  if (!sectionElement.value) return
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      emit('activateDistribution')
+      observer?.disconnect()
+      observer = undefined
+    },
+    { root: null },
+  )
+  observer.observe(sectionElement.value)
+})
+onBeforeUnmount(() => {
+  observer?.disconnect()
+})
 </script>
 
 <template>
-  <div class="mt-2 min-w-0">
-    <t-tabs
-      :value="model.activeView"
-      @update:value="emit('selectView', String($event) as FundPerformanceView)"
-    >
+  <div ref="sectionElement" class="mt-2 min-w-0">
+    <t-tabs :value="activeTab" @update:value="selectTab(String($event))">
       <t-tab-panel
         v-for="performanceTab in performanceTabs"
         :key="performanceTab.value"
@@ -63,7 +107,7 @@ const referenceSelectOptions = computed(() =>
             :error="model.cumulativeReturns.error"
             :is-loading="model.cumulativeReturns.isLoading"
             :model="model.cumulativeReturns.chart"
-            :visible="model.isVisible && model.activeView === 'cumulative-returns'"
+            :visible="model.isVisible && activeTab === 'cumulative-returns'"
             @retry="emit('retry', 'cumulative-returns')"
           />
         </div>
@@ -83,7 +127,7 @@ const referenceSelectOptions = computed(() =>
             :is-loading="model.unitNetValue.isLoading"
             :model="model.unitNetValue.chart"
             view="unit-net-value"
-            :visible="model.isVisible && model.activeView === 'unit-net-value'"
+            :visible="model.isVisible && activeTab === 'unit-net-value'"
             @retry="emit('retry', 'unit-net-value')"
           />
         </div>
@@ -103,9 +147,71 @@ const referenceSelectOptions = computed(() =>
             :is-loading="model.cumulativeNetValue.isLoading"
             :model="model.cumulativeNetValue.chart"
             view="cumulative-net-value"
-            :visible="model.isVisible && model.activeView === 'cumulative-net-value'"
+            :visible="model.isVisible && activeTab === 'cumulative-net-value'"
             @retry="emit('retry', 'cumulative-net-value')"
           />
+        </div>
+      </t-tab-panel>
+      <t-tab-panel label="分红送配" value="distribution">
+        <div class="pt-4">
+          <t-alert
+            v-if="model.distribution.error"
+            class="mb-4"
+            theme="error"
+            :message="model.distribution.error"
+          >
+            <template #operation>
+              <t-button
+                size="small"
+                theme="danger"
+                variant="text"
+                @click="emit('retryDistribution')"
+              >
+                重试
+              </t-button>
+            </template>
+          </t-alert>
+          <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <section class="min-w-0">
+              <h3 class="mb-3 text-base font-medium">分红送配详情</h3>
+              <div class="overflow-x-auto">
+                <t-table
+                  class="min-w-100"
+                  bordered
+                  :columns="dividendColumns"
+                  :data="model.distribution.dividends"
+                  :empty="model.distribution.hasLoaded ? '暂无分红送配记录' : ''"
+                  :loading="model.distribution.isLoading"
+                  row-key="rowKey"
+                  size="small"
+                  table-layout="auto"
+                >
+                  <template #dividend-per-ten-units="{ row }">
+                    <span class="font-mono tabular-nums">{{ row.dividendPerTenUnits }}</span>
+                  </template>
+                </t-table>
+              </div>
+            </section>
+            <section class="min-w-0">
+              <h3 class="mb-3 text-base font-medium">拆分详情</h3>
+              <div class="overflow-x-auto">
+                <t-table
+                  bordered
+                  :columns="conversionColumns"
+                  :data="model.distribution.conversions"
+                  :empty="model.distribution.hasLoaded ? '暂无份额折算记录' : ''"
+                  :loading="model.distribution.isLoading"
+                  row-key="rowKey"
+                  size="small"
+                  table-layout="auto"
+                >
+                  <template #ratio="{ row }">
+                    <span class="font-mono tabular-nums">{{ row.ratio }}</span>
+                  </template>
+                </t-table>
+              </div>
+            </section>
+          </div>
         </div>
       </t-tab-panel>
     </t-tabs>

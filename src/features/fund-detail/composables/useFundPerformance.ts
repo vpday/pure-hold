@@ -4,16 +4,20 @@ import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
 import { fundHistoryRangeOptions } from '../config/fundHistoryRangeOptions'
 import type { LoadFundCumulativeReturns } from '../models/fundCumulativeReturnsChart'
+import type { LoadFundDistribution } from '../models/fundDistributionTableModel'
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
 import { toFundCumulativeReturnsChartModel } from '../presenters/toFundCumulativeReturnsChartModel'
+import { toFundDistributionTableModel } from '../presenters/toFundDistributionTableModel'
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
 import { useFundCumulativeReturns } from './useFundCumulativeReturns'
+import { useFundDistribution } from './useFundDistribution'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
 
 interface UseFundPerformanceOptions {
   readonly loadCumulativeReturns?: LoadFundCumulativeReturns
+  readonly loadDistribution?: LoadFundDistribution
   readonly loadNetValueHistory?: LoadFundNetValueHistory
 }
 
@@ -22,6 +26,7 @@ export function useFundPerformance(
   options: UseFundPerformanceOptions = {},
 ) {
   const cumulativeReturns = useFundCumulativeReturns(options.loadCumulativeReturns)
+  const distribution = useFundDistribution(options.loadDistribution)
   const netValueHistory = useFundNetValueHistory(options.loadNetValueHistory)
   const activeView = ref<FundPerformanceView>('cumulative-returns')
   const currentFundCode = ref<string>()
@@ -51,6 +56,10 @@ export function useFundPerformance(
     const history = netValueHistory.data['cumulative-net-value'].value
     return history ? toFundNetValueChartModel(history, 'cumulative-net-value') : undefined
   })
+  const distributionTable = computed(() => {
+    const history = distribution.data.value
+    return history ? toFundDistributionTableModel(history) : { conversions: [], dividends: [] }
+  })
   const model = computed<FundPerformanceSectionModel>(() => ({
     activeView: activeView.value,
     cumulativeNetValue: {
@@ -67,6 +76,12 @@ export function useFundPerformance(
       selectedRange: cumulativeReturns.selectedRange.value,
       selectedReferenceIndexCode: cumulativeReturns.selectedReferenceIndexCode.value,
     },
+    distribution: {
+      ...distributionTable.value,
+      error: distribution.error.value,
+      hasLoaded: distribution.hasLoaded.value,
+      isLoading: distribution.isLoading.value,
+    },
     isVisible: toValue(isVisible),
     unitNetValue: {
       chart: unitNetValueChart.value,
@@ -81,6 +96,8 @@ export function useFundPerformance(
     basicInfo.value = undefined
     activeView.value = 'cumulative-returns'
     cumulativeReturns.close()
+    distribution.close()
+    distribution.initialize(code)
     netValueHistory.close()
     netValueHistory.initialize(code)
   }
@@ -89,6 +106,7 @@ export function useFundPerformance(
     currentFundCode.value = undefined
     basicInfo.value = undefined
     cumulativeReturns.close()
+    distribution.close()
     netValueHistory.close()
   }
 
@@ -125,20 +143,30 @@ export function useFundPerformance(
     await (view === 'cumulative-returns' ? cumulativeReturns.retry() : netValueHistory.retry(view))
   }
 
+  async function activateDistribution(): Promise<void> {
+    await distribution.activate()
+  }
+
+  async function retryDistribution(): Promise<void> {
+    await distribution.retry()
+  }
+
   async function refresh(): Promise<void> {
     if (!toValue(isVisible)) return
     const view = activeView.value
-    await (view === 'cumulative-returns'
-      ? cumulativeReturns.refresh()
-      : netValueHistory.refresh(view))
+    const chartRefresh =
+      view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh(view)
+    await Promise.all([chartRefresh, distribution.refresh()])
   }
 
   return {
+    activateDistribution,
     close,
     model,
     open,
     refresh,
     retry,
+    retryDistribution,
     selectRange,
     selectReferenceIndex,
     selectView,

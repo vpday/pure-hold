@@ -19,9 +19,9 @@ export function createTiantianFundNetValueHistoryRequestUrl(
     POINTCOUNT: '',
     RANGE: range,
     deviceid: crypto.randomUUID(),
-    plat: 'Iphone',
+    plat: 'Web',
     product: 'EFund',
-    version: '6.8.3',
+    version: '6.5.5',
   }).toString()
   return url
 }

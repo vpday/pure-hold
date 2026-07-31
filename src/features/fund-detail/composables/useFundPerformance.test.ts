@@ -4,17 +4,23 @@ import { ref } from 'vue'
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativeReturns'
+import type { FundDistributionHistory } from '@/domains/funds/models/fundDistributionHistory'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory'
 import { useFundPerformance } from './useFundPerformance'
 
 test('owns performance initialization and builds every chart model', async () => {
   const cumulativeCalls: unknown[][] = []
+  const distributionCalls: unknown[][] = []
   const netValueCalls: unknown[][] = []
   const performance = useFundPerformance(ref(true), {
     loadCumulativeReturns: async (...args) => {
       cumulativeCalls.push(args)
       return cumulativeResult(args[0], args[1], args[2])
+    },
+    loadDistribution: async (...args) => {
+      distributionCalls.push(args)
+      return distributionResult(args[0])
     },
     loadNetValueHistory: async (...args) => {
       netValueCalls.push(args)
@@ -28,10 +34,14 @@ test('owns performance initialization and builds every chart model', async () =>
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
   assert.equal(performance.model.value.cumulativeReturns.chart?.series[1].name, '中证白酒指数')
   assert.deepEqual(cumulativeCalls[0]?.slice(0, 3), ['161725', '399997', '6y'])
+  assert.equal(distributionCalls.length, 0)
   assert.equal(netValueCalls.length, 0)
 
+  await performance.activateDistribution()
   await performance.selectView('unit-net-value')
 
+  assert.equal(performance.model.value.distribution.dividends[0]?.dividendPerTenUnits, '0.4500')
+  assert.equal(distributionCalls.length, 1)
   assert.equal(performance.model.value.activeView, 'unit-net-value')
   assert.equal(performance.model.value.unitNetValue.chart?.values[0], 1)
   assert.deepEqual(netValueCalls[0]?.slice(0, 2), ['161725', '6y'])
@@ -79,10 +89,15 @@ test('routes ranges and retries through the active performance session', async (
 
 test('refreshes only the visible active view and resets on reopen', async () => {
   const isVisible = ref(false)
+  const distributionCalls: unknown[][] = []
   const netValueCalls: unknown[][] = []
   const performance = useFundPerformance(isVisible, {
     loadCumulativeReturns: async (fundCode, referenceIndexCode, range) =>
       cumulativeResult(fundCode, referenceIndexCode, range),
+    loadDistribution: async (...args) => {
+      distributionCalls.push(args)
+      return distributionResult(args[0])
+    },
     loadNetValueHistory: async (...args) => {
       netValueCalls.push(args)
       return netValueResult(args[0], args[1])
@@ -90,13 +105,16 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   })
 
   performance.open('161725')
+  await performance.activateDistribution()
   await performance.selectView('unit-net-value')
   await performance.refresh()
   assert.equal(netValueCalls.length, 1)
+  assert.equal(distributionCalls.length, 1)
 
   isVisible.value = true
   await performance.refresh()
   assert.equal(netValueCalls.length, 2)
+  assert.equal(distributionCalls.length, 2)
 
   await performance.selectRange('unit-net-value', 'n')
   performance.close()
@@ -105,6 +123,7 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
   assert.equal(performance.model.value.unitNetValue.selectedRange, '6y')
   assert.equal(performance.model.value.unitNetValue.chart, undefined)
+  assert.equal(performance.model.value.distribution.hasLoaded, false)
 })
 
 function cumulativeResult(
@@ -140,6 +159,21 @@ function netValueResult(fundCode: string, range: FundHistoryRange): FundNetValue
       },
     ],
     range,
+  }
+}
+
+function distributionResult(fundCode: string): FundDistributionHistory {
+  return {
+    conversions: [{ conversionDate: '2020-12-15', ratio: 1.005444122 }],
+    dividends: [
+      {
+        dividendPerTenUnits: 0.45,
+        equityRecordDate: '2021-12-31',
+        exDividendDate: '2021-12-31',
+        paymentDate: '2022-01-05',
+      },
+    ],
+    fundCode,
   }
 }
 

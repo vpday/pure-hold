@@ -92,8 +92,11 @@ defineExpose({ open })
   >
     <template #performance>
       <FundPerformanceSection
+        :key="detail.currentCode.value"
         :model="performance.model.value"
+        @activate-distribution="performance.activateDistribution"
         @retry="performance.retry"
+        @retry-distribution="performance.retryDistribution"
         @select-range="performance.selectRange"
         @select-reference-index="performance.selectReferenceIndex"
         @select-view="performance.selectView"

@@ -12,6 +12,6 @@ export function createTiantianFundBasicInfoRequestBody(fundCode: string): URLSea
     deviceid: crypto.randomUUID(),
     plat: 'Web',
     product: 'EFund',
-    version: '6.8.3',
+    version: '6.5.5',
   })
 }
