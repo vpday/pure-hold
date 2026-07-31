@@ -83,7 +83,7 @@ ExecPlan 或高影响改动开始前，运行最终验收会使用的同一组�
 
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **pure-hold** (1434 symbols, 3369 relationships, 112 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **pure-hold** (1519 symbols, 3554 relationships, 119 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -105,9 +105,35 @@ This project is indexed by GitNexus as **pure-hold** (1434 symbols, 3369 relatio
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/pure-hold/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/pure-hold/clusters` | All functional areas |
-| `gitnexus://repo/pure-hold/processes` | All execution flows |
-| `gitnexus://repo/pure-hold/process/{name}` | Step-by-step execution trace |
+| Resource                                   | Use for                                  |
+| ------------------------------------------ | ---------------------------------------- |
+| `gitnexus://repo/pure-hold/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/pure-hold/clusters`       | All functional areas                     |
+| `gitnexus://repo/pure-hold/processes`      | All execution flows                      |
+| `gitnexus://repo/pure-hold/process/{name}` | Step-by-step execution trace             |
+
+## CLI
+
+| Task                                             | Read this skill file                                        |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?"     | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"      | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"                 | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor              | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference               | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands          | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
+| Work in the Composables area (142 symbols)       | `.claude/skills/generated/composables/SKILL.md`             |
+| Work in the Persistence area (49 symbols)        | `.claude/skills/generated/persistence/SKILL.md`             |
+| Work in the Tiantian area (42 symbols)           | `.claude/skills/generated/tiantian/SKILL.md`                |
+| Work in the Stores area (41 symbols)             | `.claude/skills/generated/stores/SKILL.md`                  |
+| Work in the Presenters area (40 symbols)         | `.claude/skills/generated/presenters/SKILL.md`              |
+| Work in the Components area (23 symbols)         | `.claude/skills/generated/components/SKILL.md`              |
+| Work in the Eastmoney area (22 symbols)          | `.claude/skills/generated/eastmoney/SKILL.md`               |
+| Work in the Models area (22 symbols)             | `.claude/skills/generated/models/SKILL.md`                  |
+| Work in the Scripts area (18 symbols)            | `.claude/skills/generated/scripts/SKILL.md`                 |
+| Work in the Fund-list area (10 symbols)          | `.claude/skills/generated/fund-list/SKILL.md`               |
+| Work in the Fund-search area (5 symbols)         | `.claude/skills/generated/fund-search/SKILL.md`             |
+| Work in the Index-settings area (5 symbols)      | `.claude/skills/generated/index-settings/SKILL.md`          |
+| Work in the Cluster_132 area (4 symbols)         | `.claude/skills/generated/cluster-132/SKILL.md`             |
+| Work in the Fund-group-settings area (4 symbols) | `.claude/skills/generated/fund-group-settings/SKILL.md`     |
+| Work in the Fund-detail area (3 symbols)         | `.claude/skills/generated/fund-detail/SKILL.md`             |
