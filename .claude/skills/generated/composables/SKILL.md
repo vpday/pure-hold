@@ -1,11 +1,11 @@
 ---
 name: composables
-description: 'Skill for the Composables area of pure-hold. 142 symbols across 27 files.'
+description: 'Skill for the Composables area of pure-hold. 148 symbols across 28 files.'
 ---
 
 # Composables
 
-142 symbols | 27 files | Cohesion: 96%
+148 symbols | 28 files | Cohesion: 96%
 
 ## When to Use
 
@@ -15,18 +15,18 @@ description: 'Skill for the Composables area of pure-hold. 142 symbols across 27
 
 ## Key Files
 
-| File                                                                 | Symbols                                                                                                 |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/features/fund-detail/composables/useFundNetValueHistory.ts`     | activate, selectRange, retry, refresh, request (+11)                                                    |
-| `src/features/index-settings/composables/useIndexSettingsSession.ts` | selectGroup, addGroup, renameGroup, replaceGroups, saveGroups (+9)                                      |
-| `src/features/fund-detail/composables/useFundCumulativeReturns.ts`   | selectReferenceIndex, selectRange, retry, refresh, request (+8)                                         |
-| `src/features/fund-detail/composables/useFundDistribution.ts`        | activate, retry, refresh, request, startRequest (+7)                                                    |
-| `src/features/fund-search/composables/useFundSearch.ts`              | setKeyword, loadMore, retry, reset, requestPage (+6)                                                    |
-| `src/features/index-overview/composables/useQuoteCarousel.ts`        | useQuoteCarousel, handleTransitionEnd, resetLoop, resetCarousel, resetPosition (+4)                     |
-| `src/features/fund-detail/composables/useFundDetail.ts`              | open, close, retry, refresh, request (+3)                                                               |
-| `src/features/fund-detail/composables/useFundPerformance.ts`         | useFundPerformance, unitNetValueChart, cumulativeNetValueChart, distributionTable, open (+1)            |
-| `src/features/fund-search/composables/useFundAdditionSession.ts`     | addWithoutHoldings, confirmHoldings, submit, useFundAdditionSession, open (+1)                          |
-| `src/features/fund-detail/composables/useFundPerformance.test.ts`    | loadCumulativeReturns, cumulativeResult, loadDistribution, distributionResult, loadNetValueHistory (+1) |
+| File                                                                 | Symbols                                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/features/fund-detail/composables/useFundNetValueHistory.ts`     | activate, selectRange, retry, refresh, request (+11)                                         |
+| `src/features/index-settings/composables/useIndexSettingsSession.ts` | selectGroup, addGroup, renameGroup, replaceGroups, saveGroups (+9)                           |
+| `src/features/fund-detail/composables/useFundCumulativeReturns.ts`   | selectReferenceIndex, selectRange, retry, refresh, request (+8)                              |
+| `src/features/fund-detail/composables/useFundDistribution.ts`        | activate, retry, refresh, request, startRequest (+7)                                         |
+| `src/features/fund-search/composables/useFundSearch.ts`              | setKeyword, loadMore, retry, reset, requestPage (+6)                                         |
+| `src/features/index-overview/composables/useQuoteCarousel.ts`        | useQuoteCarousel, handleTransitionEnd, resetLoop, resetCarousel, resetPosition (+4)          |
+| `src/features/fund-detail/composables/useFundDetail.ts`              | open, close, retry, refresh, request (+3)                                                    |
+| `src/features/fund-group-settings/composables/useFundGroupDraft.ts`  | useFundGroupDraft, reset, commit, findReorderedCategoryIds, addGroup (+1)                    |
+| `src/features/fund-detail/composables/useFundPerformance.ts`         | useFundPerformance, unitNetValueChart, cumulativeNetValueChart, distributionTable, open (+1) |
+| `src/features/fund-search/composables/useFundAdditionSession.ts`     | addWithoutHoldings, confirmHoldings, submit, useFundAdditionSession, open (+1)               |
 
 ## Entry Points
 

@@ -1,11 +1,11 @@
 ---
 name: stores
-description: 'Skill for the Stores area of pure-hold. 43 symbols across 13 files.'
+description: 'Skill for the Stores area of pure-hold. 41 symbols across 11 files.'
 ---
 
 # Stores
 
-43 symbols | 13 files | Cohesion: 81%
+41 symbols | 11 files | Cohesion: 81%
 
 ## When to Use
 
@@ -15,18 +15,18 @@ description: 'Skill for the Stores area of pure-hold. 43 symbols across 13 files
 
 ## Key Files
 
-| File                                                                   | Symbols                                                                                                 |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `src/domains/indices/stores/useIndexQuotesStore.ts`                    | refresh, refreshOpenMarkets, runRefresh, applyBatch, startPolling (+12)                                 |
-| `src/domains/funds/stores/useFundsStore.ts`                            | replaceGroups, replaceFundOrganization, updateFundHolding, updateFundGroupMembership, currentState (+7) |
-| `src/domains/funds/stores/useFundsStore.test.ts`                       | createTestFundState, withEnvironment, ToggleStorage                                                     |
-| `src/domains/funds/services/persistence/saveFundState.ts`              | saveFundState, getLocalStorage                                                                          |
-| `src/domains/indices/services/tencent/fetchTencentMarketStatus.ts`     | fetchTencentMarketStatus                                                                                |
-| `src/domains/indices/services/tencent/parseTencentMarketStatus.ts`     | parseTencentMarketStatus                                                                                |
-| `src/domains/indices/stores/selectOpenMarketIndexDefinitions.ts`       | selectOpenMarketIndexDefinitions                                                                        |
-| `src/domains/funds/services/tiantian/createTiantianFundRequestBody.ts` | createTiantianFundRequestBody                                                                           |
-| `src/domains/funds/services/tiantian/fetchTiantianFundSnapshots.ts`    | fetchTiantianFundSnapshots                                                                              |
-| `src/domains/funds/stores/mergeFundRefreshResult.ts`                   | mergeFundRefreshResult                                                                                  |
+| File                                                               | Symbols                                                                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `src/domains/indices/stores/useIndexQuotesStore.ts`                | refresh, refreshOpenMarkets, runRefresh, applyBatch, startPolling (+12)                                 |
+| `src/domains/funds/stores/useFundsStore.ts`                        | replaceGroups, replaceFundOrganization, updateFundHolding, updateFundGroupMembership, currentState (+7) |
+| `src/domains/funds/stores/useFundsStore.test.ts`                   | createTestFundState, withEnvironment, ToggleStorage                                                     |
+| `src/domains/funds/services/persistence/saveFundState.ts`          | saveFundState, getLocalStorage                                                                          |
+| `src/domains/indices/services/tencent/fetchTencentMarketStatus.ts` | fetchTencentMarketStatus                                                                                |
+| `src/domains/indices/services/tencent/parseTencentMarketStatus.ts` | parseTencentMarketStatus                                                                                |
+| `src/domains/indices/stores/selectOpenMarketIndexDefinitions.ts`   | selectOpenMarketIndexDefinitions                                                                        |
+| `src/domains/indices/stores/selectActiveIndexDefinitions.ts`       | selectActiveIndexDefinitions                                                                            |
+| `src/domains/funds/models/createEmptyFundSnapshot.ts`              | createEmptyFundSnapshot                                                                                 |
+| `src/domains/funds/stores/mergeFundRefreshResult.ts`               | mergeFundRefreshResult                                                                                  |
 
 ## Entry Points
 
@@ -40,28 +40,28 @@ Start here when exploring this area:
 
 ## Key Symbols
 
-| Symbol                             | Type     | File                                                                   | Line |
-| ---------------------------------- | -------- | ---------------------------------------------------------------------- | ---- |
-| `fetchTencentMarketStatus`         | Function | `src/domains/indices/services/tencent/fetchTencentMarketStatus.ts`     | 5    |
-| `parseTencentMarketStatus`         | Function | `src/domains/indices/services/tencent/parseTencentMarketStatus.ts`     | 2    |
-| `selectOpenMarketIndexDefinitions` | Function | `src/domains/indices/stores/selectOpenMarketIndexDefinitions.ts`       | 2    |
-| `refresh`                          | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 41   |
-| `refreshOpenMarkets`               | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 45   |
-| `runRefresh`                       | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 66   |
-| `applyBatch`                       | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 123  |
-| `startPolling`                     | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 171  |
-| `stopPolling`                      | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 181  |
-| `handleVisibilityChange`           | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 193  |
-| `refreshWhenCurrentRequestSettles` | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 205  |
-| `refreshVisibleQuotes`             | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 206  |
-| `clearRefreshTimer`                | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                    | 221  |
-| `saveFundState`                    | Function | `src/domains/funds/services/persistence/saveFundState.ts`              | 4    |
-| `replaceGroups`                    | Function | `src/domains/funds/stores/useFundsStore.ts`                            | 179  |
-| `replaceFundOrganization`          | Function | `src/domains/funds/stores/useFundsStore.ts`                            | 190  |
-| `updateFundHolding`                | Function | `src/domains/funds/stores/useFundsStore.ts`                            | 219  |
-| `updateFundGroupMembership`        | Function | `src/domains/funds/stores/useFundsStore.ts`                            | 240  |
-| `currentState`                     | Function | `src/domains/funds/stores/useFundsStore.ts`                            | 272  |
-| `createTiantianFundRequestBody`    | Function | `src/domains/funds/services/tiantian/createTiantianFundRequestBody.ts` | 5    |
+| Symbol                             | Type     | File                                                               | Line |
+| ---------------------------------- | -------- | ------------------------------------------------------------------ | ---- |
+| `fetchTencentMarketStatus`         | Function | `src/domains/indices/services/tencent/fetchTencentMarketStatus.ts` | 5    |
+| `parseTencentMarketStatus`         | Function | `src/domains/indices/services/tencent/parseTencentMarketStatus.ts` | 2    |
+| `selectOpenMarketIndexDefinitions` | Function | `src/domains/indices/stores/selectOpenMarketIndexDefinitions.ts`   | 2    |
+| `refresh`                          | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 41   |
+| `refreshOpenMarkets`               | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 45   |
+| `runRefresh`                       | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 66   |
+| `applyBatch`                       | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 123  |
+| `startPolling`                     | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 171  |
+| `stopPolling`                      | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 181  |
+| `handleVisibilityChange`           | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 193  |
+| `refreshWhenCurrentRequestSettles` | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 205  |
+| `refreshVisibleQuotes`             | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 206  |
+| `clearRefreshTimer`                | Function | `src/domains/indices/stores/useIndexQuotesStore.ts`                | 221  |
+| `saveFundState`                    | Function | `src/domains/funds/services/persistence/saveFundState.ts`          | 4    |
+| `replaceGroups`                    | Function | `src/domains/funds/stores/useFundsStore.ts`                        | 179  |
+| `replaceFundOrganization`          | Function | `src/domains/funds/stores/useFundsStore.ts`                        | 190  |
+| `updateFundHolding`                | Function | `src/domains/funds/stores/useFundsStore.ts`                        | 219  |
+| `updateFundGroupMembership`        | Function | `src/domains/funds/stores/useFundsStore.ts`                        | 240  |
+| `currentState`                     | Function | `src/domains/funds/stores/useFundsStore.ts`                        | 272  |
+| `selectActiveIndexDefinitions`     | Function | `src/domains/indices/stores/selectActiveIndexDefinitions.ts`       | 3    |
 
 ## Execution Flows
 
@@ -84,7 +84,7 @@ Start here when exploring this area:
 | ----------- | ----------- |
 | Persistence | 3 calls     |
 | Eastmoney   | 2 calls     |
-| Tiantian    | 2 calls     |
+| Tiantian    | 1 calls     |
 
 ## How to Explore
 

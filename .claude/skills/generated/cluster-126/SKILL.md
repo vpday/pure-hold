@@ -1,9 +1,9 @@
 ---
-name: cluster-132
-description: 'Skill for the Cluster_132 area of pure-hold. 4 symbols across 1 files.'
+name: cluster-126
+description: 'Skill for the Cluster_126 area of pure-hold. 4 symbols across 1 files.'
 ---
 
-# Cluster_132
+# Cluster_126
 
 4 symbols | 1 files | Cohesion: 100%
 
@@ -11,7 +11,7 @@ description: 'Skill for the Cluster_132 area of pure-hold. 4 symbols across 1 fi
 
 - Working with code in `src/`
 - Understanding how handleApiRequest, readCachedAt, storeApiResponse work
-- Modifying cluster_132-related functionality
+- Modifying cluster_126-related functionality
 
 ## Key Files
 
@@ -31,6 +31,6 @@ description: 'Skill for the Cluster_132 area of pure-hold. 4 symbols across 1 fi
 ## How to Explore
 
 1. `context({name: "handleApiRequest"})` — see callers and callees
-2. `query({search_query: "cluster_132"})` — find related execution flows
+2. `query({search_query: "cluster_126"})` — find related execution flows
 3. Read key files listed above for implementation details
 4. `explain({target: "<file or symbol>"})` — persisted taint findings (source→sink data flows), when indexed with `--pdg`

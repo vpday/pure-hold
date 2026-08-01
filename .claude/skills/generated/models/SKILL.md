@@ -10,7 +10,7 @@ description: 'Skill for the Models area of pure-hold. 22 symbols across 7 files.
 ## When to Use
 
 - Working with code in `src/`
-- Understanding how open, close, confirm work
+- Understanding how submitFundEditDraft, open, close work
 - Modifying models-related functionality
 
 ## Key Files
@@ -29,20 +29,20 @@ description: 'Skill for the Models area of pure-hold. 22 symbols across 7 files.
 
 Start here when exploring this area:
 
+- **`submitFundEditDraft`** (Function) — `src/features/fund-edit/models/fundEditDraft.ts:44`
 - **`open`** (Function) — `src/features/fund-edit/FundEditEntry.vue:24`
 - **`close`** (Function) — `src/features/fund-edit/FundEditEntry.vue:35`
 - **`confirm`** (Function) — `src/features/fund-edit/FundEditEntry.vue:42`
-- **`submitFundEditDraft`** (Function) — `src/features/fund-edit/models/fundEditDraft.ts:44`
 - **`createFundEditDraft`** (Function) — `src/features/fund-edit/models/fundEditDraft.ts:28`
 
 ## Key Symbols
 
 | Symbol                        | Type     | File                                                                | Line |
 | ----------------------------- | -------- | ------------------------------------------------------------------- | ---- |
+| `submitFundEditDraft`         | Function | `src/features/fund-edit/models/fundEditDraft.ts`                    | 44   |
 | `open`                        | Function | `src/features/fund-edit/FundEditEntry.vue`                          | 24   |
 | `close`                       | Function | `src/features/fund-edit/FundEditEntry.vue`                          | 35   |
 | `confirm`                     | Function | `src/features/fund-edit/FundEditEntry.vue`                          | 42   |
-| `submitFundEditDraft`         | Function | `src/features/fund-edit/models/fundEditDraft.ts`                    | 44   |
 | `createFundEditDraft`         | Function | `src/features/fund-edit/models/fundEditDraft.ts`                    | 28   |
 | `createEmptyFundHoldingDraft` | Function | `src/features/fund-holding-form/models/fundHoldingDraft.ts`         | 20   |
 | `createFundHoldingDraft`      | Function | `src/features/fund-holding-form/models/fundHoldingDraft.ts`         | 31   |
@@ -64,12 +64,12 @@ Start here when exploring this area:
 
 | Flow                                     | Type            | Steps |
 | ---------------------------------------- | --------------- | ----- |
-| `Confirm → FormatLocalDate`              | cross_community | 5     |
 | `ConfirmHoldings → FormatLocalDate`      | cross_community | 5     |
-| `Confirm → ParsePositiveDecimal`         | cross_community | 4     |
-| `Confirm → ValidatePurchaseDate`         | cross_community | 4     |
+| `Confirm → FormatLocalDate`              | cross_community | 5     |
 | `ConfirmHoldings → ParsePositiveDecimal` | cross_community | 4     |
 | `ConfirmHoldings → ValidatePurchaseDate` | cross_community | 4     |
+| `Confirm → ParsePositiveDecimal`         | cross_community | 4     |
+| `Confirm → ValidatePurchaseDate`         | cross_community | 4     |
 | `Open → CreateFundHoldingDraft`          | cross_community | 3     |
 | `Open → CreateEmptyFundHoldingDraft`     | cross_community | 3     |
 | `Confirm → UpdateFundHolding`            | intra_community | 3     |
@@ -77,7 +77,7 @@ Start here when exploring this area:
 
 ## How to Explore
 
-1. `context({name: "open"})` — see callers and callees
+1. `context({name: "submitFundEditDraft"})` — see callers and callees
 2. `query({search_query: "models"})` — find related execution flows
 3. Read key files listed above for implementation details
 4. `explain({target: "<file or symbol>"})` — persisted taint findings (source→sink data flows), when indexed with `--pdg`
