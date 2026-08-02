@@ -9,6 +9,7 @@ import { buildFundCalendarReturnsChartOption } from './buildFundCalendarReturnsC
 
 test('builds five calendar return bars in ascending year order', () => {
   const option = buildFundCalendarReturnsChartOption({
+    alerts: [],
     annualized: [],
     annualReturns: [row('2025', '+3.00%')],
     cutoffText: '',
@@ -75,6 +76,7 @@ function row(key: string, fundText: string): FundMetricComparisonRowModel {
 
 function emptyModel(): FundMetricsSectionModel {
   return {
+    alerts: [],
     annualized: [],
     annualReturns: [],
     cutoffText: '',

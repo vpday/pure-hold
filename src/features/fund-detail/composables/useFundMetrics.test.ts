@@ -55,10 +55,12 @@ test('keeps old data and existing error behavior when a fund refresh fails', asy
   session.open('161725')
   await session.activate()
   const original = session.data.value
+  const originalRisk = session.riskData.value
   value = 2
   failDistribution = true
   await session.refresh()
   assert.equal(session.data.value, original)
+  assert.equal(session.riskData.value, originalRisk)
   assert.equal(session.error.value, '基金数据指标加载失败，请稍后重试')
 })
 
@@ -75,15 +77,16 @@ test('refreshes fund histories while reusing the same-day benchmark cache', asyn
   await session.activate()
   const original = session.data.value
 
-  await session.refresh()
+  const result = await session.refresh()
 
   assert.notEqual(session.data.value, original)
+  assert.equal(result, 'updated')
   assert.equal(benchmarkAttempt, 1)
   assert.equal(session.error.value, '')
-  assert.equal(session.takeNotice(), undefined)
+  assert.deepEqual(session.model.value?.alerts, [])
 })
 
-test('retries a first failure and creates consumable notices per successful batch', async () => {
+test('retries a first failure and keeps data quality issues in the section model', async () => {
   let fail = true
   const dataSource = useFundHistoryDataSource({
     loadDistribution: async (fundCode) => {
@@ -97,15 +100,96 @@ test('retries a first failure and creates consumable notices per successful batc
   })
   const session = useFundMetrics(dataSource, benchmark)
   session.open('161725')
-  await session.activate()
-  assert.equal(session.model.value, undefined)
+  assert.equal(await session.activate(), 'failed')
+  assert.equal(Boolean(session.model.value), false)
   fail = false
-  await session.retry()
-  const fundNotice = session.takeNotice()
-  assert.equal(fundNotice?.kind, 'reinvested-nav-issues')
-  if (fundNotice?.kind === 'reinvested-nav-issues') assert.equal(fundNotice.totalCount, 1)
-  assert.equal(session.takeNotice()?.kind, 'benchmark-history-incomplete')
-  assert.equal(session.takeNotice(), undefined)
+  assert.equal(await session.retry(), 'updated')
+  assert.deepEqual(
+    session.model.value?.alerts.map(({ key }) => key),
+    ['reinvested-nav-issues', 'benchmark-malformed-records'],
+  )
+})
+
+test('reports a benchmark refresh fallback and clears its persistent alert after recovery', async () => {
+  let currentDate = new Date('2026-07-31T12:00:00.000Z')
+  let fail = false
+  const benchmark = useFundBenchmarkDataSource({
+    load: async (endDate) => {
+      if (fail) throw new Error('failed')
+      return benchmarkHistory(endDate)
+    },
+    now: () => currentDate,
+  })
+  const session = useFundMetrics(source([]), benchmark)
+  session.open('161725')
+  assert.equal(await session.activate(), 'updated')
+
+  currentDate = new Date('2026-08-01T12:00:00.000Z')
+  fail = true
+  assert.equal(await session.refresh(), 'showing-stale-data')
+  assert.equal(session.error.value, '')
+  assert.deepEqual(
+    session.model.value?.alerts.map(({ key }) => key),
+    ['stale-data'],
+  )
+
+  fail = false
+  assert.equal(await session.refresh(), 'updated')
+  assert.deepEqual(session.model.value?.alerts, [])
+})
+
+test('applies session risk assumptions without network requests and rejects invalid drafts', async () => {
+  const calls: string[] = []
+  const dataSource = useFundHistoryDataSource({
+    loadDistribution: async (fundCode) => {
+      calls.push('distribution')
+      return distribution(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      calls.push('net-values')
+      return denseNetValues(fundCode, range)
+    },
+  })
+  const benchmark = useFundBenchmarkDataSource({
+    load: async (endDate) => {
+      calls.push('benchmark')
+      return denseBenchmarkHistory(endDate)
+    },
+  })
+  const session = useFundMetrics(dataSource, benchmark)
+  session.open('161725')
+  await session.activate()
+  const returnsBefore = session.data.value
+  const riskBefore = session.riskData.value
+
+  session.updateRiskFreeRateDraft(0)
+  session.updateTargetRateDraft(0)
+  assert.equal(session.riskData.value, riskBefore)
+  session.applyRiskAssumptions()
+  assert.equal(calls.length, 3)
+  assert.equal(session.data.value, returnsBefore)
+  assert.notEqual(session.riskData.value, riskBefore)
+  const appliedRisk = session.riskData.value
+
+  session.updateRiskFreeRateDraft(-100)
+  session.applyRiskAssumptions()
+  assert.equal(session.riskData.value, appliedRisk)
+  assert.equal(session.riskParameterError.value, '请输入大于 -100% 的有效年化百分比')
+  assert.equal(calls.length, 3)
+
+  session.updateRiskFreeRateDraft(0)
+  session.close()
+  assert.equal(session.riskFreeRateDraft.value, 0)
+  assert.equal(session.targetRateDraft.value, 0)
+  session.open('000001')
+  await session.activate()
+  assert.equal(calls.length, 5)
+  assert.equal(session.riskParameterError.value, '')
+  assert.deepEqual(session.riskData.value, appliedRisk)
+  const switchedRisk = session.riskData.value
+  await session.refresh()
+  assert.equal(calls.length, 7)
+  assert.deepEqual(session.riskData.value, switchedRisk)
 })
 
 test('ignores an obsolete fund response', async () => {
@@ -169,6 +253,22 @@ function netValues(fundCode: string, range: FundHistoryRange, value: number): Fu
   }
 }
 
+function denseNetValues(fundCode: string, range: FundHistoryRange): FundNetValueHistory {
+  return {
+    fundCode,
+    points: weekdays('2020-01-01', '2026-07-31').map((date, index) => {
+      const unitNetValue = 1 + index * 0.0002 + Math.sin(index / 15) * 0.01
+      return {
+        cumulativeNetValue: null,
+        dailyGrowthPercent: null,
+        date,
+        unitNetValue,
+      }
+    }),
+    range,
+  }
+}
+
 function distribution(fundCode: string, invalid = false): FundDistributionHistory {
   return {
     conversions: [],
@@ -199,6 +299,33 @@ function benchmarkHistory(endDate: string, incomplete = false): IndexPerformance
     ],
     startDate: '20041231',
   }
+}
+
+function denseBenchmarkHistory(endDate: string): IndexPerformanceHistory {
+  return {
+    endDate,
+    indexCode: 'H00300',
+    indexName: '沪深300全收益指数',
+    issues: [],
+    points: weekdays('2020-01-01', '2026-07-31').map((date, index) => ({
+      date,
+      value: 1000 + index * 0.2 + Math.sin(index / 12) * 10,
+    })),
+    startDate: '20041231',
+  }
+}
+
+function weekdays(startDate: string, endDate: string): readonly string[] {
+  const dates: string[] = []
+  const current = new Date(`${startDate}T00:00:00.000Z`)
+  const end = new Date(`${endDate}T00:00:00.000Z`)
+  while (current <= end) {
+    if (current.getUTCDay() !== 0 && current.getUTCDay() !== 6) {
+      dates.push(current.toISOString().slice(0, 10))
+    }
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+  return dates
 }
 
 interface Deferred<T> {

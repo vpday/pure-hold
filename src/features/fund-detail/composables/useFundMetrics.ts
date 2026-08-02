@@ -1,36 +1,36 @@
 import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 
 import { calculateFundReinvestedNav } from '@/domains/funds/models/fundReinvestedNav.ts'
-import type { FundReinvestedNavIssueCode } from '@/domains/funds/models/fundReinvestedNav.ts'
+import type { FundReinvestedNavPoint } from '@/domains/funds/models/fundReinvestedNav.ts'
+import type { FundRiskAssumptions } from '@/domains/funds/models/fundRiskMetrics.ts'
+import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
 import type { FundMetricsView } from '../models/fundMetricsSectionModel.ts'
 import {
   calculateFundMetricsComparison,
+  calculateFundRiskMetricsComparison,
   type FundMetricsComparison,
+  type FundRiskMetricsComparison,
 } from '../models/fundMetricsComparison.ts'
 import { toFundMetricsSectionModel } from '../presenters/toFundMetricsSectionModel.ts'
+import type { FundMetricsQualitySource } from '../presenters/toFundMetricsSectionModel.ts'
 import type { FundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
 import type { FundHistoryDataSource } from './useFundHistoryDataSource.ts'
 
-export type FundMetricsNotice =
-  | {
-      readonly batchId: number
-      readonly kind: 'benchmark-history-incomplete'
-    }
-  | {
-      readonly batchId: number
-      readonly kind: 'cached-refresh-failed'
-    }
-  | {
-      readonly batchId: number
-      readonly counts: Readonly<Partial<Record<FundReinvestedNavIssueCode, number>>>
-      readonly kind: 'reinvested-nav-issues'
-      readonly totalCount: number
-    }
+export type FundMetricsRequestResult = 'failed' | 'showing-stale-data' | 'unchanged' | 'updated'
 
 interface BenchmarkLoadFailure {
   readonly cause: unknown
   readonly source: 'benchmark'
 }
+
+interface SuccessfulRiskInputs {
+  readonly benchmark: IndexPerformanceHistory
+  readonly commonCutoffDate: string
+  readonly fundPoints: readonly FundReinvestedNavPoint[]
+}
+
+const defaultRiskFreeRatePercent = 1.15
+const defaultTargetRatePercent = 4
 
 export function useFundMetrics(
   dataSource: FundHistoryDataSource,
@@ -42,15 +42,35 @@ export function useFundMetrics(
   const error = ref('')
   const isActivated = ref(false)
   const isLoading = ref(false)
-  const model = computed(() => (data.value ? toFundMetricsSectionModel(data.value) : undefined))
-  let nextBatchId = 0
-  let pendingNotices: FundMetricsNotice[] = []
+  const quality = shallowRef<FundMetricsQualitySource>(emptyQuality())
+  const riskData = shallowRef<FundRiskMetricsComparison>()
+  const riskFreeRateDraft = ref<number | null>(defaultRiskFreeRatePercent)
+  const riskParameterError = ref('')
+  const targetRateDraft = ref<number | null>(defaultTargetRatePercent)
+  const model = computed(() =>
+    data.value
+      ? toFundMetricsSectionModel(data.value, {
+          quality: quality.value,
+          riskComparison: riskData.value,
+          riskParameters: {
+            parameterError: riskParameterError.value,
+            riskFreeRatePercent: riskFreeRateDraft.value,
+            targetRatePercent: targetRateDraft.value,
+          },
+        })
+      : undefined,
+  )
+  let appliedAssumptions: FundRiskAssumptions = {
+    riskFreeAnnualRate: defaultRiskFreeRatePercent / 100,
+    targetAnnualRate: defaultTargetRatePercent / 100,
+  }
+  let lastSuccessfulRiskInputs: SuccessfulRiskInputs | undefined
   let requestGeneration = 0
   let activeRequest:
     | {
         readonly controller: AbortController
         readonly generation: number
-        readonly promise: Promise<void>
+        readonly promise: Promise<FundMetricsRequestResult>
       }
     | undefined
 
@@ -63,31 +83,56 @@ export function useFundMetrics(
     error.value = ''
     isActivated.value = false
     isLoading.value = false
-    pendingNotices = []
+    lastSuccessfulRiskInputs = undefined
+    quality.value = emptyQuality()
+    riskData.value = undefined
   }
 
-  async function activate(): Promise<void> {
-    if (isActivated.value) return
+  async function activate(): Promise<FundMetricsRequestResult> {
+    if (isActivated.value) return 'unchanged'
     isActivated.value = true
-    await request(false)
+    return await request(false)
   }
 
-  async function retry(): Promise<void> {
-    if (!isActivated.value) return
-    await request(true)
+  async function retry(): Promise<FundMetricsRequestResult> {
+    if (!isActivated.value) return 'unchanged'
+    return await request(true)
   }
 
-  async function refresh(): Promise<void> {
-    if (!isActivated.value) return
-    await request(true)
+  async function refresh(): Promise<FundMetricsRequestResult> {
+    if (!isActivated.value) return 'unchanged'
+    return await request(true)
   }
 
   function selectView(view: FundMetricsView): void {
     activeView.value = view
   }
 
-  function takeNotice(): FundMetricsNotice | undefined {
-    return pendingNotices.shift()
+  function updateRiskFreeRateDraft(value: number | null): void {
+    riskFreeRateDraft.value = value
+    riskParameterError.value = ''
+  }
+
+  function updateTargetRateDraft(value: number | null): void {
+    targetRateDraft.value = value
+    riskParameterError.value = ''
+  }
+
+  function applyRiskAssumptions(): void {
+    const riskFreePercent = riskFreeRateDraft.value
+    const targetPercent = targetRateDraft.value
+    if (!isValidRatePercent(riskFreePercent) || !isValidRatePercent(targetPercent)) {
+      riskParameterError.value = '请输入大于 -100% 的有效年化百分比'
+      return
+    }
+    appliedAssumptions = {
+      riskFreeAnnualRate: riskFreePercent / 100,
+      targetAnnualRate: targetPercent / 100,
+    }
+    riskParameterError.value = ''
+    if (lastSuccessfulRiskInputs) {
+      riskData.value = calculateRisk(lastSuccessfulRiskInputs, appliedAssumptions)
+    }
   }
 
   function close(): void {
@@ -99,22 +144,23 @@ export function useFundMetrics(
     error.value = ''
     isActivated.value = false
     isLoading.value = false
-    pendingNotices = []
+    lastSuccessfulRiskInputs = undefined
+    quality.value = emptyQuality()
+    riskData.value = undefined
   }
 
-  async function request(force: boolean): Promise<void> {
+  async function request(force: boolean): Promise<FundMetricsRequestResult> {
     const fundCode = currentFundCode.value
-    if (!fundCode) return
+    if (!fundCode) return 'unchanged'
     if (activeRequest) return await activeRequest.promise
 
     const controller = new AbortController()
     const generation = ++requestGeneration
-    const batchId = ++nextBatchId
-    const promise = loadBatch(fundCode, force, controller.signal, generation, batchId)
+    const promise = loadBatch(fundCode, force, controller.signal, generation)
     activeRequest = { controller, generation, promise }
     isLoading.value = true
     error.value = ''
-    await promise
+    return await promise
   }
 
   async function loadBatch(
@@ -122,8 +168,7 @@ export function useFundMetrics(
     force: boolean,
     signal: AbortSignal,
     generation: number,
-    batchId: number,
-  ): Promise<void> {
+  ): Promise<FundMetricsRequestResult> {
     try {
       const [netValues, distribution, benchmark] = await Promise.all([
         dataSource.loadNetValueHistory(fundCode, 'ln', { force, signal }),
@@ -132,23 +177,36 @@ export function useFundMetrics(
           throw { cause, source: 'benchmark' } satisfies BenchmarkLoadFailure
         }),
       ])
-      if (!isCurrent(fundCode, generation)) return
+      if (!isCurrent(fundCode, generation)) return 'unchanged'
       const reinvested = calculateFundReinvestedNav(netValues, distribution)
-      data.value = calculateFundMetricsComparison(reinvested.points, benchmark.points)
+      const comparison = calculateFundMetricsComparison(reinvested.points, benchmark.points)
+      const riskInputs: SuccessfulRiskInputs = {
+        benchmark,
+        commonCutoffDate: comparison.commonCutoffDate,
+        fundPoints: reinvested.points,
+      }
+      const riskComparison = calculateRisk(riskInputs, appliedAssumptions)
+      data.value = comparison
+      riskData.value = riskComparison
+      lastSuccessfulRiskInputs = riskInputs
       error.value = ''
-      pendingNotices = noticesForSuccessfulBatch(
-        batchId,
-        reinvested.issues,
-        benchmark.issues.length > 0,
-      )
+      quality.value = {
+        benchmarkIssues: benchmark.issues,
+        isShowingStaleData: false,
+        reinvestedIssues: reinvested.issues,
+      }
+      return 'updated'
     } catch (requestError) {
       if (isCurrent(fundCode, generation) && !isAbortError(requestError)) {
         if (force && data.value && isBenchmarkLoadFailure(requestError)) {
-          pendingNotices = [{ batchId, kind: 'cached-refresh-failed' }]
+          quality.value = { ...quality.value, isShowingStaleData: true }
+          return 'showing-stale-data'
         } else {
           error.value = '基金数据指标加载失败，请稍后重试'
+          return 'failed'
         }
       }
+      return 'unchanged'
     } finally {
       if (isCurrent(fundCode, generation)) {
         isLoading.value = false
@@ -171,6 +229,7 @@ export function useFundMetrics(
   return {
     activate,
     activeView,
+    applyRiskAssumptions,
     close,
     currentFundCode,
     data,
@@ -181,30 +240,34 @@ export function useFundMetrics(
     open,
     refresh,
     retry,
+    riskData,
+    riskFreeRateDraft,
+    riskParameterError,
     selectView,
-    takeNotice,
+    targetRateDraft,
+    updateRiskFreeRateDraft,
+    updateTargetRateDraft,
   }
 }
 
-function noticesForSuccessfulBatch(
-  batchId: number,
-  issues: readonly { readonly code: FundReinvestedNavIssueCode; readonly count: number }[],
-  benchmarkHistoryIncomplete: boolean,
-): FundMetricsNotice[] {
-  const notices: FundMetricsNotice[] = []
-  if (issues.length > 0) {
-    const counts: Partial<Record<FundReinvestedNavIssueCode, number>> = {}
-    let totalCount = 0
-    for (const issue of issues) {
-      counts[issue.code] = (counts[issue.code] ?? 0) + issue.count
-      totalCount += issue.count
-    }
-    notices.push({ batchId, counts, kind: 'reinvested-nav-issues', totalCount })
-  }
-  if (benchmarkHistoryIncomplete) {
-    notices.push({ batchId, kind: 'benchmark-history-incomplete' })
-  }
-  return notices
+function calculateRisk(
+  inputs: SuccessfulRiskInputs,
+  assumptions: FundRiskAssumptions,
+): FundRiskMetricsComparison {
+  return calculateFundRiskMetricsComparison(
+    inputs.fundPoints,
+    inputs.benchmark,
+    inputs.commonCutoffDate,
+    assumptions,
+  )
+}
+
+function emptyQuality(): FundMetricsQualitySource {
+  return { benchmarkIssues: [], isShowingStaleData: false, reinvestedIssues: [] }
+}
+
+function isValidRatePercent(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && value > -100
 }
 
 function isBenchmarkLoadFailure(error: unknown): error is BenchmarkLoadFailure {

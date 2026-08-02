@@ -4,7 +4,19 @@ import {
   calculateReturnMetrics,
   type FundReturnMetrics,
 } from '@/domains/funds/models/fundReturnMetrics.ts'
-import type { IndexPerformancePoint } from '@/domains/indices/models/indexPerformanceHistory.ts'
+import {
+  calculateRollingFundRiskMetrics,
+  fundRiskPeriodKeys,
+  minimumReturnsPerFullYear,
+  type FundRiskAssumptions,
+  type FundRiskPeriodKey,
+  type FundRiskPeriodMetrics,
+  type FundRiskQualityIssue,
+} from '@/domains/funds/models/fundRiskMetrics.ts'
+import type {
+  IndexPerformanceHistory,
+  IndexPerformancePoint,
+} from '@/domains/indices/models/indexPerformanceHistory.ts'
 
 type PeriodKey = keyof FundReturnMetrics['periods']
 type AnnualizedKey = keyof FundReturnMetrics['annualized']
@@ -32,6 +44,40 @@ export interface FundMetricsComparison {
   readonly quarterlyReturns: readonly FundMetricComparisonQuarter[]
 }
 
+export interface FundRiskMetricComparisonValue {
+  readonly benchmark: number | null
+  readonly difference: number | null
+  readonly fund: number | null
+}
+
+export interface FundRiskPeriodComparison {
+  readonly annualizedVolatility: FundRiskMetricComparisonValue
+  readonly calmarRatio: FundRiskMetricComparisonValue
+  readonly maximumDrawdown: FundRiskMetricComparisonValue
+  readonly quality: FundRiskPeriodQuality | null
+  readonly sharpeRatio: FundRiskMetricComparisonValue
+  readonly sortinoRatio: FundRiskMetricComparisonValue
+}
+
+export type FundRiskPeriodQuality =
+  | {
+      readonly kind: 'comparison-window-too-short'
+      readonly minimumReturns: number
+    }
+  | {
+      readonly kind: 'fund-history-too-short'
+      readonly requiredYears: number
+    }
+  | {
+      readonly benchmarkIssue: FundRiskQualityIssue | null
+      readonly fundIssue: FundRiskQualityIssue | null
+      readonly kind: 'history-incomplete'
+    }
+
+export interface FundRiskMetricsComparison {
+  readonly periods: Readonly<Record<FundRiskPeriodKey, FundRiskPeriodComparison>>
+}
+
 const periodKeys = [
   'oneWeek',
   'oneMonth',
@@ -52,6 +98,14 @@ const annualizedKeys = [
   'fiveYears',
   'sinceInception',
 ] as const satisfies readonly AnnualizedKey[]
+
+const riskPeriodYears: Readonly<Record<FundRiskPeriodKey, number | null>> = {
+  fiveYears: 5,
+  oneYear: 1,
+  sinceInception: null,
+  threeYears: 3,
+  twoYears: 2,
+}
 
 const quarters = [
   { field: 'fourthQuarter', quarter: 4 },
@@ -121,6 +175,62 @@ export function calculateFundMetricsComparison(
   }
 }
 
+export function calculateFundRiskMetricsComparison(
+  fundSource: readonly FundReinvestedNavPoint[],
+  benchmarkHistory: IndexPerformanceHistory,
+  commonCutoffDate: string,
+  assumptions: FundRiskAssumptions,
+): FundRiskMetricsComparison {
+  const fundPoints = validFundPoints(fundSource).filter(({ date }) => date <= commonCutoffDate)
+  const benchmarkPoints = validBenchmarkPoints(benchmarkHistory.points).filter(
+    ({ date }) => date <= commonCutoffDate,
+  )
+  const inceptionDate = fundPoints[0]?.date ?? commonCutoffDate
+  const expectedDates = benchmarkPoints.map(({ date }) => date)
+  const fundMetrics = calculateRollingFundRiskMetrics(
+    fundPoints.map(({ date, reinvestedNetValue: value }) => ({ date, value })),
+    expectedDates,
+    { assumptions, commonCutoffDate, inceptionDate },
+  )
+  const benchmarkMetrics = calculateRollingFundRiskMetrics(benchmarkPoints, expectedDates, {
+    assumptions,
+    commonCutoffDate,
+    inceptionDate,
+    sourceIncompletePeriods: benchmarkIncompletePeriods(benchmarkHistory),
+  })
+
+  return {
+    periods: Object.fromEntries(
+      fundRiskPeriodKeys.map((period) => {
+        const fullYears = riskPeriodYears[period]
+        const fundMetric = fundMetrics[period]
+        const benchmarkMetric = benchmarkMetrics[period]
+        const quality =
+          period === 'sinceInception' &&
+          fundMetric.qualityIssue === 'insufficient-observations' &&
+          benchmarkMetric.qualityIssue === 'insufficient-observations'
+            ? ({
+                kind: 'comparison-window-too-short',
+                minimumReturns: minimumReturnsPerFullYear,
+              } as const)
+            : fullYears !== null &&
+                fundMetric.qualityIssue !== null &&
+                benchmarkMetric.qualityIssue === null &&
+                !hasFullYearsHistory(inceptionDate, commonCutoffDate, fullYears)
+              ? ({ kind: 'fund-history-too-short', requiredYears: fullYears } as const)
+              : fundMetric.qualityIssue || benchmarkMetric.qualityIssue
+                ? ({
+                    benchmarkIssue: benchmarkMetric.qualityIssue,
+                    fundIssue: fundMetric.qualityIssue,
+                    kind: 'history-incomplete',
+                  } as const)
+                : null
+        return [period, riskPeriodComparison(fundMetric, benchmarkMetric, quality)]
+      }),
+    ) as Readonly<Record<FundRiskPeriodKey, FundRiskPeriodComparison>>,
+  }
+}
+
 export function calculateRelativeReturn(
   fundReturn: number | null,
   benchmarkReturn: number | null,
@@ -147,6 +257,50 @@ function comparisonYear(
   year: number,
 ): FundMetricComparisonYear {
   return { ...comparison(fund, benchmark), year }
+}
+
+function riskPeriodComparison(
+  fund: FundRiskPeriodMetrics,
+  benchmark: FundRiskPeriodMetrics,
+  quality: FundRiskPeriodQuality | null,
+): FundRiskPeriodComparison {
+  return {
+    annualizedVolatility: riskComparison(fund.annualizedVolatility, benchmark.annualizedVolatility),
+    calmarRatio: riskComparison(fund.calmarRatio, benchmark.calmarRatio),
+    maximumDrawdown: riskComparison(fund.maximumDrawdown, benchmark.maximumDrawdown),
+    quality,
+    sharpeRatio: riskComparison(fund.sharpeRatio, benchmark.sharpeRatio),
+    sortinoRatio: riskComparison(fund.sortinoRatio, benchmark.sortinoRatio),
+  }
+}
+
+function riskComparison(fund: number | null, benchmark: number | null) {
+  return {
+    benchmark,
+    difference:
+      fund !== null && benchmark !== null && Number.isFinite(fund) && Number.isFinite(benchmark)
+        ? fund - benchmark
+        : null,
+    fund,
+  }
+}
+
+function hasFullYearsHistory(startDate: string, endDate: string, fullYears: number): boolean {
+  const anniversary = new Date(`${startDate}T00:00:00.000Z`)
+  const startMonth = anniversary.getUTCMonth()
+  anniversary.setUTCFullYear(anniversary.getUTCFullYear() + fullYears)
+  if (anniversary.getUTCMonth() !== startMonth) anniversary.setUTCDate(0)
+  return anniversary.getTime() <= Date.parse(`${endDate}T00:00:00.000Z`)
+}
+
+function benchmarkIncompletePeriods(
+  history: IndexPerformanceHistory,
+): ReadonlySet<FundRiskPeriodKey> {
+  const issueCodes = new Set(history.issues.map(({ code }) => code))
+  if (issueCodes.has('malformed-record')) return new Set(fundRiskPeriodKeys)
+  return issueCodes.has('missing-start-date')
+    ? new Set<FundRiskPeriodKey>(['sinceInception'])
+    : new Set()
 }
 
 function validFundPoints(

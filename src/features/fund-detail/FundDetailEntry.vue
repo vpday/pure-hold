@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
-import type { FundReinvestedNavIssueCode } from '@/domains/funds/models/fundReinvestedNav'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
@@ -13,6 +12,7 @@ import { useFundBenchmarkDataSource } from './composables/useFundBenchmarkDataSo
 import { useFundDetail } from './composables/useFundDetail'
 import { useFundHistoryDataSource } from './composables/useFundHistoryDataSource'
 import { useFundMetrics } from './composables/useFundMetrics'
+import type { FundMetricsRequestResult } from './composables/useFundMetrics'
 import { useFundPerformance } from './composables/useFundPerformance'
 import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
 
@@ -28,16 +28,6 @@ const performance = useFundPerformance(
   { historyDataSource },
 )
 const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
-const metricIssueLabels: Record<FundReinvestedNavIssueCode, string> = {
-  'duplicate-conversion': '重复折算',
-  'first-date-conversion': '首日折算',
-  'first-date-dividend': '首日分红',
-  'invalid-conversion': '无效折算',
-  'invalid-dividend': '无效分红',
-  'invalid-unit-net-value': '无效单位净值',
-  'unmatched-conversion-date': '无法对齐的折算',
-  'unmatched-dividend-date': '无法对齐的分红',
-}
 const snapshot = computed(() => {
   const code = detail.currentCode.value
   return code ? store.snapshotsByCode[code] : undefined
@@ -92,37 +82,25 @@ function close(): void {
 }
 
 async function refresh(): Promise<void> {
-  await Promise.all([detail.refresh(), performance.refresh(), metrics.refresh()])
-  showMetricsWarning()
+  const [, , metricsResult] = await Promise.all([
+    detail.refresh(),
+    performance.refresh(),
+    metrics.refresh(),
+  ])
+  showMetricsRefreshWarning(metricsResult)
 }
 
 async function activateMetrics(): Promise<void> {
   await metrics.activate()
-  showMetricsWarning()
 }
 
 async function retryMetrics(): Promise<void> {
-  await metrics.retry()
-  showMetricsWarning()
+  showMetricsRefreshWarning(await metrics.retry())
 }
 
-function showMetricsWarning(): void {
-  for (let notice = metrics.takeNotice(); notice; notice = metrics.takeNotice()) {
-    if (notice.kind === 'cached-refresh-failed') {
-      void MessagePlugin.warning('刷新失败，当前展示缓存数据')
-      continue
-    }
-    if (notice.kind === 'benchmark-history-incomplete') {
-      void MessagePlugin.warning('历史数据不完整')
-      continue
-    }
-    const reasons = Object.entries(notice.counts)
-      .filter((entry): entry is [FundReinvestedNavIssueCode, number] => entry[1] !== undefined)
-      .map(([code, count]) => `${metricIssueLabels[code]} ${count} 条`)
-      .join('、')
-    void MessagePlugin.warning(
-      `已忽略 ${notice.totalCount} 条异常记录（${reasons}），收益指标可能存在偏差`,
-    )
+function showMetricsRefreshWarning(result: FundMetricsRequestResult): void {
+  if (result === 'showing-stale-data') {
+    void MessagePlugin.warning('沪深300全收益基准刷新失败')
   }
 }
 
@@ -167,8 +145,11 @@ defineExpose({ open })
         :error="metrics.error.value"
         :is-loading="metrics.isLoading.value"
         :model="metrics.model.value"
+        @apply-risk-assumptions="metrics.applyRiskAssumptions"
         @retry="retryMetrics"
         @select-view="metrics.selectView"
+        @update-risk-free-rate="metrics.updateRiskFreeRateDraft"
+        @update-target-rate="metrics.updateTargetRateDraft"
       />
     </template>
   </FundDetailDrawer>
