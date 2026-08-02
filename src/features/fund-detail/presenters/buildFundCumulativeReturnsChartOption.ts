@@ -157,7 +157,9 @@ function formatTooltip(value: unknown): string {
   return [date, ...lines].join('<br />')
 }
 
-function formatSignedPercent(value: number): string {
-  const text = `${value.toFixed(2)}%`
-  return value > 0 ? `+${text}` : text
+function formatSignedPercent(number: number): string {
+  const text = `${number.toFixed(2)}%`
+  if (number > 0) return `<span style="color:var(--td-error-color)">+${text}</span>`
+  if (number < 0) return `<span style="color:var(--td-success-color)">${text}</span>`
+  return text
 }

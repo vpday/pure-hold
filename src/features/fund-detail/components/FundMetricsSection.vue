@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { BarChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import * as echarts from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import type { ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { TableProps } from 'tdesign-vue-next'
 
 import type {
@@ -8,6 +13,9 @@ import type {
   FundMetricsView,
   FundMetricTrend,
 } from '../models/fundMetricsSectionModel.ts'
+import { buildFundCalendarReturnsChartOption } from '../presenters/buildFundCalendarReturnsChartOption.ts'
+
+echarts.use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 const props = defineProps<{
   activeView: FundMetricsView
@@ -19,6 +27,10 @@ const emit = defineEmits<{
   retry: []
   selectView: [view: FundMetricsView]
 }>()
+const calendarChartContainer = ref<HTMLDivElement>()
+
+let calendarChart: echarts.ECharts | undefined
+let calendarChartResizeObserver: ResizeObserver | undefined
 
 const tabs = [
   { label: '阶段涨幅', value: 'periods' },
@@ -46,6 +58,38 @@ function trendClass(trend: FundMetricTrend): string {
   if (trend === 'unknown') return 'text-(--td-text-color-placeholder)'
   return 'text-(--td-text-color-primary)'
 }
+
+function renderCalendarChart(): void {
+  const model = props.model
+  if (!calendarChart || !model) return
+  calendarChart.setOption(buildFundCalendarReturnsChartOption(model), true)
+}
+
+function setCalendarChartContainer(element: Element | ComponentPublicInstance | null): void {
+  calendarChartContainer.value = element instanceof HTMLDivElement ? element : undefined
+}
+
+async function syncCalendarChart(): Promise<void> {
+  if (props.activeView !== 'calendar' || !props.model) return
+  await nextTick()
+  const element = calendarChartContainer.value
+  if (!element) return
+  if (!calendarChart) {
+    calendarChart = echarts.init(element)
+    calendarChartResizeObserver = new ResizeObserver(() => calendarChart?.resize())
+    calendarChartResizeObserver.observe(element)
+  }
+  calendarChart.resize()
+  renderCalendarChart()
+}
+
+watch(() => [props.activeView, props.model] as const, syncCalendarChart, { immediate: true })
+
+onBeforeUnmount(() => {
+  calendarChartResizeObserver?.disconnect()
+  calendarChart?.dispose()
+  calendarChart = undefined
+})
 </script>
 
 <template>
@@ -98,66 +142,74 @@ function trendClass(trend: FundMetricTrend): string {
                 </template>
               </t-table>
             </div>
-            <div v-else class="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
-              <section class="min-w-0">
-                <h3 class="mb-3 text-base font-medium">季度涨幅</h3>
-                <t-table
-                  bordered
-                  :columns="comparisonColumns"
-                  :data="model.quarterlyReturns"
-                  empty="暂无季度涨幅"
-                  row-key="key"
-                  size="small"
-                  table-layout="auto"
-                  :max-height="400"
-                >
-                  <template #fund="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.fund.trend)">
-                      {{ row.fund.text }}
-                    </span>
-                  </template>
-                  <template #benchmark="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.benchmark.trend)">
-                      {{ row.benchmark.text }}
-                    </span>
-                  </template>
-                  <template #excess="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.excess.trend)">
-                      {{ row.excess.text }}
-                    </span>
-                  </template>
-                </t-table>
-              </section>
-              <section class="min-w-0">
-                <h3 class="mb-3 text-base font-medium">年度涨幅</h3>
-                <t-table
-                  bordered
-                  :columns="comparisonColumns"
-                  :data="model.annualReturns"
-                  empty="暂无年度涨幅"
-                  row-key="key"
-                  size="small"
-                  table-layout="auto"
-                  :max-height="400"
-                >
-                  <template #fund="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.fund.trend)">
-                      {{ row.fund.text }}
-                    </span>
-                  </template>
-                  <template #benchmark="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.benchmark.trend)">
-                      {{ row.benchmark.text }}
-                    </span>
-                  </template>
-                  <template #excess="{ row }">
-                    <span class="font-mono tabular-nums" :class="trendClass(row.excess.trend)">
-                      {{ row.excess.text }}
-                    </span>
-                  </template>
-                </t-table>
-              </section>
-            </div>
+            <template v-else>
+              <div
+                :ref="setCalendarChartContainer"
+                aria-label="季度与年度涨幅柱状图"
+                class="mb-3 h-90 w-full"
+                role="img"
+              />
+              <div class="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
+                <section class="min-w-0">
+                  <h3 class="mb-3 text-base font-medium">季度涨幅</h3>
+                  <t-table
+                    bordered
+                    :columns="comparisonColumns"
+                    :data="model.quarterlyReturns"
+                    empty="暂无季度涨幅"
+                    row-key="key"
+                    size="small"
+                    table-layout="auto"
+                    :max-height="400"
+                  >
+                    <template #fund="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.fund.trend)">
+                        {{ row.fund.text }}
+                      </span>
+                    </template>
+                    <template #benchmark="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.benchmark.trend)">
+                        {{ row.benchmark.text }}
+                      </span>
+                    </template>
+                    <template #excess="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.excess.trend)">
+                        {{ row.excess.text }}
+                      </span>
+                    </template>
+                  </t-table>
+                </section>
+                <section class="min-w-0">
+                  <h3 class="mb-3 text-base font-medium">年度涨幅</h3>
+                  <t-table
+                    bordered
+                    :columns="comparisonColumns"
+                    :data="model.annualReturns"
+                    empty="暂无年度涨幅"
+                    row-key="key"
+                    size="small"
+                    table-layout="auto"
+                    :max-height="400"
+                  >
+                    <template #fund="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.fund.trend)">
+                        {{ row.fund.text }}
+                      </span>
+                    </template>
+                    <template #benchmark="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.benchmark.trend)">
+                        {{ row.benchmark.text }}
+                      </span>
+                    </template>
+                    <template #excess="{ row }">
+                      <span class="font-mono tabular-nums" :class="trendClass(row.excess.trend)">
+                        {{ row.excess.text }}
+                      </span>
+                    </template>
+                  </t-table>
+                </section>
+              </div>
+            </template>
             <div class="metrics-note">
               <p>{{ model.cutoffText }}</p>
               <p>风险提示：数据仅供参考，过往业绩不预示未来表现！</p>
