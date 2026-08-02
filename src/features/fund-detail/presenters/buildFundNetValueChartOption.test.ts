@@ -33,6 +33,14 @@ test('builds one red line and preserves null gaps', () => {
   assert.equal(series[0]?.lineStyle.color, 'red')
   assert.equal(series[0]?.markPoint, undefined)
   assert.equal('legend' in option, false)
+  assert.deepEqual(option.grid, {
+    bottom: 0,
+    left: 0,
+    outerBoundsContain: 'axisLabel',
+    outerBoundsMode: 'same',
+    right: 10,
+    top: 0,
+  })
 })
 
 test('formats net values and signed growth with semantic colors', () => {

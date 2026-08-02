@@ -33,6 +33,14 @@ test('builds five calendar return bars in ascending year order', () => {
   assert.deepEqual(series[3]?.data, [null, null])
   assert.deepEqual(series[4]?.data, [3, null])
   assert.ok(series.every(({ type }) => type === 'bar'))
+  assert.deepEqual(option.grid, {
+    bottom: 0,
+    left: 0,
+    outerBoundsContain: 'axisLabel',
+    outerBoundsMode: 'same',
+    right: 10,
+    top: 36,
+  })
   assert.deepEqual(option.legend, {
     data: ['1季度涨幅', '2季度涨幅', '3季度涨幅', '4季度涨幅', '年度涨幅'],
     right: 0,

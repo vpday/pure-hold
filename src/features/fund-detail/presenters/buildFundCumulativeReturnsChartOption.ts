@@ -72,8 +72,9 @@ export function buildFundCumulativeReturnsChartOption(
     animationDuration: 250,
     grid: {
       bottom: 0,
-      containLabel: true,
       left: 0,
+      outerBoundsContain: 'axisLabel',
+      outerBoundsMode: 'same',
       right: 10,
       top: showLegend ? 36 : 16,
     },

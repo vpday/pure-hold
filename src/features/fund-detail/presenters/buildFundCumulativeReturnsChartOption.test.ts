@@ -62,6 +62,14 @@ test('builds a three-line percentage option that preserves null gaps', () => {
   assert.equal(series[1]?.markPoint, undefined)
   assert.equal(series[2]?.markPoint, undefined)
   assert.equal('markLine' in (series[0] ?? {}), false)
+  assert.deepEqual(option.grid, {
+    bottom: 0,
+    left: 0,
+    outerBoundsContain: 'axisLabel',
+    outerBoundsMode: 'same',
+    right: 10,
+    top: 36,
+  })
   assert.deepEqual(option.legend, {
     data: ['基金累计收益', '中证白酒指数', '同类基金收益'],
     right: 0,

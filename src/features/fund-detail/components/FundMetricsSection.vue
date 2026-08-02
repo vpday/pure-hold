@@ -115,6 +115,13 @@ function renderCalendarChart(): void {
   calendarChart.setOption(buildFundCalendarReturnsChartOption(model), true)
 }
 
+function disposeCalendarChart(): void {
+  calendarChartResizeObserver?.disconnect()
+  calendarChartResizeObserver = undefined
+  calendarChart?.dispose()
+  calendarChart = undefined
+}
+
 function setCalendarChartContainer(element: Element | ComponentPublicInstance | null): void {
   calendarChartContainer.value = element instanceof HTMLDivElement ? element : undefined
 }
@@ -124,6 +131,7 @@ async function syncCalendarChart(): Promise<void> {
   await nextTick()
   const element = calendarChartContainer.value
   if (!element) return
+  if (calendarChart && calendarChart.getDom() !== element) disposeCalendarChart()
   if (!calendarChart) {
     calendarChart = echarts.init(element)
     calendarChartResizeObserver = new ResizeObserver(() => calendarChart?.resize())
@@ -145,9 +153,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  calendarChartResizeObserver?.disconnect()
-  calendarChart?.dispose()
-  calendarChart = undefined
+  disposeCalendarChart()
 })
 </script>
 

@@ -55,6 +55,16 @@ function render(): void {
   )
 }
 
+async function syncChart(): Promise<void> {
+  if (!props.model) return
+  await nextTick()
+  const element = container.value
+  if (!element || element.clientWidth === 0 || element.clientHeight === 0) return
+  chart ??= echarts.init(element)
+  chart.resize()
+  render()
+}
+
 function themeColor(name: string): string | undefined {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return value || undefined
@@ -77,26 +87,17 @@ function summaryValueColor(valueText: string): string | undefined {
 onMounted(() => {
   const element = container.value
   if (!element) return
-  chart = echarts.init(element)
-  resizeObserver = new ResizeObserver(() => chart?.resize())
+  resizeObserver = new ResizeObserver(() => void syncChart())
   resizeObserver.observe(element)
-  render()
+  void syncChart()
 })
 
 watch(
   () => props.model,
-  () => render(),
+  () => void syncChart(),
 )
 watch(isLgUp, () => render())
-watch(
-  () => props.visible,
-  async (visible) => {
-    if (!visible) return
-    await nextTick()
-    chart?.resize()
-    render()
-  },
-)
+watch(() => props.visible, syncChart)
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()

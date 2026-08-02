@@ -23,8 +23,9 @@ export function buildFundNetValueChartOption(
     animationDuration: 250,
     grid: {
       bottom: 0,
-      containLabel: true,
       left: 0,
+      outerBoundsContain: 'axisLabel',
+      outerBoundsMode: 'same',
       right: 10,
       top: 0,
     },

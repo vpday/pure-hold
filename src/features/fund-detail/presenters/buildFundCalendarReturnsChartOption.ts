@@ -44,7 +44,14 @@ export function buildFundCalendarReturnsChartOption(
 
   return {
     animationDuration: 250,
-    grid: { bottom: 0, containLabel: true, left: 0, right: 10, top: 36 },
+    grid: {
+      bottom: 0,
+      left: 0,
+      outerBoundsContain: 'axisLabel',
+      outerBoundsMode: 'same',
+      right: 10,
+      top: 36,
+    },
     legend: {
       data: series.map(({ name }) => String(name ?? '')),
       right: 0,

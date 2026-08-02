@@ -36,6 +36,33 @@ function render(): void {
   )
 }
 
+function disposeChart(): void {
+  resizeObserver?.disconnect()
+  resizeObserver = undefined
+  chart?.dispose()
+  chart = undefined
+}
+
+function observeContainer(element: HTMLDivElement): void {
+  resizeObserver?.disconnect()
+  resizeObserver = new ResizeObserver(() => void syncChart())
+  resizeObserver.observe(element)
+}
+
+async function syncChart(): Promise<void> {
+  if (!props.model) return
+  await nextTick()
+  const element = container.value
+  if (!element || element.clientWidth === 0 || element.clientHeight === 0) return
+  if (chart && chart.getDom() !== element) {
+    disposeChart()
+    observeContainer(element)
+  }
+  chart ??= echarts.init(element)
+  chart.resize()
+  render()
+}
+
 function themeColor(name: string): string | undefined {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return value || undefined
@@ -44,30 +71,18 @@ function themeColor(name: string): string | undefined {
 onMounted(() => {
   const element = container.value
   if (!element) return
-  chart = echarts.init(element)
-  resizeObserver = new ResizeObserver(() => chart?.resize())
-  resizeObserver.observe(element)
-  render()
+  observeContainer(element)
+  void syncChart()
 })
 
 watch(
   () => props.model,
-  () => render(),
+  () => void syncChart(),
 )
-watch(
-  () => props.visible,
-  async (visible) => {
-    if (!visible) return
-    await nextTick()
-    chart?.resize()
-    render()
-  },
-)
+watch(() => props.visible, syncChart)
 
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  chart?.dispose()
-  chart = undefined
+  disposeChart()
 })
 </script>
 
