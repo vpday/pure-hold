@@ -109,28 +109,3 @@ Use the GitNexus MCP tools to understand code, assess impact, and navigate safel
 | `gitnexus://repo/pure-hold/clusters`       | All functional areas                     |
 | `gitnexus://repo/pure-hold/processes`      | All execution flows                      |
 | `gitnexus://repo/pure-hold/process/{name}` | Step-by-step execution trace             |
-
-## CLI
-
-| Task                                             | Read this skill file                                        |
-| ------------------------------------------------ | ----------------------------------------------------------- |
-| Understand architecture / "How does X work?"     | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
-| Blast radius / "What breaks if I change X?"      | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?"                 | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
-| Rename / extract / split / refactor              | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
-| Tools, resources, schema reference               | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
-| Index, status, clean, wiki CLI commands          | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
-| Work in the Composables area (148 symbols)       | `.claude/skills/generated/composables/SKILL.md`             |
-| Work in the Presenters area (54 symbols)         | `.claude/skills/generated/presenters/SKILL.md`              |
-| Work in the Scripts area (51 symbols)            | `.claude/skills/generated/scripts/SKILL.md`                 |
-| Work in the Tiantian area (51 symbols)           | `.claude/skills/generated/tiantian/SKILL.md`                |
-| Work in the Persistence area (49 symbols)        | `.claude/skills/generated/persistence/SKILL.md`             |
-| Work in the Stores area (41 symbols)             | `.claude/skills/generated/stores/SKILL.md`                  |
-| Work in the Models area (22 symbols)             | `.claude/skills/generated/models/SKILL.md`                  |
-| Work in the Eastmoney area (13 symbols)          | `.claude/skills/generated/eastmoney/SKILL.md`               |
-| Work in the Components area (13 symbols)         | `.claude/skills/generated/components/SKILL.md`              |
-| Work in the Fund-search area (5 symbols)         | `.claude/skills/generated/fund-search/SKILL.md`             |
-| Work in the Index-settings area (5 symbols)      | `.claude/skills/generated/index-settings/SKILL.md`          |
-| Work in the Cluster_126 area (4 symbols)         | `.claude/skills/generated/cluster-126/SKILL.md`             |
-| Work in the Fund-group-settings area (4 symbols) | `.claude/skills/generated/fund-group-settings/SKILL.md`     |
-| Work in the Fund-detail area (3 symbols)         | `.claude/skills/generated/fund-detail/SKILL.md`             |
