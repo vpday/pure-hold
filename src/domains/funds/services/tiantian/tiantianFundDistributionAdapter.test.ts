@@ -114,6 +114,25 @@ test('accepts missing record arrays and rejects malformed responses', () => {
   }
 })
 
+test('maps a successful null payload with zero records to an empty history', () => {
+  assert.deepEqual(
+    parseTiantianFundDistributionResponse(
+      {
+        data: null,
+        errorCode: 0,
+        expansion: null,
+        firstError: null,
+        hasWrongToken: null,
+        jf: 'ali',
+        success: true,
+        totalCount: 0,
+      },
+      '161725',
+    ),
+    { conversions: [], dividends: [], fundCode: '161725' },
+  )
+})
+
 test('fetch rejects HTTP failures and propagates caller cancellation', async (context) => {
   const originalFetch = globalThis.fetch
   context.after(() => {

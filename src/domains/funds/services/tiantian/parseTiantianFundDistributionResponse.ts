@@ -13,9 +13,13 @@ export function parseTiantianFundDistributionResponse(
   value: unknown,
   fundCode: string,
 ): FundDistributionHistory {
-  if (!isSuccessfulTiantianResponse(value) || !isRecord(value.data)) {
+  if (!isSuccessfulTiantianResponse(value)) {
     throw new TypeError('基金分红送配服务返回了无效数据')
   }
+  if (value.data === null && value.totalCount === 0) {
+    return { conversions: [], dividends: [], fundCode }
+  }
+  if (!isRecord(value.data)) throw new TypeError('基金分红送配服务返回了无效数据')
 
   const data = value.data as TiantianFundDistributionDataDto
   const dividendValues = toRecords(data.FHINFO)

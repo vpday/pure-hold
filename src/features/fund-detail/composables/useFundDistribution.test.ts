@@ -20,9 +20,10 @@ test('initializes without loading and caches the first activation', async () => 
 
   session.close()
   session.initialize('161725')
-  assert.equal(session.data.value?.dividends[0]?.dividendPerTenUnits, 1)
+  assert.equal(session.hasLoaded.value, false)
   await session.activate()
   assert.equal(calls.length, 1)
+  assert.equal(session.data.value?.dividends[0]?.dividendPerTenUnits, 1)
 })
 
 test('cancels old funds and ignores late responses', async () => {

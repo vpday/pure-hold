@@ -7,6 +7,9 @@ import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativ
 import type { FundDistributionHistory } from '@/domains/funds/models/fundDistributionHistory'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory'
+import { useFundBenchmarkDataSource } from './useFundBenchmarkDataSource'
+import { useFundHistoryDataSource } from './useFundHistoryDataSource'
+import { useFundMetrics } from './useFundMetrics'
 import { useFundPerformance } from './useFundPerformance'
 
 test('owns performance initialization and builds every chart model', async () => {
@@ -124,6 +127,49 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   assert.equal(performance.model.value.unitNetValue.selectedRange, '6y')
   assert.equal(performance.model.value.unitNetValue.chart, undefined)
   assert.equal(performance.model.value.distribution.hasLoaded, false)
+})
+
+test('shares history requests with the metrics session in both directions', async () => {
+  const distributionCalls: string[] = []
+  const netValueCalls: FundHistoryRange[] = []
+  const historyDataSource = useFundHistoryDataSource({
+    loadDistribution: async (fundCode) => {
+      distributionCalls.push(fundCode)
+      return distributionResult(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      netValueCalls.push(range)
+      return netValueResult(fundCode, range)
+    },
+  })
+  const performance = useFundPerformance(ref(true), { historyDataSource })
+  const metrics = useFundMetrics(
+    historyDataSource,
+    useFundBenchmarkDataSource({
+      load: async (endDate) => ({
+        endDate,
+        indexCode: 'H00300',
+        indexName: '沪深300全收益指数',
+        issues: [],
+        points: [
+          { date: '2025-07-31', value: 1000 },
+          { date: '2026-07-29', value: 1100 },
+        ],
+        startDate: '20041231',
+      }),
+    }),
+  )
+  performance.open('161725')
+  metrics.open('161725')
+
+  await performance.activateDistribution()
+  await performance.selectView('unit-net-value')
+  await metrics.activate()
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.deepEqual(netValueCalls, ['6y', 'ln'])
+
+  await performance.selectRange('unit-net-value', 'ln')
+  assert.deepEqual(netValueCalls, ['6y', 'ln'])
 })
 
 function cumulativeResult(

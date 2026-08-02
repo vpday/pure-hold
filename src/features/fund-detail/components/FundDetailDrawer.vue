@@ -117,7 +117,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             </div>
 
             <div class="mt-4">
-              <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1, 1]" />
+              <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1]" />
               <div
                 v-else-if="error"
                 class="rounded-md bg-(--td-error-color-light-9) p-4 text-(--td-error-color)"
@@ -192,10 +192,9 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-metrics"
             aria-labelledby="fund-detail-metrics-title"
-            class="detail-section"
+            class="detail-section min-w-0"
           >
-            <h2 id="fund-detail-metrics-title" class="section-title">数据指标</h2>
-            <p class="section-placeholder">数据指标功能后续开发</p>
+            <slot name="metrics" />
           </section>
 
           <section

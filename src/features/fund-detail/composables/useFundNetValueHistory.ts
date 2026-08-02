@@ -2,15 +2,16 @@ import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange.ts'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory.ts'
-import { fetchTiantianFundNetValueHistory } from '@/domains/funds/services/tiantian/fetchTiantianFundNetValueHistory.ts'
 import { defaultFundHistoryRange } from '../config/fundHistoryRangeOptions.ts'
 import type { FundNetValueView, LoadFundNetValueHistory } from '../models/fundNetValueChart.ts'
+import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource.ts'
 
 const views = ['unit-net-value', 'cumulative-net-value'] as const
 
-export function useFundNetValueHistory(
-  load: LoadFundNetValueHistory = fetchTiantianFundNetValueHistory,
-) {
+export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFundNetValueHistory) {
+  const ownsDataSource = !source || typeof source === 'function'
+  const dataSource =
+    typeof source === 'object' ? source : useFundHistoryDataSource({ loadNetValueHistory: source })
   const currentFundCode = ref<string>()
   const activeView = ref<FundNetValueView>()
   const selectedRanges = {
@@ -29,8 +30,6 @@ export function useFundNetValueHistory(
     'cumulative-net-value': ref(''),
     'unit-net-value': ref(''),
   }
-  const cache = new Map<string, FundNetValueHistory>()
-
   let activeRequest:
     | {
         readonly controller: AbortController
@@ -90,15 +89,8 @@ export function useFundNetValueHistory(
       cancelActiveRequest()
       clearLoading()
     }
-    if (!activeRequest && !force) {
-      const cached = cache.get(key)
-      if (cached) {
-        applyResult(view, cached)
-        return
-      }
-    }
-
-    const request = activeRequest?.key === key ? activeRequest : startRequest(fundCode, range, key)
+    const request =
+      activeRequest?.key === key ? activeRequest : startRequest(fundCode, range, key, force)
     isLoading[view].value = true
     error[view].value = ''
     try {
@@ -121,14 +113,13 @@ export function useFundNetValueHistory(
     fundCode: string,
     range: FundHistoryRange,
     key: string,
+    force: boolean,
   ): NonNullable<typeof activeRequest> {
     const controller = new AbortController()
     const generation = ++requestGeneration
-    const promise = load(fundCode, range, controller.signal).then((result) => {
-      if (generation === requestGeneration && currentFundCode.value === fundCode) {
-        cache.set(key, result)
-      }
-      return result
+    const promise = dataSource.loadNetValueHistory(fundCode, range, {
+      force,
+      signal: controller.signal,
     })
     const request = { controller, generation, key, promise }
     activeRequest = request
@@ -179,7 +170,12 @@ export function useFundNetValueHistory(
     activeRequest = undefined
   }
 
-  if (getCurrentScope()) onScopeDispose(close)
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      close()
+      if (ownsDataSource) dataSource.dispose()
+    })
+  }
 
   return {
     activate,

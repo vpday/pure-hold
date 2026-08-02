@@ -86,7 +86,7 @@ src/
 │  │  ├─ services/tencent/      # 腾讯市场状态适配器
 │  │  └─ stores/                # 指数运行时状态与市场筛选
 │  └─ funds/
-│     ├─ models/                # 基金快照、分组、汇总持仓和搜索结果
+│     ├─ models/                # 基金快照、持仓、历史数据和收益计算
 │     ├─ services/eastmoney/    # 东方财富基金搜索适配器
 │     ├─ services/tiantian/     # 天天基金实时行情、资料与历史适配器
 │     ├─ services/persistence/  # 版本化基金状态持久化与恢复
@@ -110,7 +110,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益与净值历史会话；详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史和数据指标会话；净值历史与分红送配通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -193,18 +193,26 @@ FundBasicInfo 中成对归一化的跟踪指数代码与名称
 
 累计收益按基金、参考指数和范围组合缓存，只存在于 `FundDetailEntry` 生命周期内；切换选择时保留上一次成功数据，失败与基础资料错误独立展示。历史序列不进入 Funds Store、localStorage 或 Service Worker，协议字段、请求参数和空值处理也不进入 Vue 组件。
 
-基金详情净值历史的数据流是：
+基金详情净值历史与数据指标的数据流是：
 
 ```text
 FundDetailEntry 当前基金代码
-  -> useFundNetValueHistory 懒加载与共享缓存
-  -> fetchTiantianFundNetValueHistory
-  -> FundNetValueHistory
-  -> toFundNetValueChartModel
-  -> FundNetValueChart 按需注册的 ECharts 单折线图
+  -> FundHistoryDataSource 按请求键共享成功缓存和进行中请求
+     -> fetchTiantianFundNetValueHistory -> FundNetValueHistory
+     -> fetchTiantianFundDistribution -> FundDistributionHistory
+  -> FundBenchmarkDataSource 共享固定 H00300 成功缓存和进行中请求
+     -> fetchCsindexPerformanceHistory -> IndexPerformanceHistory
+  -> useFundNetValueHistory -> toFundNetValueChartModel -> FundNetValueChart
+  -> useFundMetrics 首次进入数据指标时加载基金成立来历史与基准完整历史
+     -> calculateFundReinvestedNav -> 复权净值点 + 被忽略的数据问题
+     -> 取基金与基准最近共同日期并截断双方序列
+     -> calculateReturnMetrics -> 基金、基准、相对超额的阶段、季/年度和 CAGR
+     -> toFundMetricsSectionModel -> FundMetricsSection
 ```
 
-单位净值与累计净值各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；第三方 `FSRQ`、`DWJZ`、`LJJZ` 和 `JZZZL` 字段只存在于天天基金适配器。净值历史首次切换到对应内层 Tab 时才加载，关闭详情会重置视图与范围，但会话生命周期内的成功缓存不进入 Pinia、localStorage 或 Service Worker。
+单位净值与累计净值各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：首次查看数据指标时从 `20041231` 请求到上海当天，之后所有基金复用；指标章节参与全局刷新时重新全量请求并原子替换。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。净值图首次切换到对应内层 Tab 时才加载；数据指标首次成为当前章节时才并行加载基金成立来历史与基准历史。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker。
+
+复权净值把现金分红按除息日单位净值立即再投资，并把份额折算计入连续收益。比较以基金复权序列与 `H00300` 日期交集中的最近日期为共同截止日；相对超额按 `(1 + 基金收益) / (1 + 基准收益) - 1` 计算。无效单位净值、无效或无法对齐的企业行动以及重复折算会被排除并形成结构化问题；中证响应部分不完整时展示可计算结果。指数刷新失败保留旧缓存和旧对比模型。上述问题由 `FundDetailEntry` 使用一次性全局 warning，领域层保留完整数值精度，Presenter 才负责两位百分比、显式正负号和涨红跌绿语义。
 
 关键 seam：
 
@@ -216,10 +224,15 @@ FundDetailEntry 当前基金代码
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
 - `fetchTiantianFundCumulativeReturns` 隐藏累计收益 URL、范围参数、UUID、取消、响应校验、日期排序和空值归一化。
 - `fetchTiantianFundNetValueHistory` 隐藏净值历史 URL、范围参数、UUID、取消、响应校验、日期排序和可空数值归一化。
+- `fetchCsindexPerformanceHistory` 隐藏中证代理 URL、固定 `H00300` 和 `20041231`、上海动态结束日、取消、响应身份校验、日期排序和正数点位归一化。
 - `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验，以及基础资料和交易规则字段的领域归一化。
 - `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
 - `useFundCumulativeReturns` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
-- `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、共享缓存、请求复用、取消、重试和过期响应隔离。
+- `FundHistoryDataSource` 隐藏净值历史与分红送配的详情级成功缓存、同键 Promise 复用和多消费者取消。
+- `FundBenchmarkDataSource` 隐藏固定全收益指数的详情级单序列成功缓存、全量 force 替换、进行中 Promise 复用和多消费者取消。
+- `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、重试和过期响应隔离。
+- `calculateFundReinvestedNav`、`calculateFundReturnMetrics` 与 `calculateReturnMetrics` 隐藏复权公式、异常记录处理、通用正值序列、UTC 日期端点和 CAGR 口径。
+- `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
@@ -258,7 +271,7 @@ FundDetailEntry 当前基金代码
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
 
-实时指数行情、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料和净值历史不进入 Service Worker 缓存。详情基础资料、累计收益与净值历史的会话缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
+实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料、净值历史和分红送配不进入 Service Worker 缓存。详情基础资料、累计收益、详情级基金历史数据源和全收益指数数据源的会话缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
 
 ### UI 与响应式
 
@@ -266,7 +279,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 纯 CSS 布局优先使用 Tailwind 响应式类。只有 Drawer/Collapse 分流、轮播容量等 JavaScript 行为使用 `useBreakpoints`。该 composable 读取 Tailwind v4 的 `--breakpoint-*` CSS 变量，使 CSS 与 JavaScript 共用同一断点来源。
 
-基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。只有业绩表现保留“累计收益”“单位净值”“累计净值”三个内层 Tab，各自保存日期范围；参考指数只属于累计收益。数据指标、持仓构成和成交记录尚未实现时只显示紧凑占位。累计收益图保留三条收益曲线、摘要和最大回撤，两个净值图各显示一条红色折线，并在滚动离开章节后重新显示时随容器 resize。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。每次打开详情时，章节回到基金概览，内层 Tab 回到累计收益且三个范围回到近 6 月。
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。业绩表现保留“累计收益”“单位净值”“累计净值”三个内层 Tab，各自保存日期范围；可选择的参考指数只属于累计收益。数据指标固定比较沪深 300 全收益指数，不提供下拉，包含“阶段涨幅”“季/年度涨幅”“年化收益”三个内层 Tab；各表以时间为行，以基金收益、基准收益和相对超额为列，并在窄屏只让表格容器横向滚动。累计收益图保留三条收益曲线、摘要和最大回撤，两个净值图各显示一条红色折线，并在滚动离开章节后重新显示时随容器 resize。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。持仓构成和成交记录尚未实现时只显示紧凑占位。每次打开详情时，章节回到基金概览，业绩内层 Tab 回到累计收益且三个范围回到近 6 月，指标内层 Tab 回到阶段涨幅。
 
 ### 时间和行情语义
 

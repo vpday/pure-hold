@@ -1,4 +1,12 @@
-import { computed, ref, shallowRef, toValue, type MaybeRefOrGetter } from 'vue'
+import {
+  computed,
+  getCurrentScope,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  toValue,
+  type MaybeRefOrGetter,
+} from 'vue'
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
@@ -13,9 +21,11 @@ import { toFundDistributionTableModel } from '../presenters/toFundDistributionTa
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
 import { useFundCumulativeReturns } from './useFundCumulativeReturns'
 import { useFundDistribution } from './useFundDistribution'
+import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
 
 interface UseFundPerformanceOptions {
+  readonly historyDataSource?: FundHistoryDataSource
   readonly loadCumulativeReturns?: LoadFundCumulativeReturns
   readonly loadDistribution?: LoadFundDistribution
   readonly loadNetValueHistory?: LoadFundNetValueHistory
@@ -25,9 +35,16 @@ export function useFundPerformance(
   isVisible: MaybeRefOrGetter<boolean>,
   options: UseFundPerformanceOptions = {},
 ) {
+  const ownsHistoryDataSource = !options.historyDataSource
+  const historyDataSource =
+    options.historyDataSource ??
+    useFundHistoryDataSource({
+      loadDistribution: options.loadDistribution,
+      loadNetValueHistory: options.loadNetValueHistory,
+    })
   const cumulativeReturns = useFundCumulativeReturns(options.loadCumulativeReturns)
-  const distribution = useFundDistribution(options.loadDistribution)
-  const netValueHistory = useFundNetValueHistory(options.loadNetValueHistory)
+  const distribution = useFundDistribution(historyDataSource)
+  const netValueHistory = useFundNetValueHistory(historyDataSource)
   const activeView = ref<FundPerformanceView>('cumulative-returns')
   const currentFundCode = ref<string>()
   const basicInfo = shallowRef<FundBasicInfo>()
@@ -157,6 +174,10 @@ export function useFundPerformance(
     const chartRefresh =
       view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh(view)
     await Promise.all([chartRefresh, distribution.refresh()])
+  }
+
+  if (getCurrentScope() && ownsHistoryDataSource) {
+    onScopeDispose(() => historyDataSource.dispose())
   }
 
   return {

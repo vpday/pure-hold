@@ -1,18 +1,19 @@
 import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 
 import type { FundDistributionHistory } from '@/domains/funds/models/fundDistributionHistory'
-import { fetchTiantianFundDistribution } from '@/domains/funds/services/tiantian/fetchTiantianFundDistribution'
 import type { LoadFundDistribution } from '../models/fundDistributionTableModel'
+import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 
-export function useFundDistribution(load: LoadFundDistribution = fetchTiantianFundDistribution) {
+export function useFundDistribution(source?: FundHistoryDataSource | LoadFundDistribution) {
+  const ownsDataSource = !source || typeof source === 'function'
+  const dataSource =
+    typeof source === 'object' ? source : useFundHistoryDataSource({ loadDistribution: source })
   const currentFundCode = ref<string>()
   const data = shallowRef<FundDistributionHistory>()
   const error = ref('')
   const hasLoaded = ref(false)
   const isActivated = ref(false)
   const isLoading = ref(false)
-  const cache = new Map<string, FundDistributionHistory>()
-
   let activeRequest:
     | {
         readonly controller: AbortController
@@ -30,9 +31,8 @@ export function useFundDistribution(load: LoadFundDistribution = fetchTiantianFu
     isActivated.value = false
     isLoading.value = false
     error.value = ''
-    const cached = cache.get(fundCode)
-    data.value = cached
-    hasLoaded.value = cached !== undefined
+    data.value = undefined
+    hasLoaded.value = false
   }
 
   async function activate(): Promise<void> {
@@ -64,15 +64,8 @@ export function useFundDistribution(load: LoadFundDistribution = fetchTiantianFu
   async function request(force: boolean): Promise<void> {
     const fundCode = currentFundCode.value
     if (!fundCode) return
-    if (!activeRequest && !force) {
-      const cached = cache.get(fundCode)
-      if (cached) {
-        applyResult(cached)
-        return
-      }
-    }
-
-    const pending = activeRequest?.fundCode === fundCode ? activeRequest : startRequest(fundCode)
+    const pending =
+      activeRequest?.fundCode === fundCode ? activeRequest : startRequest(fundCode, force)
     isLoading.value = true
     error.value = ''
     try {
@@ -91,14 +84,12 @@ export function useFundDistribution(load: LoadFundDistribution = fetchTiantianFu
     }
   }
 
-  function startRequest(fundCode: string): NonNullable<typeof activeRequest> {
+  function startRequest(fundCode: string, force: boolean): NonNullable<typeof activeRequest> {
     const controller = new AbortController()
     const generation = ++requestGeneration
-    const promise = load(fundCode, controller.signal).then((result) => {
-      if (generation === requestGeneration && currentFundCode.value === fundCode) {
-        cache.set(fundCode, result)
-      }
-      return result
+    const promise = dataSource.loadDistribution(fundCode, {
+      force,
+      signal: controller.signal,
     })
     const pending = { controller, fundCode, generation, promise }
     activeRequest = pending
@@ -125,7 +116,12 @@ export function useFundDistribution(load: LoadFundDistribution = fetchTiantianFu
     activeRequest = undefined
   }
 
-  if (getCurrentScope()) onScopeDispose(close)
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      close()
+      if (ownsDataSource) dataSource.dispose()
+    })
+  }
 
   return {
     activate,
