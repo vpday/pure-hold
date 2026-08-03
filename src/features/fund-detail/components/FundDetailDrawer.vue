@@ -199,10 +199,9 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-holdings"
             aria-labelledby="fund-detail-holdings-title"
-            class="detail-section pt-4"
+            class="detail-section min-w-0"
           >
-            <h2 id="fund-detail-holdings-title" class="section-title">持仓构成</h2>
-            <p class="section-placeholder">持仓构成功能后续开发</p>
+            <slot name="holdings" />
           </section>
 
           <section

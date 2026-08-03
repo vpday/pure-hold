@@ -6,11 +6,13 @@ import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
+import FundHoldingsSection from './components/FundHoldingsSection.vue'
 import FundMetricsSection from './components/FundMetricsSection.vue'
 import FundPerformanceSection from './components/FundPerformanceSection.vue'
 import { useFundBenchmarkDataSource } from './composables/useFundBenchmarkDataSource'
 import { useFundDetail } from './composables/useFundDetail'
 import { useFundHistoryDataSource } from './composables/useFundHistoryDataSource'
+import { useFundHoldings } from './composables/useFundHoldings'
 import { useFundMetrics } from './composables/useFundMetrics'
 import type { FundMetricsRequestResult } from './composables/useFundMetrics'
 import { useFundPerformance } from './composables/useFundPerformance'
@@ -28,6 +30,7 @@ const performance = useFundPerformance(
   { historyDataSource },
 )
 const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
+const holdings = useFundHoldings(() => detail.visible.value && activeSection.value === 'holdings')
 const snapshot = computed(() => {
   const code = detail.currentCode.value
   return code ? store.snapshotsByCode[code] : undefined
@@ -47,6 +50,7 @@ watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, b
 })
 watch([detail.visible, activeSection], ([visible, section]) => {
   if (visible && (section === 'performance' || section === 'metrics')) void activateMetrics()
+  if (visible && section === 'holdings') void holdings.activate()
 })
 
 let unsubscribeRefresh: (() => void) | undefined
@@ -58,6 +62,7 @@ onBeforeUnmount(() => {
   unsubscribeRefresh?.()
   performance.close()
   metrics.close()
+  holdings.close()
   benchmarkDataSource.dispose()
   historyDataSource.dispose()
 })
@@ -72,6 +77,7 @@ function open(code: string): void {
   activeSection.value = 'overview'
   performance.open(code)
   metrics.open(code)
+  holdings.open(code)
   void detail.open(code)
 }
 
@@ -79,6 +85,7 @@ function close(): void {
   detail.close()
   performance.close()
   metrics.close()
+  holdings.close()
 }
 
 async function refresh(): Promise<void> {
@@ -86,6 +93,7 @@ async function refresh(): Promise<void> {
     detail.refresh(),
     performance.refresh(),
     metrics.refresh(),
+    holdings.refresh(),
   ])
   showMetricsRefreshWarning(metricsResult)
 }
@@ -150,6 +158,15 @@ defineExpose({ open })
         @select-view="metrics.selectView"
         @update-risk-free-rate="metrics.updateRiskFreeRateDraft"
         @update-target-rate="metrics.updateTargetRateDraft"
+      />
+    </template>
+    <template #holdings>
+      <FundHoldingsSection
+        :model="holdings.model.value"
+        @retry-holdings="holdings.retryHoldings"
+        @retry-quotes="holdings.retryQuotes"
+        @select-report-date="holdings.selectReportDate"
+        @select-view="holdings.selectView"
       />
     </template>
   </FundDetailDrawer>
