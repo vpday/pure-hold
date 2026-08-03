@@ -25,8 +25,7 @@ const emit = defineEmits<{
 
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
-  { label: '单位净值', value: 'unit-net-value' },
-  { label: '累计净值', value: 'cumulative-net-value' },
+  { label: '净值走势', value: 'net-value' },
 ] as const
 const activeTab = ref<FundPerformanceView | 'distribution'>(props.model.activeView)
 const sectionElement = ref<HTMLElement>()
@@ -78,8 +77,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="sectionElement" class="mt-2 min-w-0">
-    <t-tabs :value="activeTab" @update:value="selectTab(String($event))">
+  <div ref="sectionElement" class="performance-section">
+    <h2 id="fund-detail-performance-title" class="performance-title">业绩表现</h2>
+    <t-tabs class="performance-tabs" :value="activeTab" @update:value="selectTab(String($event))">
       <t-tab-panel
         v-for="performanceTab in performanceTabs"
         :key="performanceTab.value"
@@ -111,44 +111,21 @@ onBeforeUnmount(() => {
             @retry="emit('retry', 'cumulative-returns')"
           />
         </div>
-        <div v-else-if="performanceTab.value === 'unit-net-value'" class="pt-4">
-          <div class="performance-filters">
-            <t-select
-              label="日期范围："
-              :options="fundHistoryRangeOptions"
-              :value="model.unitNetValue.selectedRange"
-              @update:value="
-                emit('selectRange', 'unit-net-value', String($event) as FundHistoryRange)
-              "
-            />
-          </div>
-          <FundNetValueChart
-            :error="model.unitNetValue.error"
-            :is-loading="model.unitNetValue.isLoading"
-            :model="model.unitNetValue.chart"
-            view="unit-net-value"
-            :visible="model.isVisible && activeTab === 'unit-net-value'"
-            @retry="emit('retry', 'unit-net-value')"
-          />
-        </div>
         <div v-else class="pt-4">
           <div class="performance-filters">
             <t-select
               label="日期范围："
               :options="fundHistoryRangeOptions"
-              :value="model.cumulativeNetValue.selectedRange"
-              @update:value="
-                emit('selectRange', 'cumulative-net-value', String($event) as FundHistoryRange)
-              "
+              :value="model.netValue.selectedRange"
+              @update:value="emit('selectRange', 'net-value', String($event) as FundHistoryRange)"
             />
           </div>
           <FundNetValueChart
-            :error="model.cumulativeNetValue.error"
-            :is-loading="model.cumulativeNetValue.isLoading"
-            :model="model.cumulativeNetValue.chart"
-            view="cumulative-net-value"
-            :visible="model.isVisible && activeTab === 'cumulative-net-value'"
-            @retry="emit('retry', 'cumulative-net-value')"
+            :error="model.netValue.error"
+            :is-loading="model.netValue.isLoading"
+            :model="model.netValue.chart"
+            :visible="model.isVisible && activeTab === 'net-value'"
+            @retry="emit('retry', 'net-value')"
           />
         </div>
       </t-tab-panel>
@@ -223,5 +200,25 @@ onBeforeUnmount(() => {
 
 .performance-filters {
   @apply mb-4 flex w-full sm:w-55 flex-col gap-2 sm:flex-row;
+}
+
+.performance-section {
+  @apply mt-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4;
+}
+
+.performance-title {
+  @apply flex h-12 items-center text-lg font-medium text-(--td-text-color-primary);
+}
+
+.performance-tabs {
+  display: contents;
+}
+
+.performance-tabs :deep(.t-tabs__header) {
+  @apply col-start-2 row-start-1 min-w-0;
+}
+
+.performance-tabs :deep(.t-tabs__content) {
+  @apply col-span-2 row-start-2 min-w-0;
 }
 </style>

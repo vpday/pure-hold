@@ -65,13 +65,9 @@ export function useFundPerformance(
       ? toFundCumulativeReturnsChartModel(returns, referenceIndex.name, rangeOption.label)
       : undefined
   })
-  const unitNetValueChart = computed(() => {
-    const history = netValueHistory.data['unit-net-value'].value
-    return history ? toFundNetValueChartModel(history, 'unit-net-value') : undefined
-  })
-  const cumulativeNetValueChart = computed(() => {
-    const history = netValueHistory.data['cumulative-net-value'].value
-    return history ? toFundNetValueChartModel(history, 'cumulative-net-value') : undefined
+  const netValueChart = computed(() => {
+    const history = netValueHistory.data.value
+    return history ? toFundNetValueChartModel(history) : undefined
   })
   const distributionTable = computed(() => {
     const history = distribution.data.value
@@ -79,12 +75,6 @@ export function useFundPerformance(
   })
   const model = computed<FundPerformanceSectionModel>(() => ({
     activeView: activeView.value,
-    cumulativeNetValue: {
-      chart: cumulativeNetValueChart.value,
-      error: netValueHistory.error['cumulative-net-value'].value,
-      isLoading: netValueHistory.isLoading['cumulative-net-value'].value,
-      selectedRange: netValueHistory.selectedRanges['cumulative-net-value'].value,
-    },
     cumulativeReturns: {
       chart: cumulativeReturnsChart.value,
       error: cumulativeReturns.error.value,
@@ -100,11 +90,11 @@ export function useFundPerformance(
       isLoading: distribution.isLoading.value,
     },
     isVisible: toValue(isVisible),
-    unitNetValue: {
-      chart: unitNetValueChart.value,
-      error: netValueHistory.error['unit-net-value'].value,
-      isLoading: netValueHistory.isLoading['unit-net-value'].value,
-      selectedRange: netValueHistory.selectedRanges['unit-net-value'].value,
+    netValue: {
+      chart: netValueChart.value,
+      error: netValueHistory.error.value,
+      isLoading: netValueHistory.isLoading.value,
+      selectedRange: netValueHistory.selectedRange.value,
     },
   }))
 
@@ -143,13 +133,13 @@ export function useFundPerformance(
       if (code && info) await cumulativeReturns.initialize(code, info)
       return
     }
-    await netValueHistory.activate(view)
+    await netValueHistory.activate()
   }
 
   async function selectRange(view: FundPerformanceView, range: FundHistoryRange): Promise<void> {
     await (view === 'cumulative-returns'
       ? cumulativeReturns.selectRange(range)
-      : netValueHistory.selectRange(view, range))
+      : netValueHistory.selectRange(range))
   }
 
   async function selectReferenceIndex(code: string): Promise<void> {
@@ -157,7 +147,7 @@ export function useFundPerformance(
   }
 
   async function retry(view: FundPerformanceView): Promise<void> {
-    await (view === 'cumulative-returns' ? cumulativeReturns.retry() : netValueHistory.retry(view))
+    await (view === 'cumulative-returns' ? cumulativeReturns.retry() : netValueHistory.retry())
   }
 
   async function activateDistribution(): Promise<void> {
@@ -172,7 +162,7 @@ export function useFundPerformance(
     if (!toValue(isVisible)) return
     const view = activeView.value
     const chartRefresh =
-      view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh(view)
+      view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh()
     await Promise.all([chartRefresh, distribution.refresh()])
   }
 

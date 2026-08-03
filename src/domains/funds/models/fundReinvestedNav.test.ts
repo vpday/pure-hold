@@ -123,6 +123,7 @@ type Action = readonly [date: string, value: number | null]
 
 function history(values: readonly NetValue[], fundCode = '161725'): FundNetValueHistory {
   return {
+    events: [],
     fundCode,
     points: values.map(([date, unitNetValue]) => ({
       cumulativeNetValue: null,

@@ -60,6 +60,7 @@ test('maps, sorts and deduplicates net value points while preserving holes', () 
   )
 
   assert.deepEqual(result, {
+    events: [],
     fundCode: '161725',
     range: 'ln',
     points: [
@@ -83,6 +84,29 @@ test('maps, sorts and deduplicates net value points while preserving holes', () 
       },
     ],
   })
+})
+
+test('maps supported history events and ignores unknown or malformed entries', () => {
+  const result = parseTiantianFundNetValueHistoryResponse(
+    successful(
+      [{ FSRQ: '2026-07-29', DWJZ: 1, LJJZ: 2 }],
+      [
+        { FSRQ: '2026-07-29', STYPE: '100', BONUS: '0.1' },
+        { FSRQ: '2026-07-29', STYPE: 2 },
+        { FSRQ: '2026-07-29', STYPE: '100' },
+        { FSRQ: '2026-07-29', STYPE: '11' },
+        { FSRQ: 'invalid', STYPE: '2' },
+        null,
+      ],
+    ),
+    '161725',
+    'ln',
+  )
+
+  assert.deepEqual(result.events, [
+    { date: '2026-07-29', type: 'dividend' },
+    { date: '2026-07-29', type: 'manager-change' },
+  ])
 })
 
 test('normalizes each invalid numeric field independently', () => {
@@ -139,6 +163,6 @@ test('fetch rejects HTTP failures and propagates caller cancellation', async (co
   assert.equal(requestedSignal, controller.signal)
 })
 
-function successful(data: readonly unknown[]): unknown {
-  return { data, errorCode: 0, expansion: [], success: true, totalCount: data.length }
+function successful(data: readonly unknown[], expansion: unknown = []): unknown {
+  return { data, errorCode: 0, expansion, success: true, totalCount: data.length }
 }

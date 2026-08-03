@@ -1,20 +1,33 @@
 <script setup lang="ts">
 import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
+import {
+  GridComponent,
+  DataZoomComponent,
+  LegendComponent,
+  MarkPointComponent,
+  TooltipComponent,
+} from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import type { FundNetValueChartModel, FundNetValueView } from '../models/fundNetValueChart'
+import type { FundNetValueChartModel } from '../models/fundNetValueChart'
 import { buildFundNetValueChartOption } from '../presenters/buildFundNetValueChartOption'
 
-echarts.use([LineChart, TooltipComponent, GridComponent, CanvasRenderer])
+echarts.use([
+  LineChart,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  DataZoomComponent,
+  MarkPointComponent,
+  CanvasRenderer,
+])
 
 const props = defineProps<{
   error: string
   isLoading: boolean
   model?: FundNetValueChartModel
-  view: FundNetValueView
   visible: boolean
 }>()
 const emit = defineEmits<{ retry: [] }>()
@@ -27,10 +40,12 @@ function render(): void {
   if (!chart || !props.model) return
   chart.setOption(
     buildFundNetValueChartOption(props.model, {
+      cumulativeLine: themeColor('--td-error-color-6'),
       decrease: themeColor('--td-success-color'),
+      event: themeColor('--td-warning-color'),
       increase: themeColor('--td-error-color'),
-      line: themeColor('--td-error-color-6'),
       text: themeColor('--td-text-color-primary'),
+      unitLine: themeColor('--td-brand-color-5'),
     }),
     true,
   )

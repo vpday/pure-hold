@@ -1,3 +1,1 @@
-import type { FundNetValueView } from './fundNetValueChart.ts'
-
-export type FundPerformanceView = 'cumulative-returns' | FundNetValueView
+export type FundPerformanceView = 'cumulative-returns' | 'net-value'

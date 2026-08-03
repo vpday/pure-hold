@@ -1,24 +1,54 @@
 import type { LineSeriesOption } from 'echarts/charts'
-import type { GridComponentOption, TooltipComponentOption } from 'echarts/components'
+import type {
+  DataZoomComponentOption,
+  GridComponentOption,
+  LegendComponentOption,
+  MarkPointComponentOption,
+  TooltipComponentOption,
+} from 'echarts/components'
 import type { ComposeOption } from 'echarts/core'
 
 import type { FundNetValueChartModel } from '../models/fundNetValueChart.ts'
 
 export type FundNetValueChartOption = ComposeOption<
-  LineSeriesOption | GridComponentOption | TooltipComponentOption
+  | LineSeriesOption
+  | GridComponentOption
+  | LegendComponentOption
+  | MarkPointComponentOption
+  | TooltipComponentOption
+  | DataZoomComponentOption
 >
 
 export interface FundNetValueChartTheme {
   readonly decrease?: string
+  readonly cumulativeLine?: string
+  readonly event?: string
   readonly increase?: string
-  readonly line?: string
   readonly text?: string
+  readonly unitLine?: string
 }
 
 export function buildFundNetValueChartOption(
   model: FundNetValueChartModel,
   theme: FundNetValueChartTheme = {},
 ): FundNetValueChartOption {
+  const colors = [theme.unitLine, theme.cumulativeLine]
+  const eventDates = new Set(model.events.map(({ date }) => date))
+  const eventMarkPoint: LineSeriesOption['markPoint'] = model.events.length
+    ? {
+        data: model.events.map((event) => ({
+          coord: [event.date, event.unitNetValue],
+          itemStyle: theme.event ? { color: theme.event } : undefined,
+          label: { color: theme.event, formatter: eventMarkerLabel(event.types), offset: [0, -15] },
+          name: eventNames(event.types),
+          symbol:
+            'path://M8,2a0.75,0.75,0,0,1,0.75,0.75l0,8.6899995803833l3.2200002670288086,-3.219999313354492a0.75,0.75,0,1,1,1.0599994659423828,1.0599994659423828l-4.5,4.5a0.75,0.75,0,0,1,-1.059999942779541,0l-4.499999761581421,-4.5a0.75,0.75,0,0,1,1.0600001811981201,-1.0599994659423828l3.2199997901916504,3.219999313354492L7.25,2.75A0.75,0.75,0,0,1,8,2Z',
+          symbolSize: [8, 20],
+          symbolRotate: 0,
+          symbolOffset: [0, -11],
+        })),
+      }
+    : undefined
   return {
     animationDuration: 250,
     grid: {
@@ -27,20 +57,39 @@ export function buildFundNetValueChartOption(
       outerBoundsContain: 'axisLabel',
       outerBoundsMode: 'same',
       right: 10,
-      top: 0,
+      top: 26,
     },
-    series: [
+    legend: {
+      data: model.series.map(({ name }) => name),
+      right: 0,
+      top: 0,
+      type: 'scroll',
+    },
+    dataZoom: [
       {
-        connectNulls: false,
-        data: [...model.values],
-        itemStyle: theme.line ? { color: theme.line } : undefined,
-        lineStyle: theme.line ? { color: theme.line } : undefined,
-        name: model.name,
-        showSymbol: false,
-        smooth: false,
-        type: 'line',
+        type: 'inside',
+        realtime: true,
       },
     ],
+    series: model.series.map(({ name, values }, index) => {
+      const showEventSymbols = index === 0 && eventDates.size > 0
+      return {
+        connectNulls: false,
+        data: [...values],
+        itemStyle: colors[index] ? { color: colors[index] } : undefined,
+        lineStyle: colors[index] ? { color: colors[index] } : undefined,
+        markPoint: index === 0 ? eventMarkPoint : undefined,
+        name,
+        showAllSymbol: showEventSymbols,
+        showSymbol: showEventSymbols,
+        smooth: false,
+        symbol: showEventSymbols ? 'circle' : undefined,
+        symbolSize: showEventSymbols
+          ? (_value, { dataIndex }) => (eventDates.has(model.dates[dataIndex] ?? '') ? 6 : 0)
+          : undefined,
+        type: 'line',
+      }
+    }),
     tooltip: {
       axisPointer: { type: 'line' },
       formatter: (value: unknown) => formatTooltip(value, model, theme),
@@ -74,13 +123,17 @@ function formatTooltip(
   model: FundNetValueChartModel,
   theme: FundNetValueChartTheme,
 ): string {
-  const item = Array.isArray(value) ? (value[0] as TooltipItem | undefined) : undefined
+  const items = Array.isArray(value) ? (value as TooltipItem[]) : []
+  const item = items[0]
   const date = typeof item?.axisValue === 'string' ? item.axisValue : ''
   const index = typeof item?.dataIndex === 'number' ? item.dataIndex : -1
-  const marker = typeof item?.marker === 'string' ? item.marker : ''
-  const name =
-    typeof item?.seriesName === 'string' && item.seriesName ? item.seriesName : model.name
-  const netValue = toNullableFiniteNumber(item?.value)
+  const seriesNames = new Set(model.series.map(({ name }) => name))
+  const valueLines = items.flatMap((seriesItem) => {
+    const name = typeof seriesItem.seriesName === 'string' ? seriesItem.seriesName : ''
+    if (!seriesNames.has(name)) return []
+    const marker = typeof seriesItem.marker === 'string' ? seriesItem.marker : ''
+    return [`${marker}${name}：${formatNetValue(toNullableFiniteNumber(seriesItem.value))}`]
+  })
   const growth = model.dailyGrowthPercents[index] ?? null
   const growthColor =
     growth === null
@@ -94,7 +147,18 @@ function formatTooltip(
   const growthLine = growthColor
     ? `日涨幅：<span style="color:${growthColor}">${growthText}</span>`
     : `日涨幅：${growthText}`
-  return [date, `${marker}${name}：${formatNetValue(netValue)}`, growthLine].join('<br />')
+  const events = model.events.find((event) => event.date === date)
+  const eventLine = events ? `事件：${eventNames(events.types)}` : undefined
+  return [date, ...valueLines, growthLine, eventLine].filter(Boolean).join('<br />')
+}
+
+function eventMarkerLabel(types: FundNetValueChartModel['events'][number]['types']): string {
+  if (types.length > 1) return String(types.length)
+  return types[0] === 'dividend' ? '分红' : '基金经理变更'
+}
+
+function eventNames(types: FundNetValueChartModel['events'][number]['types']): string {
+  return types.map((type) => (type === 'dividend' ? '分红' : '基金经理变更')).join('、')
 }
 
 function formatNetValue(value: number | null): string {

@@ -4,6 +4,11 @@ import test from 'node:test'
 import { toFundNetValueChartModel } from './toFundNetValueChartModel.ts'
 
 const history = {
+  events: [
+    { date: '2026-07-28', type: 'dividend' },
+    { date: '2026-07-28', type: 'manager-change' },
+    { date: '2026-07-29', type: 'dividend' },
+  ],
   fundCode: '161725',
   range: '6y',
   points: [
@@ -22,20 +27,20 @@ const history = {
   ],
 } as const
 
-test('maps unit net values without filling null gaps', () => {
-  assert.deepEqual(toFundNetValueChartModel(history, 'unit-net-value'), {
+test('maps both net value series and preserves null gaps', () => {
+  assert.deepEqual(toFundNetValueChartModel(history), {
     dailyGrowthPercents: [null, 0.9],
     dates: ['2026-07-28', '2026-07-29'],
-    name: '单位净值',
-    values: [0.5, null],
-  })
-})
-
-test('maps cumulative net values while preserving aligned growth values', () => {
-  assert.deepEqual(toFundNetValueChartModel(history, 'cumulative-net-value'), {
-    dailyGrowthPercents: [null, 0.9],
-    dates: ['2026-07-28', '2026-07-29'],
-    name: '累计净值',
-    values: [null, 2.2784],
+    events: [
+      {
+        date: '2026-07-28',
+        types: ['dividend', 'manager-change'],
+        unitNetValue: 0.5,
+      },
+    ],
+    series: [
+      { name: '单位净值', values: [0.5, null] },
+      { name: '累计净值', values: [null, 2.2784] },
+    ],
   })
 })

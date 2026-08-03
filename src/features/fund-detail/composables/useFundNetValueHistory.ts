@@ -3,33 +3,19 @@ import { getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange.ts'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory.ts'
 import { defaultFundHistoryRange } from '../config/fundHistoryRangeOptions.ts'
-import type { FundNetValueView, LoadFundNetValueHistory } from '../models/fundNetValueChart.ts'
+import type { LoadFundNetValueHistory } from '../models/fundNetValueChart.ts'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource.ts'
-
-const views = ['unit-net-value', 'cumulative-net-value'] as const
 
 export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFundNetValueHistory) {
   const ownsDataSource = !source || typeof source === 'function'
   const dataSource =
     typeof source === 'object' ? source : useFundHistoryDataSource({ loadNetValueHistory: source })
   const currentFundCode = ref<string>()
-  const activeView = ref<FundNetValueView>()
-  const selectedRanges = {
-    'cumulative-net-value': ref<FundHistoryRange>(defaultFundHistoryRange),
-    'unit-net-value': ref<FundHistoryRange>(defaultFundHistoryRange),
-  }
-  const data = {
-    'cumulative-net-value': shallowRef<FundNetValueHistory>(),
-    'unit-net-value': shallowRef<FundNetValueHistory>(),
-  }
-  const isLoading = {
-    'cumulative-net-value': ref(false),
-    'unit-net-value': ref(false),
-  }
-  const error = {
-    'cumulative-net-value': ref(''),
-    'unit-net-value': ref(''),
-  }
+  const selectedRange = ref<FundHistoryRange>(defaultFundHistoryRange)
+  const data = shallowRef<FundNetValueHistory>()
+  const isLoading = ref(false)
+  const error = ref('')
+  let active = false
   let activeRequest:
     | {
         readonly controller: AbortController
@@ -44,68 +30,62 @@ export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFund
     cancelActiveRequest()
     requestGeneration += 1
     currentFundCode.value = fundCode
-    activeView.value = undefined
-    resetViewState()
+    active = false
+    resetState()
   }
 
-  async function activate(view: FundNetValueView): Promise<void> {
-    activeView.value = view
-    await request(view, false)
+  async function activate(): Promise<void> {
+    active = true
+    await request(false)
   }
 
-  async function selectRange(view: FundNetValueView, range: FundHistoryRange): Promise<void> {
-    if (selectedRanges[view].value === range) return
-    selectedRanges[view].value = range
-    error[view].value = ''
-    if (activeView.value === view) {
-      await request(view, false)
-    }
+  async function selectRange(range: FundHistoryRange): Promise<void> {
+    if (selectedRange.value === range) return
+    selectedRange.value = range
+    error.value = ''
+    if (active) await request(false)
   }
 
-  async function retry(view: FundNetValueView): Promise<void> {
-    if (activeView.value !== view) return
-    await request(view, true)
+  async function retry(): Promise<void> {
+    if (!active) return
+    await request(true)
   }
 
-  async function refresh(view: FundNetValueView): Promise<void> {
-    if (activeView.value !== view) return
-    await request(view, true)
+  async function refresh(): Promise<void> {
+    if (!active) return
+    await request(true)
   }
 
   function close(): void {
     cancelActiveRequest()
     requestGeneration += 1
     currentFundCode.value = undefined
-    activeView.value = undefined
-    resetViewState()
+    active = false
+    resetState()
   }
 
-  async function request(view: FundNetValueView, force: boolean): Promise<void> {
+  async function request(force: boolean): Promise<void> {
     const fundCode = currentFundCode.value
     if (!fundCode) return
-    const range = selectedRanges[view].value
+    const range = selectedRange.value
     const key = cacheKey(fundCode, range)
     if (activeRequest && activeRequest.key !== key) {
       cancelActiveRequest()
-      clearLoading()
+      isLoading.value = false
     }
     const request =
       activeRequest?.key === key ? activeRequest : startRequest(fundCode, range, key, force)
-    isLoading[view].value = true
-    error[view].value = ''
+    isLoading.value = true
+    error.value = ''
     try {
       const result = await request.promise
-      if (isCurrentTarget(view, fundCode, range)) {
-        applyResult(view, result)
-      }
+      if (isCurrentTarget(fundCode, range)) applyResult(result)
     } catch (requestError) {
-      if (isCurrentTarget(view, fundCode, range) && !isAbortError(requestError)) {
-        error[view].value = '基金净值历史加载失败，请稍后重试'
+      if (isCurrentTarget(fundCode, range) && !isAbortError(requestError)) {
+        error.value = '基金净值历史加载失败，请稍后重试'
       }
     } finally {
-      if (isCurrentTarget(view, fundCode, range)) {
-        isLoading[view].value = false
-      }
+      if (isCurrentTarget(fundCode, range)) isLoading.value = false
     }
   }
 
@@ -132,37 +112,21 @@ export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFund
     return request
   }
 
-  function applyResult(view: FundNetValueView, result: FundNetValueHistory): void {
-    data[view].value = result
-    error[view].value = ''
-    isLoading[view].value = false
+  function applyResult(result: FundNetValueHistory): void {
+    data.value = result
+    error.value = ''
+    isLoading.value = false
   }
 
-  function isCurrentTarget(
-    view: FundNetValueView,
-    fundCode: string,
-    range: FundHistoryRange,
-  ): boolean {
-    return (
-      currentFundCode.value === fundCode &&
-      activeView.value === view &&
-      selectedRanges[view].value === range
-    )
+  function isCurrentTarget(fundCode: string, range: FundHistoryRange): boolean {
+    return currentFundCode.value === fundCode && active && selectedRange.value === range
   }
 
-  function resetViewState(): void {
-    for (const view of views) {
-      selectedRanges[view].value = defaultFundHistoryRange
-      data[view].value = undefined
-      isLoading[view].value = false
-      error[view].value = ''
-    }
-  }
-
-  function clearLoading(): void {
-    for (const view of views) {
-      isLoading[view].value = false
-    }
+  function resetState(): void {
+    selectedRange.value = defaultFundHistoryRange
+    data.value = undefined
+    isLoading.value = false
+    error.value = ''
   }
 
   function cancelActiveRequest(): void {
@@ -179,7 +143,6 @@ export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFund
 
   return {
     activate,
-    activeView,
     close,
     currentFundCode,
     data,
@@ -188,7 +151,7 @@ export function useFundNetValueHistory(source?: FundHistoryDataSource | LoadFund
     isLoading,
     refresh,
     retry,
-    selectedRanges,
+    selectedRange,
     selectRange,
   }
 }

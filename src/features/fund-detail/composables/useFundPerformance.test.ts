@@ -41,12 +41,12 @@ test('owns performance initialization and builds every chart model', async () =>
   assert.equal(netValueCalls.length, 0)
 
   await performance.activateDistribution()
-  await performance.selectView('unit-net-value')
+  await performance.selectView('net-value')
 
   assert.equal(performance.model.value.distribution.dividends[0]?.dividendPerTenUnits, '0.4500')
   assert.equal(distributionCalls.length, 1)
-  assert.equal(performance.model.value.activeView, 'unit-net-value')
-  assert.equal(performance.model.value.unitNetValue.chart?.values[0], 1)
+  assert.equal(performance.model.value.activeView, 'net-value')
+  assert.equal(performance.model.value.netValue.chart?.series[0].values[0], 1)
   assert.deepEqual(netValueCalls[0]?.slice(0, 2), ['161725', '6y'])
 })
 
@@ -68,9 +68,9 @@ test('routes ranges and retries through the active performance session', async (
   await performance.updateBasicInfo('161725', basicInfo('161725'))
   await performance.selectRange('cumulative-returns', 'n')
   await performance.retry('cumulative-returns')
-  await performance.selectView('cumulative-net-value')
-  await performance.selectRange('cumulative-net-value', '3n')
-  await performance.retry('cumulative-net-value')
+  await performance.selectView('net-value')
+  await performance.selectRange('net-value', '3n')
+  await performance.retry('net-value')
 
   assert.deepEqual(
     cumulativeCalls.map((call) => call.slice(0, 3)),
@@ -109,7 +109,7 @@ test('refreshes only the visible active view and resets on reopen', async () => 
 
   performance.open('161725')
   await performance.activateDistribution()
-  await performance.selectView('unit-net-value')
+  await performance.selectView('net-value')
   await performance.refresh()
   assert.equal(netValueCalls.length, 1)
   assert.equal(distributionCalls.length, 1)
@@ -119,13 +119,13 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   assert.equal(netValueCalls.length, 2)
   assert.equal(distributionCalls.length, 2)
 
-  await performance.selectRange('unit-net-value', 'n')
+  await performance.selectRange('net-value', 'n')
   performance.close()
   performance.open('000001')
 
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.unitNetValue.selectedRange, '6y')
-  assert.equal(performance.model.value.unitNetValue.chart, undefined)
+  assert.equal(performance.model.value.netValue.selectedRange, '6y')
+  assert.equal(performance.model.value.netValue.chart, undefined)
   assert.equal(performance.model.value.distribution.hasLoaded, false)
 })
 
@@ -163,12 +163,12 @@ test('shares history requests with the metrics session in both directions', asyn
   metrics.open('161725')
 
   await performance.activateDistribution()
-  await performance.selectView('unit-net-value')
+  await performance.selectView('net-value')
   await metrics.activate()
   assert.deepEqual(distributionCalls, ['161725'])
   assert.deepEqual(netValueCalls, ['6y', 'ln'])
 
-  await performance.selectRange('unit-net-value', 'ln')
+  await performance.selectRange('net-value', 'ln')
   assert.deepEqual(netValueCalls, ['6y', 'ln'])
 })
 
@@ -195,6 +195,7 @@ function cumulativeResult(
 
 function netValueResult(fundCode: string, range: FundHistoryRange): FundNetValueHistory {
   return {
+    events: [],
     fundCode,
     points: [
       {

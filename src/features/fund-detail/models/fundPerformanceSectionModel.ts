@@ -32,9 +32,8 @@ interface FundDistributionPanelModel extends FundDistributionTableModel {
 
 export interface FundPerformanceSectionModel {
   readonly activeView: FundPerformanceView
-  readonly cumulativeNetValue: FundNetValuePanelModel
   readonly cumulativeReturns: FundCumulativeReturnsPanelModel
   readonly distribution: FundDistributionPanelModel
   readonly isVisible: boolean
-  readonly unitNetValue: FundNetValuePanelModel
+  readonly netValue: FundNetValuePanelModel
 }

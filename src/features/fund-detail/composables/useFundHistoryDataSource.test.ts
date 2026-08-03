@@ -127,6 +127,7 @@ function waitForAbort(signal?: AbortSignal): Promise<never> {
 
 function netValues(fundCode: string, range: FundHistoryRange, value: number): FundNetValueHistory {
   return {
+    events: [],
     fundCode,
     points: [
       {

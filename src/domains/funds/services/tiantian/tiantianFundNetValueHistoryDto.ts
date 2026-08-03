@@ -6,3 +6,8 @@ export interface TiantianFundNetValuePointDto {
   readonly NAVTYPE?: unknown
   readonly RATE?: unknown
 }
+
+export interface TiantianFundNetValueEventDto {
+  readonly FSRQ?: unknown
+  readonly STYPE?: unknown
+}

@@ -185,7 +185,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             aria-labelledby="fund-detail-performance-title"
             class="detail-section min-w-0"
           >
-            <h2 id="fund-detail-performance-title" class="section-title">业绩表现</h2>
             <slot name="performance" />
           </section>
 
@@ -200,7 +199,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-holdings"
             aria-labelledby="fund-detail-holdings-title"
-            class="detail-section"
+            class="detail-section pt-4"
           >
             <h2 id="fund-detail-holdings-title" class="section-title">持仓构成</h2>
             <p class="section-placeholder">持仓构成功能后续开发</p>
@@ -209,7 +208,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-trading-rules"
             aria-labelledby="fund-detail-trading-rules-title"
-            class="detail-section"
+            class="detail-section pt-4"
           >
             <h2 id="fund-detail-trading-rules-title" class="section-title">交易规则</h2>
             <FundTradingRules
@@ -223,7 +222,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-transactions"
             aria-labelledby="fund-detail-transactions-title"
-            class="detail-section"
+            class="detail-section pt-4"
           >
             <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
             <p class="section-placeholder">成交记录功能后续开发</p>
@@ -267,7 +266,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 .detail-section {
-  @apply mt-4 pt-4 border-t border-(--td-component-border);
+  @apply mt-4 border-t border-(--td-component-border);
 }
 
 .fund-detail-scroll {

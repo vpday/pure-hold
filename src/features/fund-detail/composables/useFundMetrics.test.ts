@@ -234,6 +234,7 @@ function benchmarkSource(calls: string[]) {
 
 function netValues(fundCode: string, range: FundHistoryRange, value: number): FundNetValueHistory {
   return {
+    events: [],
     fundCode,
     points: [
       {
@@ -255,6 +256,7 @@ function netValues(fundCode: string, range: FundHistoryRange, value: number): Fu
 
 function denseNetValues(fundCode: string, range: FundHistoryRange): FundNetValueHistory {
   return {
+    events: [],
     fundCode,
     points: weekdays('2020-01-01', '2026-07-31').map((date, index) => {
       const unitNetValue = 1 + index * 0.0002 + Math.sin(index / 15) * 0.01

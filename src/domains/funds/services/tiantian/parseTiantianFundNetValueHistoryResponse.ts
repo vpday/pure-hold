@@ -1,6 +1,14 @@
-import type { FundNetValueHistory, FundNetValuePoint } from '../../models/fundNetValueHistory.ts'
+import type {
+  FundNetValueEvent,
+  FundNetValueEventType,
+  FundNetValueHistory,
+  FundNetValuePoint,
+} from '../../models/fundNetValueHistory.ts'
 import type { FundHistoryRange } from '../../models/fundHistoryRange.ts'
-import type { TiantianFundNetValuePointDto } from './tiantianFundNetValueHistoryDto.ts'
+import type {
+  TiantianFundNetValueEventDto,
+  TiantianFundNetValuePointDto,
+} from './tiantianFundNetValueHistoryDto.ts'
 import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export function parseTiantianFundNetValueHistoryResponse(
@@ -24,7 +32,29 @@ export function parseTiantianFundNetValueHistoryResponse(
     throw new TypeError('基金净值历史数据为空')
   }
 
-  return { fundCode, points, range }
+  return { events: mapEvents(value.expansion), fundCode, points, range }
+}
+
+function mapEvents(value: unknown): readonly FundNetValueEvent[] {
+  if (!Array.isArray(value)) return []
+  const eventsByKey = new Map<string, FundNetValueEvent>()
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    const dto = item as TiantianFundNetValueEventDto
+    const type = toEventType(dto.STYPE)
+    if (!type || !isValidDate(dto.FSRQ)) continue
+    const event = { date: dto.FSRQ, type }
+    eventsByKey.set(`${event.date}:${event.type}`, event)
+  }
+  return [...eventsByKey.values()].sort(
+    (left, right) => left.date.localeCompare(right.date) || left.type.localeCompare(right.type),
+  )
+}
+
+function toEventType(value: unknown): FundNetValueEventType | undefined {
+  if (value === 2 || value === '2') return 'manager-change'
+  if (value === 100 || value === '100') return 'dividend'
+  return undefined
 }
 
 function mapPoint(value: unknown): FundNetValuePoint | undefined {
