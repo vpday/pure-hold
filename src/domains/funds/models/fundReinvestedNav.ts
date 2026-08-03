@@ -23,7 +23,15 @@ export interface FundReinvestedNavPoint {
   readonly unitNetValue: number
 }
 
+export type FundReinvestedNavAppliedEventType = 'conversion' | 'dividend'
+
+export interface FundReinvestedNavAppliedEvent {
+  readonly date: string
+  readonly type: FundReinvestedNavAppliedEventType
+}
+
 export interface FundReinvestedNavResult {
+  readonly appliedEvents: readonly FundReinvestedNavAppliedEvent[]
   readonly issues: readonly FundReinvestedNavIssue[]
   readonly points: readonly FundReinvestedNavPoint[]
 }
@@ -92,7 +100,8 @@ export function calculateFundReinvestedNav(
   }
 
   const first = netValues[0]
-  if (!first) return { issues, points: [] }
+  if (!first) return { appliedEvents: [], issues, points: [] }
+  const appliedEvents: FundReinvestedNavAppliedEvent[] = []
   const points: FundReinvestedNavPoint[] = [{ ...first, reinvestedNetValue: first.unitNetValue }]
   for (const point of netValues.slice(1)) {
     const previous = points.at(-1)!
@@ -102,9 +111,12 @@ export function calculateFundReinvestedNav(
           (dividendsByDate.get(point.date) ?? 0))) /
       previous.unitNetValue
     points.push({ ...point, reinvestedNetValue })
+    if (dividendsByDate.has(point.date)) appliedEvents.push({ date: point.date, type: 'dividend' })
+    if (conversionByDate.has(point.date))
+      appliedEvents.push({ date: point.date, type: 'conversion' })
   }
 
-  return { issues, points }
+  return { appliedEvents, issues, points }
 }
 
 function isPositiveFiniteNumber(value: number | null): value is number {

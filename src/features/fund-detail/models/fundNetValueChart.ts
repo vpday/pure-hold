@@ -1,12 +1,11 @@
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
-import type {
-  FundNetValueEventType,
-  FundNetValueHistory,
-} from '@/domains/funds/models/fundNetValueHistory'
+import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory'
+
+export type FundNetValueChartEventType = 'conversion' | 'dividend' | 'manager-change'
 
 export interface FundNetValueChartEvent {
   readonly date: string
-  readonly types: readonly FundNetValueEventType[]
+  readonly types: readonly FundNetValueChartEventType[]
   readonly unitNetValue: number
 }
 
@@ -16,7 +15,7 @@ export interface FundNetValueChartSeries {
 }
 
 export interface FundNetValueChartModel {
-  readonly dailyGrowthPercents: readonly (number | null)[]
+  readonly dailyGrowthPercents?: readonly (number | null)[]
   readonly dates: readonly string[]
   readonly events: readonly FundNetValueChartEvent[]
   readonly series: readonly [FundNetValueChartSeries, FundNetValueChartSeries]

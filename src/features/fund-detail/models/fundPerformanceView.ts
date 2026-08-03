@@ -1,1 +1,1 @@
-export type FundPerformanceView = 'cumulative-returns' | 'net-value'
+export type FundPerformanceView = 'cumulative-returns' | 'net-value' | 'reinvested-net-value'

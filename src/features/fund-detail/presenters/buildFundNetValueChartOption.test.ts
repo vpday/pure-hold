@@ -142,6 +142,47 @@ test('formats y-axis values to four decimal places', () => {
   assert.equal(formatter(1.2), '1.2000')
 })
 
+test('formats conversion events and omits growth when the model does not provide it', () => {
+  const reinvestedModel: FundNetValueChartModel = {
+    dates: ['2026-07-29'],
+    events: [
+      {
+        date: '2026-07-29',
+        types: ['dividend', 'conversion'],
+        unitNetValue: 1,
+      },
+    ],
+    series: [
+      { name: '单位净值', values: [1] },
+      { name: '复权净值', values: [2] },
+    ],
+  }
+  const option = buildFundNetValueChartOption(reinvestedModel)
+  const formatter = (option.tooltip as { formatter: (value: unknown) => string }).formatter
+  const tooltip = formatter([
+    {
+      axisValue: '2026-07-29',
+      dataIndex: 0,
+      marker: '●',
+      seriesName: '单位净值',
+      value: 1,
+    },
+    {
+      axisValue: '2026-07-29',
+      dataIndex: 0,
+      marker: '●',
+      seriesName: '复权净值',
+      value: 2,
+    },
+  ])
+  const markPoint = (option.series as readonly { readonly markPoint?: { data: unknown[] } }[])[0]
+    ?.markPoint?.data[0]
+
+  assert.doesNotMatch(tooltip, /日涨幅/)
+  assert.match(tooltip, /事件：分红、份额折算/)
+  assert.equal((markPoint as { name: string }).name, '分红、份额折算')
+})
+
 function tooltipItem(dataIndex: number, seriesName: string, value: number | null): unknown {
   return {
     axisValue: model.dates[dataIndex],

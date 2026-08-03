@@ -134,7 +134,7 @@ function formatTooltip(
     const marker = typeof seriesItem.marker === 'string' ? seriesItem.marker : ''
     return [`${marker}${name}：${formatNetValue(toNullableFiniteNumber(seriesItem.value))}`]
   })
-  const growth = model.dailyGrowthPercents[index] ?? null
+  const growth = model.dailyGrowthPercents?.[index] ?? null
   const growthColor =
     growth === null
       ? undefined
@@ -144,9 +144,11 @@ function formatTooltip(
           ? theme.increase
           : theme.decrease
   const growthText = formatGrowth(growth)
-  const growthLine = growthColor
-    ? `日涨幅：<span style="color:${growthColor}">${growthText}</span>`
-    : `日涨幅：${growthText}`
+  const growthLine = model.dailyGrowthPercents
+    ? growthColor
+      ? `日涨幅：<span style="color:${growthColor}">${growthText}</span>`
+      : `日涨幅：${growthText}`
+    : undefined
   const events = model.events.find((event) => event.date === date)
   const eventLine = events ? `事件：${eventNames(events.types)}` : undefined
   return [date, ...valueLines, growthLine, eventLine].filter(Boolean).join('<br />')
@@ -154,11 +156,16 @@ function formatTooltip(
 
 function eventMarkerLabel(types: FundNetValueChartModel['events'][number]['types']): string {
   if (types.length > 1) return String(types.length)
-  return types[0] === 'dividend' ? '分红' : '基金经理变更'
+  return eventName(types[0]!)
 }
 
 function eventNames(types: FundNetValueChartModel['events'][number]['types']): string {
-  return types.map((type) => (type === 'dividend' ? '分红' : '基金经理变更')).join('、')
+  return types.map(eventName).join('、')
+}
+
+function eventName(type: FundNetValueChartModel['events'][number]['types'][number]): string {
+  if (type === 'dividend') return '分红'
+  return type === 'conversion' ? '份额折算' : '基金经理变更'
 }
 
 function formatNetValue(value: number | null): string {

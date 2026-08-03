@@ -19,10 +19,12 @@ import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
 import { toFundCumulativeReturnsChartModel } from '../presenters/toFundCumulativeReturnsChartModel'
 import { toFundDistributionTableModel } from '../presenters/toFundDistributionTableModel'
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
+import { toFundReinvestedNavChartModel } from '../presenters/toFundReinvestedNavChartModel'
 import { useFundCumulativeReturns } from './useFundCumulativeReturns'
 import { useFundDistribution } from './useFundDistribution'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
+import { useFundReinvestedNavHistory } from './useFundReinvestedNavHistory'
 
 interface UseFundPerformanceOptions {
   readonly historyDataSource?: FundHistoryDataSource
@@ -45,6 +47,7 @@ export function useFundPerformance(
   const cumulativeReturns = useFundCumulativeReturns(options.loadCumulativeReturns)
   const distribution = useFundDistribution(historyDataSource)
   const netValueHistory = useFundNetValueHistory(historyDataSource)
+  const reinvestedNavHistory = useFundReinvestedNavHistory(historyDataSource)
   const activeView = ref<FundPerformanceView>('cumulative-returns')
   const currentFundCode = ref<string>()
   const basicInfo = shallowRef<FundBasicInfo>()
@@ -68,6 +71,10 @@ export function useFundPerformance(
   const netValueChart = computed(() => {
     const history = netValueHistory.data.value
     return history ? toFundNetValueChartModel(history) : undefined
+  })
+  const reinvestedNetValueChart = computed(() => {
+    const history = reinvestedNavHistory.selectedData.value
+    return history ? toFundReinvestedNavChartModel(history) : undefined
   })
   const distributionTable = computed(() => {
     const history = distribution.data.value
@@ -96,6 +103,15 @@ export function useFundPerformance(
       isLoading: netValueHistory.isLoading.value,
       selectedRange: netValueHistory.selectedRange.value,
     },
+    reinvestedNetValue: {
+      chart: reinvestedNetValueChart.value,
+      error: reinvestedNavHistory.error.value,
+      isLoading: reinvestedNavHistory.isLoading.value,
+      selectedRange: reinvestedNavHistory.selectedRange.value,
+      warning: reinvestedNavHistory.data.value?.issues.length
+        ? '部分净值、分红或份额折算数据异常，已忽略异常记录'
+        : '',
+    },
   }))
 
   function open(code: string): void {
@@ -107,6 +123,8 @@ export function useFundPerformance(
     distribution.initialize(code)
     netValueHistory.close()
     netValueHistory.initialize(code)
+    reinvestedNavHistory.close()
+    reinvestedNavHistory.initialize(code)
   }
 
   function close(): void {
@@ -115,6 +133,7 @@ export function useFundPerformance(
     cumulativeReturns.close()
     distribution.close()
     netValueHistory.close()
+    reinvestedNavHistory.close()
   }
 
   async function updateBasicInfo(code: string, value: FundBasicInfo): Promise<void> {
@@ -133,13 +152,13 @@ export function useFundPerformance(
       if (code && info) await cumulativeReturns.initialize(code, info)
       return
     }
-    await netValueHistory.activate()
+    await (view === 'net-value' ? netValueHistory.activate() : reinvestedNavHistory.activate())
   }
 
   async function selectRange(view: FundPerformanceView, range: FundHistoryRange): Promise<void> {
-    await (view === 'cumulative-returns'
-      ? cumulativeReturns.selectRange(range)
-      : netValueHistory.selectRange(range))
+    if (view === 'cumulative-returns') await cumulativeReturns.selectRange(range)
+    else if (view === 'net-value') await netValueHistory.selectRange(range)
+    else reinvestedNavHistory.selectRange(range)
   }
 
   async function selectReferenceIndex(code: string): Promise<void> {
@@ -147,7 +166,9 @@ export function useFundPerformance(
   }
 
   async function retry(view: FundPerformanceView): Promise<void> {
-    await (view === 'cumulative-returns' ? cumulativeReturns.retry() : netValueHistory.retry())
+    if (view === 'cumulative-returns') await cumulativeReturns.retry()
+    else if (view === 'net-value') await netValueHistory.retry()
+    else await reinvestedNavHistory.retry()
   }
 
   async function activateDistribution(): Promise<void> {
@@ -162,7 +183,11 @@ export function useFundPerformance(
     if (!toValue(isVisible)) return
     const view = activeView.value
     const chartRefresh =
-      view === 'cumulative-returns' ? cumulativeReturns.refresh() : netValueHistory.refresh()
+      view === 'cumulative-returns'
+        ? cumulativeReturns.refresh()
+        : view === 'net-value'
+          ? netValueHistory.refresh()
+          : reinvestedNavHistory.refresh()
     await Promise.all([chartRefresh, distribution.refresh()])
   }
 

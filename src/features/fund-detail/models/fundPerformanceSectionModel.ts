@@ -24,6 +24,10 @@ interface FundNetValuePanelModel extends FundChartState<FundNetValueChartModel> 
   readonly selectedRange: FundHistoryRange
 }
 
+interface FundReinvestedNavPanelModel extends FundNetValuePanelModel {
+  readonly warning: string
+}
+
 interface FundDistributionPanelModel extends FundDistributionTableModel {
   readonly error: string
   readonly hasLoaded: boolean
@@ -36,4 +40,5 @@ export interface FundPerformanceSectionModel {
   readonly distribution: FundDistributionPanelModel
   readonly isVisible: boolean
   readonly netValue: FundNetValuePanelModel
+  readonly reinvestedNetValue: FundReinvestedNavPanelModel
 }

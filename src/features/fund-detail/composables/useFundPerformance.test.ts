@@ -48,6 +48,15 @@ test('owns performance initialization and builds every chart model', async () =>
   assert.equal(performance.model.value.activeView, 'net-value')
   assert.equal(performance.model.value.netValue.chart?.series[0].values[0], 1)
   assert.deepEqual(netValueCalls[0]?.slice(0, 2), ['161725', '6y'])
+
+  await performance.selectView('reinvested-net-value')
+  assert.equal(performance.model.value.reinvestedNetValue.chart?.series[1].name, '复权净值')
+  assert.equal(
+    performance.model.value.reinvestedNetValue.warning,
+    '部分净值、分红或份额折算数据异常，已忽略异常记录',
+  )
+  assert.deepEqual(netValueCalls[1]?.slice(0, 2), ['161725', 'ln'])
+  assert.equal(distributionCalls.length, 1)
 })
 
 test('routes ranges and retries through the active performance session', async () => {
@@ -58,6 +67,7 @@ test('routes ranges and retries through the active performance session', async (
       cumulativeCalls.push(args)
       return cumulativeResult(args[0], args[1], args[2])
     },
+    loadDistribution: async (fundCode) => distributionResult(fundCode),
     loadNetValueHistory: async (...args) => {
       netValueCalls.push(args)
       return netValueResult(args[0], args[1])
@@ -71,6 +81,9 @@ test('routes ranges and retries through the active performance session', async (
   await performance.selectView('net-value')
   await performance.selectRange('net-value', '3n')
   await performance.retry('net-value')
+  await performance.selectView('reinvested-net-value')
+  await performance.selectRange('reinvested-net-value', 'y')
+  await performance.retry('reinvested-net-value')
 
   assert.deepEqual(
     cumulativeCalls.map((call) => call.slice(0, 3)),
@@ -86,6 +99,8 @@ test('routes ranges and retries through the active performance session', async (
       ['161725', '6y'],
       ['161725', '3n'],
       ['161725', '3n'],
+      ['161725', 'ln'],
+      ['161725', 'ln'],
     ],
   )
 })
@@ -126,6 +141,8 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
   assert.equal(performance.model.value.netValue.selectedRange, '6y')
   assert.equal(performance.model.value.netValue.chart, undefined)
+  assert.equal(performance.model.value.reinvestedNetValue.selectedRange, '6y')
+  assert.equal(performance.model.value.reinvestedNetValue.chart, undefined)
   assert.equal(performance.model.value.distribution.hasLoaded, false)
 })
 
@@ -162,14 +179,23 @@ test('shares history requests with the metrics session in both directions', asyn
   performance.open('161725')
   metrics.open('161725')
 
-  await performance.activateDistribution()
-  await performance.selectView('net-value')
   await metrics.activate()
   assert.deepEqual(distributionCalls, ['161725'])
-  assert.deepEqual(netValueCalls, ['6y', 'ln'])
+  assert.deepEqual(netValueCalls, ['ln'])
 
-  await performance.selectRange('net-value', 'ln')
-  assert.deepEqual(netValueCalls, ['6y', 'ln'])
+  await performance.selectView('reinvested-net-value')
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.deepEqual(netValueCalls, ['ln'])
+
+  performance.open('000001')
+  metrics.open('000001')
+  await performance.selectView('reinvested-net-value')
+  assert.deepEqual(distributionCalls, ['161725', '000001'])
+  assert.deepEqual(netValueCalls, ['ln', 'ln'])
+
+  await metrics.activate()
+  assert.deepEqual(distributionCalls, ['161725', '000001'])
+  assert.deepEqual(netValueCalls, ['ln', 'ln'])
 })
 
 function cumulativeResult(

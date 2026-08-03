@@ -26,6 +26,7 @@ const emit = defineEmits<{
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
   { label: '净值走势', value: 'net-value' },
+  { label: '复权净值', value: 'reinvested-net-value' },
 ] as const
 const activeTab = ref<FundPerformanceView | 'distribution'>(props.model.activeView)
 const sectionElement = ref<HTMLElement>()
@@ -111,7 +112,7 @@ onBeforeUnmount(() => {
             @retry="emit('retry', 'cumulative-returns')"
           />
         </div>
-        <div v-else class="pt-4">
+        <div v-else-if="performanceTab.value === 'net-value'" class="pt-4">
           <div class="performance-filters">
             <t-select
               label="日期范围："
@@ -126,6 +127,32 @@ onBeforeUnmount(() => {
             :model="model.netValue.chart"
             :visible="model.isVisible && activeTab === 'net-value'"
             @retry="emit('retry', 'net-value')"
+          />
+        </div>
+        <div v-else class="pt-4">
+          <div class="performance-filters">
+            <t-select
+              label="日期范围："
+              :options="fundHistoryRangeOptions"
+              :value="model.reinvestedNetValue.selectedRange"
+              @update:value="
+                emit('selectRange', 'reinvested-net-value', String($event) as FundHistoryRange)
+              "
+            />
+          </div>
+          <t-alert
+            v-if="model.reinvestedNetValue.warning"
+            class="mb-4"
+            close-btn
+            theme="warning"
+            :message="model.reinvestedNetValue.warning"
+          />
+          <FundNetValueChart
+            :error="model.reinvestedNetValue.error"
+            :is-loading="model.reinvestedNetValue.isLoading"
+            :model="model.reinvestedNetValue.chart"
+            :visible="model.isVisible && activeTab === 'reinvested-net-value'"
+            @retry="emit('retry', 'reinvested-net-value')"
           />
         </div>
       </t-tab-panel>

@@ -18,6 +18,7 @@ test('calculates returns without corporate actions', () => {
     [1, 1.1],
   )
   assert.deepEqual(result.issues, [])
+  assert.deepEqual(result.appliedEvents, [])
 })
 
 test('combines same-day dividends and a conversion without losing precision', () => {
@@ -35,6 +36,10 @@ test('combines same-day dividends and a conversion without losing precision', ()
     ),
   )
   assert.equal(result.points[1]?.reinvestedNetValue, 1)
+  assert.deepEqual(result.appliedEvents, [
+    { date: '2026-01-05', type: 'dividend' },
+    { date: '2026-01-05', type: 'conversion' },
+  ])
 })
 
 test('ignores invalid net values and reports them', () => {
@@ -80,6 +85,7 @@ test('ignores invalid and unmatched corporate actions', () => {
     ],
   )
   assert.equal(result.points[1]?.reinvestedNetValue, 1.1)
+  assert.deepEqual(result.appliedEvents, [])
 })
 
 test('ignores corporate actions on the first valid net-value date', () => {
@@ -94,6 +100,7 @@ test('ignores corporate actions on the first valid net-value date', () => {
     result.issues.map(({ code }) => code),
     ['first-date-dividend', 'first-date-conversion'],
   )
+  assert.deepEqual(result.appliedEvents, [])
 })
 
 test('ignores every valid conversion when a date has duplicates', () => {
@@ -109,6 +116,29 @@ test('ignores every valid conversion when a date has duplicates', () => {
   )
   assert.equal(result.points[1]?.reinvestedNetValue, 0.5)
   assert.deepEqual(result.issues, [{ code: 'duplicate-conversion', count: 2, date: '2026-01-05' }])
+  assert.deepEqual(result.appliedEvents, [])
+})
+
+test('marks a valid action when invalid records share its date', () => {
+  const result = calculateFundReinvestedNav(
+    history([
+      ['2026-01-02', 1],
+      ['2026-01-05', 0.9],
+    ]),
+    distribution(
+      [['2026-01-05', 2]],
+      [
+        ['2026-01-05', null],
+        ['2026-01-05', 1],
+      ],
+    ),
+  )
+
+  assert.deepEqual(result.appliedEvents, [
+    { date: '2026-01-05', type: 'dividend' },
+    { date: '2026-01-05', type: 'conversion' },
+  ])
+  assert.deepEqual(result.issues, [{ code: 'invalid-dividend', count: 1, date: '2026-01-05' }])
 })
 
 test('rejects histories for different funds', () => {
