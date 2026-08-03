@@ -50,11 +50,12 @@ function trendClass(item: IndexQuoteViewModel) {
           'grid-cols-5': capacity === 5,
           'grid-cols-6': capacity === 6,
           'grid-cols-7': capacity === 7,
+          'grid-cols-8': capacity === 8,
         }"
         :style="{ height: `${100 / Math.max(1, renderedPages.length)}%` }"
       >
-        <div v-for="item in page" :key="item.id">
-          <div class="text-sm">{{ item.name }}</div>
+        <div v-for="item in page" :key="item.id" class="min-w-0">
+          <div class="truncate text-sm" :title="item.name">{{ item.name }}</div>
           <div class="flex flex-row items-baseline space-x-2 font-mono">
             <span class="whitespace-nowrap text-base tabular-nums" :class="trendClass(item)">
               {{ item.priceText }}
