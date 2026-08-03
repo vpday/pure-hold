@@ -29,6 +29,41 @@ export default defineConfig({
         display: 'standalone',
         theme_color: '#ffffff',
         background_color: '#ffffff',
+        icons: [
+          {
+            src: 'icon-120.png',
+            sizes: '120x120',
+            type: 'image/png',
+          },
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+          {
+            src: 'icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+          },
+          {
+            src: 'maskable_icon-120.png',
+            sizes: '120x120',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: 'maskable_icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: 'maskable_icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
