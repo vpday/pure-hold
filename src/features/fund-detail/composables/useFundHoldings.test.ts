@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { ref } from 'vue'
 
+import type { FundAssetAllocation } from '@/domains/funds/models/fundAssetAllocation.ts'
 import type { FundHoldingQuote } from '@/domains/funds/models/fundHoldingQuote.ts'
 import type { FundHoldingsDisclosure } from '@/domains/funds/models/fundHoldingsDisclosure.ts'
 import { useFundHoldings } from './useFundHoldings.ts'
@@ -94,6 +95,7 @@ test('polls only visible positions and avoids overlapping quote requests', async
     clearInterval: timer.clearInterval,
     loadDates: async () => ['2026-06-30'],
     loadDisclosure: async (_, date) => disclosure(date),
+    loadAssetAllocation: async (fundCode) => allocation(fundCode, 1),
     loadQuotes: async () => {
       quoteCalls += 1
       return quoteCalls === 1 ? quotes() : pending.promise
@@ -163,6 +165,149 @@ test('keeps disclosure on quote failure and clears the warning after retry', asy
   session.close()
 })
 
+test('loads allocation only on first selection and reuses its session cache after reopen', async () => {
+  const allocationCalls: string[] = []
+  const session = useFundHoldings(ref(true), {
+    loadAssetAllocation: async (fundCode) => {
+      allocationCalls.push(fundCode)
+      return allocation(fundCode, allocationCalls.length)
+    },
+    loadDates: async () => ['2026-06-30'],
+    loadDisclosure: async (_, date) => disclosure(date),
+    loadQuotes: async () => quotes(),
+  })
+
+  session.open('161725')
+  await session.activate()
+  assert.deepEqual(allocationCalls, [])
+  session.selectView('allocation')
+  await nextTask()
+  assert.deepEqual(allocationCalls, ['161725'])
+  assert.equal(session.model.value.allocation.chart?.series[0].values[0], 1)
+  assert.equal(session.model.value.allocation.visible, true)
+
+  session.selectView('positions')
+  session.selectView('allocation')
+  await nextTask()
+  assert.equal(allocationCalls.length, 1)
+
+  session.close()
+  session.open('161725')
+  await session.activate()
+  session.selectView('allocation')
+  await nextTask()
+  assert.equal(allocationCalls.length, 1)
+  assert.equal(session.model.value.allocation.chart?.series[0].values[0], 1)
+  session.close()
+})
+
+test('refreshes allocation only while its visible tab is active and retains stale data', async () => {
+  const visible = ref(true)
+  let allocationCalls = 0
+  let shouldFail = false
+  const session = useFundHoldings(visible, {
+    loadAssetAllocation: async (fundCode) => {
+      allocationCalls += 1
+      if (shouldFail) throw new Error('offline')
+      return allocation(fundCode, allocationCalls)
+    },
+    loadDates: async () => ['2026-06-30'],
+    loadDisclosure: async (_, date) => disclosure(date),
+    loadQuotes: async () => quotes(),
+  })
+
+  session.open('161725')
+  await session.activate()
+  await session.refresh()
+  assert.equal(allocationCalls, 0)
+
+  session.selectView('allocation')
+  await nextTask()
+  assert.equal(allocationCalls, 1)
+  shouldFail = true
+  await session.refresh()
+  assert.equal(allocationCalls, 2)
+  assert.equal(session.model.value.allocation.chart?.series[0].values[0], 1)
+  assert.equal(session.model.value.allocation.warning, '资产配置刷新失败，当前显示上次数据')
+
+  session.selectView('positions')
+  await session.refresh()
+  assert.equal(allocationCalls, 2)
+  session.selectView('allocation')
+  await nextTask()
+  visible.value = false
+  await nextMicrotask()
+  await session.refresh()
+  assert.equal(allocationCalls, 2)
+  assert.equal(session.model.value.allocation.visible, false)
+
+  visible.value = true
+  shouldFail = false
+  await nextMicrotask()
+  await session.refresh()
+  assert.equal(allocationCalls, 3)
+  assert.equal(session.model.value.allocation.warning, '')
+  assert.equal(session.model.value.allocation.chart?.series[0].values[0], 3)
+  session.close()
+})
+
+test('routes allocation retry and aborts a pending request on close', async () => {
+  const requests: {
+    readonly pending: ReturnType<typeof deferred<FundAssetAllocation>>
+    readonly signal?: AbortSignal
+  }[] = []
+  const session = useFundHoldings(ref(true), {
+    loadAssetAllocation: (_fundCode, signal) => {
+      const pending = deferred<FundAssetAllocation>()
+      requests.push({ pending, signal })
+      return pending.promise
+    },
+    loadDates: async () => ['2026-06-30'],
+    loadDisclosure: async (_, date) => disclosure(date),
+    loadQuotes: async () => quotes(),
+  })
+
+  session.open('161725')
+  await session.activate()
+  session.selectView('allocation')
+  await nextMicrotask()
+  assert.equal(requests.length, 1)
+  requests[0]?.pending.resolve(allocation('161725', 1))
+  await nextTask()
+
+  session.open('000001')
+  await session.activate()
+  session.selectView('allocation')
+  await nextMicrotask()
+  assert.equal(requests.length, 2)
+  session.close()
+  assert.equal(requests[1]?.signal?.aborted, true)
+})
+
+test('exposes an initial allocation failure and retries through the holdings session', async () => {
+  let attempt = 0
+  const session = useFundHoldings(ref(true), {
+    loadAssetAllocation: async (fundCode) => {
+      attempt += 1
+      if (attempt === 1) throw new Error('offline')
+      return allocation(fundCode, attempt)
+    },
+    loadDates: async () => ['2026-06-30'],
+    loadDisclosure: async (_, date) => disclosure(date),
+    loadQuotes: async () => quotes(),
+  })
+
+  session.open('161725')
+  await session.activate()
+  session.selectView('allocation')
+  await nextTask()
+  assert.equal(session.model.value.allocation.error, '资产配置加载失败，请稍后重试')
+  await session.retryAllocation()
+  assert.equal(session.model.value.allocation.error, '')
+  assert.equal(session.model.value.allocation.chart?.series[0].values[0], 2)
+  session.close()
+})
+
 function disclosure(reportDate: string): FundHoldingsDisclosure {
   return {
     bonds: [{ code: '118034', market: 'sh', name: '晶能转债', netAssetPercent: 1 }],
@@ -188,6 +333,21 @@ function quotes(): readonly FundHoldingQuote[] {
     { code: '600519', dailyChangePercent: 1, latestPrice: 1400, market: 'sh' },
     { code: '118034', dailyChangePercent: -1, latestPrice: 118.8, market: 'sh' },
   ]
+}
+
+function allocation(fundCode: string, value: number): FundAssetAllocation {
+  return {
+    fundCode,
+    points: [
+      {
+        bondPercent: value,
+        cashPercent: value,
+        date: '2026-06-30',
+        netAssetValue: value,
+        stockPercent: value,
+      },
+    ],
+  }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

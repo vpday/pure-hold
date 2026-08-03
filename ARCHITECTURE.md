@@ -27,6 +27,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 累计收益 API | `fetchTiantianFundCumulativeReturns`                   | 天天基金历史累计收益适配器的领域入口            |
 | 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口      |
 | 基金资料 API | `fetchTiantianFundBasicInfo`                           | 天天基金基础资料适配器的领域入口                |
+| 资产配置 API | `fetchTiantianFundAssetAllocation`                     | 天天基金资产配置历史适配器的领域入口            |
 | 基金持久化   | `loadFundState` / `saveFundState`                      | 版本化基金状态的加载、验证、恢复和保存          |
 | 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态               |
 | PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本              |
@@ -193,6 +194,21 @@ FundBasicInfo 中成对归一化的跟踪指数代码与名称
 
 累计收益按基金、参考指数和范围组合缓存，只存在于 `FundDetailEntry` 生命周期内；切换选择时保留上一次成功数据，失败与基础资料错误独立展示。历史序列不进入 Funds Store、localStorage 或 Service Worker，协议字段、请求参数和空值处理也不进入 Vue 组件。
 
+基金详情资产配置的数据流是：
+
+```text
+FundDetailEntry 当前基金代码
+  -> useFundHoldings 编排持仓 tab、章节可见性和全局刷新
+  -> useFundAssetAllocation 首次切换资产配置时激活
+  -> fetchTiantianFundAssetAllocation(top=20)
+  -> FundAssetAllocationTop DTO 记录级校验、日期去重与升序
+  -> FundAssetAllocation 会话成功缓存、取消与过期响应隔离
+  -> toFundAssetAllocationChartModel
+  -> FundAssetAllocationChart 三柱一线双轴图
+```
+
+资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 仍匹配 `src/sw.ts` 现有的 `fundcomapi.tiantianfunds.com/mm/**` 通用规则，但每次公共参数生成随机 `deviceid`，因此精确 URL 缓存通常不能跨请求命中并会共享 100 条容量；本数据的稳定会话复用依赖 Feature 内存缓存。
+
 基金详情净值历史与数据指标的数据流是：
 
 ```text
@@ -240,6 +256,7 @@ FundDetailEntry 当前基金代码
 - `calculateFundReinvestedNav`、`calculateFundReturnMetrics` 与 `calculateReturnMetrics` 隐藏复权公式、异常记录处理、通用正值序列、UTC 日期端点和 CAGR 口径。
 - `calculateRollingFundRiskMetrics` 隐藏滚动窗口、252期年化、路径质量门槛和五项风险指标；跨市场日历、回撤峰谷和修复指标不在当前 seam 内。
 - `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、风险参数会话、内存重算、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
+- `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
@@ -278,7 +295,7 @@ FundDetailEntry 当前基金代码
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
 
-实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料、净值历史和分红送配不进入 Service Worker 缓存。详情基础资料、累计收益、详情级基金历史数据源、全收益指数数据源、风险参数和风险计算输入的会话缓存也不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
+实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料、净值历史和分红送配不进入 Service Worker 缓存。资产配置 endpoint 是现有 `fundcomapi.tiantianfunds.com/mm/**` 通用规则的例外，但随机 `deviceid` 限制了精确 URL 命中。详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、风险参数和风险计算输入的会话缓存不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
 
 ### UI 与响应式
 
@@ -286,7 +303,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 纯 CSS 布局优先使用 Tailwind 响应式类。只有 Drawer/Collapse 分流、轮播容量等 JavaScript 行为使用 `useBreakpoints`。该 composable 读取 Tailwind v4 的 `--breakpoint-*` CSS 变量，使 CSS 与 JavaScript 共用同一断点来源。
 
-基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。业绩表现保留“累计收益”“净值走势”“复权净值”“分红送配”四个内层 Tab；三个图表视图各自保存日期范围，可选择的参考指数只属于累计收益。数据指标固定比较沪深 300 全收益指数，不提供下拉，包含“阶段涨幅”“季/年度涨幅”“年化收益”“风险指标”四个内层 Tab；前三个收益表继续以时间为行，以基金收益、基准收益和相对超额为列。风险表按选中的近1/2/3/5年或成立以来窗口展示基金、基准和中性差值，参数区允许换行，表格在窄屏局部横向滚动。累计收益图保留三条收益曲线、摘要和最大回撤；净值走势图展示单位净值和累计净值，复权净值图展示单位净值和绝对复权净值，并在滚动离开章节后重新显示时随容器 resize。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。持仓构成和成交记录尚未实现时只显示紧凑占位。每次打开详情时，章节回到基金概览，业绩内层 Tab 回到累计收益且三个图表范围回到近 6 月，指标内层 Tab 回到阶段涨幅；风险参数在当前应用会话内跨基金和详情开关保留，刷新页面后恢复默认值。
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。业绩表现保留“累计收益”“净值走势”“复权净值”“分红送配”四个内层 Tab；三个图表视图各自保存日期范围，可选择的参考指数只属于累计收益。数据指标固定比较沪深 300 全收益指数，不提供下拉，包含“阶段涨幅”“季/年度涨幅”“年化收益”“风险指标”四个内层 Tab；前三个收益表继续以时间为行，以基金收益、基准收益和相对超额为列。风险表按选中的近1/2/3/5年或成立以来窗口展示基金、基准和中性差值，参数区允许换行，表格在窄屏局部横向滚动。累计收益图保留三条收益曲线、摘要和最大回撤；净值走势图展示单位净值和累计净值，复权净值图展示单位净值和绝对复权净值，并在滚动离开章节后重新显示时随容器 resize。持仓构成包含“持仓信息”和“资产配置”两个内层 Tab；资产配置使用股票、债券、现金占比柱形与资产净值折线的双轴图，并在固定画布中平移历史窗口。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。成交记录尚未实现时只显示紧凑占位。每次打开详情时，章节回到基金概览，业绩内层 Tab 回到累计收益且三个图表范围回到近 6 月，指标内层 Tab 回到阶段涨幅，持仓内层 Tab 回到持仓信息；风险参数在当前应用会话内跨基金和详情开关保留，刷新页面后恢复默认值。
 
 ### 时间和行情语义
 

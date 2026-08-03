@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableProps } from 'tdesign-vue-next'
 
+import FundAssetAllocationChart from './FundAssetAllocationChart.vue'
 import type {
   FundBondHoldingRow,
   FundHoldingsSectionModel,
@@ -11,6 +12,7 @@ import type {
 
 defineProps<{ model: FundHoldingsSectionModel }>()
 const emit = defineEmits<{
+  retryAllocation: []
   retryHoldings: []
   retryQuotes: []
   selectReportDate: [reportDate: string]
@@ -192,7 +194,16 @@ function trendClass(trend: FundHoldingsTrend): string {
             </template>
           </template>
         </div>
-        <p v-else class="allocation-placeholder">功能后续开发</p>
+        <div v-else class="pt-4">
+          <FundAssetAllocationChart
+            :error="model.allocation.error"
+            :is-loading="model.allocation.isLoading"
+            :model="model.allocation.chart"
+            :visible="model.allocation.visible"
+            :warning="model.allocation.warning"
+            @retry="emit('retryAllocation')"
+          />
+        </div>
       </t-tab-panel>
     </t-tabs>
   </div>
@@ -231,9 +242,5 @@ function trendClass(trend: FundHoldingsTrend): string {
 
 .holding-summary {
   @apply flex flex-wrap justify-between mt-4 text-xs text-(--td-text-color-placeholder);
-}
-
-.allocation-placeholder {
-  @apply mt-4 rounded-md bg-(--td-bg-color-secondarycontainer) px-4 py-3 text-sm text-(--td-text-color-secondary);
 }
 </style>

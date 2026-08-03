@@ -50,7 +50,7 @@ watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, b
 })
 watch([detail.visible, activeSection], ([visible, section]) => {
   if (visible && (section === 'performance' || section === 'metrics')) void activateMetrics()
-  if (visible && section === 'holdings') void holdings.activate()
+  if (visible && (section === 'metrics' || section === 'holdings')) void holdings.activate()
 })
 
 let unsubscribeRefresh: (() => void) | undefined
@@ -163,6 +163,7 @@ defineExpose({ open })
     <template #holdings>
       <FundHoldingsSection
         :model="holdings.model.value"
+        @retry-allocation="holdings.retryAllocation"
         @retry-holdings="holdings.retryHoldings"
         @retry-quotes="holdings.retryQuotes"
         @select-report-date="holdings.selectReportDate"

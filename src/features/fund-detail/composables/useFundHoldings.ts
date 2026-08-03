@@ -10,7 +10,9 @@ import { fetchTencentFundHoldingQuotes } from '@/domains/funds/services/tencent/
 import { fetchTiantianFundHoldingDates } from '@/domains/funds/services/tiantian/fetchTiantianFundHoldingDates.ts'
 import { fetchTiantianFundHoldingsDisclosure } from '@/domains/funds/services/tiantian/fetchTiantianFundHoldingsDisclosure.ts'
 import type { FundHoldingsView } from '../models/fundHoldingsSectionModel.ts'
+import { toFundAssetAllocationChartModel } from '../presenters/toFundAssetAllocationChartModel.ts'
 import { toFundHoldingsSectionModel } from '../presenters/toFundHoldingsSectionModel.ts'
+import { type LoadFundAssetAllocation, useFundAssetAllocation } from './useFundAssetAllocation.ts'
 
 type LoadHoldingDates = (fundCode: string, signal?: AbortSignal) => Promise<readonly string[]>
 type LoadHoldingsDisclosure = (
@@ -26,6 +28,7 @@ type TimerHandle = ReturnType<typeof setInterval>
 
 export interface UseFundHoldingsOptions {
   readonly clearInterval?: (handle: TimerHandle) => void
+  readonly loadAssetAllocation?: LoadFundAssetAllocation
   readonly loadDates?: LoadHoldingDates
   readonly loadDisclosure?: LoadHoldingsDisclosure
   readonly loadQuotes?: LoadHoldingQuotes
@@ -41,6 +44,7 @@ export function useFundHoldings(
   const loadQuotes = options.loadQuotes ?? fetchTencentFundHoldingQuotes
   const scheduleInterval = options.setInterval ?? globalThis.setInterval
   const clearScheduledInterval = options.clearInterval ?? globalThis.clearInterval
+  const assetAllocation = useFundAssetAllocation(options.loadAssetAllocation)
   const currentCode = ref<string>()
   const isActivated = ref(false)
   const activeView = ref<FundHoldingsView>('positions')
@@ -65,8 +69,8 @@ export function useFundHoldings(
   let quotesGeneration = 0
   let pollingTimer: TimerHandle | undefined
 
-  const model = computed(() =>
-    toFundHoldingsSectionModel({
+  const model = computed(() => {
+    const holdings = toFundHoldingsSectionModel({
       activeView: activeView.value,
       disclosure: disclosure.value,
       holdingsError: holdingsError.value,
@@ -78,8 +82,20 @@ export function useFundHoldings(
       quoteWarning: quoteWarning.value,
       reportDates: reportDates.value,
       selectedReportDate: selectedReportDate.value,
-    }),
-  )
+    })
+    return {
+      ...holdings,
+      allocation: {
+        chart: assetAllocation.data.value
+          ? toFundAssetAllocationChartModel(assetAllocation.data.value)
+          : undefined,
+        error: assetAllocation.error.value,
+        isLoading: assetAllocation.isLoading.value,
+        visible: toValue(isSectionVisible) && activeView.value === 'allocation',
+        warning: assetAllocation.warning.value,
+      },
+    }
+  })
 
   watch(
     () => toValue(isSectionVisible),
@@ -93,11 +109,13 @@ export function useFundHoldings(
   function open(fundCode: string): void {
     resetSession()
     currentCode.value = fundCode
+    assetAllocation.open(fundCode)
   }
 
   function close(): void {
     resetSession()
     currentCode.value = undefined
+    assetAllocation.close()
   }
 
   async function activate(): Promise<void> {
@@ -255,6 +273,7 @@ export function useFundHoldings(
     if (view === 'allocation') {
       stopPolling()
       quotesController?.abort()
+      void assetAllocation.activate()
       return
     }
     if (toValue(isSectionVisible) && disclosure.value) void refreshQuotes()
@@ -263,8 +282,17 @@ export function useFundHoldings(
 
   async function refresh(): Promise<void> {
     if (!currentCode.value || !isActivated.value) return
+    const allocationRefresh =
+      toValue(isSectionVisible) && activeView.value === 'allocation'
+        ? assetAllocation.refresh()
+        : Promise.resolve()
     const datesLoaded = await loadReportDates(true)
     if (!datesLoaded && selectedReportDate.value) await loadSelectedDisclosure(true)
+    await allocationRefresh
+  }
+
+  async function retryAllocation(): Promise<void> {
+    await assetAllocation.retry()
   }
 
   async function retryHoldings(): Promise<void> {
@@ -357,6 +385,7 @@ export function useFundHoldings(
     model,
     open,
     refresh,
+    retryAllocation,
     retryHoldings,
     retryQuotes,
     selectReportDate,

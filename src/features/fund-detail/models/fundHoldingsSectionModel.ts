@@ -1,5 +1,15 @@
+import type { FundAssetAllocationChartModel } from './fundAssetAllocationChart.ts'
+
 export type FundHoldingsView = 'positions' | 'allocation'
 export type FundHoldingsTrend = 'down' | 'neutral' | 'unknown' | 'up'
+
+export interface FundAssetAllocationPanelModel {
+  readonly chart?: FundAssetAllocationChartModel
+  readonly error: string
+  readonly isLoading: boolean
+  readonly visible: boolean
+  readonly warning: string
+}
 
 export interface FundHoldingsReportDateOption {
   readonly label: string
@@ -30,6 +40,7 @@ export interface FundBondHoldingRow {
 
 export interface FundHoldingsSectionModel {
   readonly activeView: FundHoldingsView
+  readonly allocation: FundAssetAllocationPanelModel
   readonly bondTotalLabel: string
   readonly bondTotalText: string
   readonly bonds: readonly FundBondHoldingRow[]

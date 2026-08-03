@@ -60,6 +60,12 @@ export function toFundHoldingsSectionModel(
 
   return {
     activeView: state.activeView,
+    allocation: {
+      error: '',
+      isLoading: false,
+      visible: false,
+      warning: '',
+    },
     bondTotalLabel: `前 ${bonds.length} 只持仓占比合计`,
     bondTotalText: formatPercent(sumPercent(state.disclosure?.bonds ?? [])),
     bonds,
