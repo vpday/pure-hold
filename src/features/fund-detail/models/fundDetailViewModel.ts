@@ -25,6 +25,8 @@ export interface FundDetailViewModel {
   readonly dailyChangePercentText: string
   readonly dailyChangeTrend: FundDetailTrend
   readonly establishedDateText: string
+  readonly estimatedAtTimeText: string
+  readonly estimatedNavText: string
   readonly fundType: string
   readonly morningstarRating: number | null
   readonly name: string

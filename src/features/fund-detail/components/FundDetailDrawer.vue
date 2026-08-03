@@ -87,6 +87,15 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           >
             <h2 id="fund-detail-overview-title" class="section-title">基金概览</h2>
             <div class="mt-4 grid grid-cols-3 lg:grid-cols-5 lg:gap-5">
+              <div v-if="viewModel.estimatedNavText !== '--'">
+                <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
+                <p class="nav-value">
+                  {{ viewModel.estimatedNavText }}
+                </p>
+                <p class="font-mono text-xs tabular-nums">
+                  {{ viewModel.estimatedAtTimeText }}
+                </p>
+              </div>
               <div>
                 <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
                 <p class="nav-value">
@@ -103,6 +112,9 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                   :class="trendClass(viewModel.dailyChangeTrend)"
                 >
                   {{ viewModel.dailyChangePercentText }}
+                </p>
+                <p class="font-mono text-xs tabular-nums">
+                  {{ viewModel.navDateText }}
                 </p>
               </div>
               <div>

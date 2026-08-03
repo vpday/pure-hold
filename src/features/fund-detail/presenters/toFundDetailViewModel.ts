@@ -1,5 +1,6 @@
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
+import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
   FundDetailTrend,
   FundDetailViewModel,
@@ -21,7 +22,9 @@ export function toFundDetailViewModel(
     companyName: basicInfo?.companyName ?? '--',
     dailyChangePercentText: formatPercent(snapshot.dailyChangePercent),
     dailyChangeTrend: toTrend(snapshot.dailyChangePercent),
-    establishedDateText: formatFullDate(basicInfo?.establishedDate),
+    establishedDateText: formatRowDate(basicInfo?.establishedDate ?? '--'),
+    estimatedAtTimeText: formatRowDate(snapshot.estimatedAt ?? '--'),
+    estimatedNavText: formatNumber(snapshot.estimatedNav, 4),
     fundType: basicInfo?.fundType ?? '--',
     morningstarRating: basicInfo?.morningstarRating ?? null,
     name: snapshot.name,
@@ -134,10 +137,6 @@ function formatNetAssets(value: number | null | undefined): string {
 function formatCompactDate(value: string | null | undefined): string {
   const match = value ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null
   return match?.[2] && match[3] ? `${match[2]}-${match[3]}` : '--'
-}
-
-function formatFullDate(value: string | null | undefined): string {
-  return value ?? '--'
 }
 
 function toTrend(value: number | null): FundDetailTrend {

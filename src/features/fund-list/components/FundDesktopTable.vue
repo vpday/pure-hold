@@ -2,6 +2,7 @@
 import { computed, h, ref } from 'vue'
 import type { DropdownProps, PrimaryTableProps } from 'tdesign-vue-next'
 
+import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
   FundReturnField,
   FundRowViewModel,
@@ -134,26 +135,6 @@ function handleDeleteConfirmVisibleChange(code: string, visible: boolean): void 
 function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
   const formatted = formatRowDate(rowDate, headerDate)
   return formatted !== '--' && formatted !== headerDate
-}
-
-function formatRowDate(rowDate: string, headerDate: string): string {
-  if (rowDate === '--') {
-    return rowDate
-  }
-  const match = /^(\d{4})[-/](\d{2})[-/](\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(rowDate)
-  if (!match?.[2] || !match[3]) {
-    return rowDate
-  }
-  if (/^\d{2}:\d{2}$/.test(headerDate) && match[4] && match[5]) {
-    return `${match[4]}:${match[5]}`
-  }
-  if (/^\d{2}-\d{2} \d{2}:\d{2}$/.test(headerDate) && match[4] && match[5]) {
-    return `${match[2]}-${match[3]} ${match[4]}:${match[5]}`
-  }
-  if (/^\d{2}-\d{2}$/.test(headerDate)) {
-    return `${match[2]}-${match[3]}`
-  }
-  return rowDate
 }
 </script>
 

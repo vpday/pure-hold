@@ -9,6 +9,8 @@ test('formats snapshot quotes and complete basic information', () => {
   const snapshot = {
     ...createTestFundSnapshot('161725', '招商中证白酒指数(LOF)A'),
     dailyChangePercent: -1.2,
+    estimatedAt: '2026-08-03 15:00',
+    estimatedNav: 1.25678,
     nav: 1.23456,
     navDate: '2026-07-28',
     returns: {
@@ -24,6 +26,8 @@ test('formats snapshot quotes and complete basic information', () => {
     dailyChangePercentText: '-1.20%',
     dailyChangeTrend: 'down',
     establishedDateText: '2015-05-27',
+    estimatedAtTimeText: '15:00',
+    estimatedNavText: '1.2568',
     fundType: '指数型-股票',
     morningstarRating: 5,
     name: '招商中证白酒指数(LOF)A',
@@ -89,6 +93,8 @@ test('uses placeholders and preserves unrecognized full dates', () => {
 
   assert.equal(viewModel.establishedDateText, '2015年5月27日')
   assert.equal(viewModel.netAssetsDateText, '--')
+  assert.equal(viewModel.estimatedAtTimeText, '--')
+  assert.equal(viewModel.estimatedNavText, '--')
   assert.equal(viewModel.navDateText, '--')
   assert.equal(viewModel.navText, '--')
   assert.equal(viewModel.trackingErrorText, '--')
