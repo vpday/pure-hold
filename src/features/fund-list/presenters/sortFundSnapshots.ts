@@ -35,6 +35,8 @@ function sortableValue(snapshot: FundSnapshot, field: FundSortField): number | n
   switch (field) {
     case 'dailyChangePercent':
       return snapshot.dailyChangePercent
+    case 'estimatedChangePercent':
+      return snapshot.estimatedChangePercent
     case 'estimatedNav':
       return snapshot.estimatedNav
     case 'nav':

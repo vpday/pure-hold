@@ -48,13 +48,13 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
     { cell: 'name-cell', colKey: 'name', title: '基金名称', fixed: 'left', width: 180 },
     {
       cell: 'estimated-nav-cell',
-      colKey: 'estimatedNav',
+      colKey: 'estimatedChangePercent',
       sorter: true,
       title: () => renderQuoteTitle('净值估算', estimatedAt),
     },
     {
       cell: 'nav-cell',
-      colKey: 'nav',
+      colKey: 'dailyChangePercent',
       sorter: true,
       title: () => renderQuoteTitle('单位净值', navDate),
     },
@@ -140,7 +140,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 
 <template>
   <t-primary-table
-    :key="`${estimatedAt}:${navDate}`"
+    :key="`${estimatedAt}:${navDate}:${sort?.sortBy}:${sort?.descending}`"
     :columns="columns"
     :data="rows"
     :loading="loading"

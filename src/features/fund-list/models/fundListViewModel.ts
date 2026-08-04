@@ -12,7 +12,12 @@ export type FundReturnField =
   | 'twoYears'
   | 'yearToDate'
 
-export type FundSortField = 'dailyChangePercent' | 'estimatedNav' | 'nav' | FundReturnField
+export type FundSortField =
+  | 'dailyChangePercent'
+  | 'estimatedChangePercent'
+  | 'estimatedNav'
+  | 'nav'
+  | FundReturnField
 
 export interface FundSort {
   readonly descending: boolean

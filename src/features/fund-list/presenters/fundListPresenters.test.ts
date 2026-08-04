@@ -40,22 +40,28 @@ test('fund presenter keeps signs, missing placeholders, all return fields and tr
 test('fund sorting is stable, keeps missing values last and null restores default order', () => {
   const base = createTestFundSnapshot('161726')
   const snapshots = [
-    { ...base, code: 'a', estimatedNav: 2 },
-    { ...base, code: 'b', estimatedNav: null },
-    { ...base, code: 'c', estimatedNav: 1 },
-    { ...base, code: 'd', estimatedNav: 2 },
+    { ...base, code: 'a', dailyChangePercent: 1, estimatedChangePercent: 2 },
+    { ...base, code: 'b', dailyChangePercent: 3, estimatedChangePercent: null },
+    { ...base, code: 'c', dailyChangePercent: null, estimatedChangePercent: 1 },
+    { ...base, code: 'd', dailyChangePercent: 2, estimatedChangePercent: 2 },
   ]
   assert.deepEqual(
-    sortFundSnapshots(snapshots, { descending: false, sortBy: 'estimatedNav' }).map(
+    sortFundSnapshots(snapshots, { descending: false, sortBy: 'estimatedChangePercent' }).map(
       (item) => item.code,
     ),
     ['c', 'a', 'd', 'b'],
   )
   assert.deepEqual(
-    sortFundSnapshots(snapshots, { descending: true, sortBy: 'estimatedNav' }).map(
+    sortFundSnapshots(snapshots, { descending: true, sortBy: 'estimatedChangePercent' }).map(
       (item) => item.code,
     ),
     ['a', 'd', 'c', 'b'],
+  )
+  assert.deepEqual(
+    sortFundSnapshots(snapshots, { descending: false, sortBy: 'dailyChangePercent' }).map(
+      (item) => item.code,
+    ),
+    ['a', 'd', 'b', 'c'],
   )
   assert.deepEqual(
     sortFundSnapshots(snapshots, null).map((item) => item.code),
