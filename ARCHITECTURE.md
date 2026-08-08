@@ -8,31 +8,34 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 ## Entry Points
 
-| 要找什么     | 从哪里开始                                             | 说明                                            |
-| ------------ | ------------------------------------------------------ | ----------------------------------------------- |
-| 客户端启动   | `src/main.ts`                                          | 加载样式、注册 Pinia、挂载 Vue 应用             |
-| 应用壳       | `src/App.vue`                                          | 组合全局 Provider、页头、内容区、页脚和功能入口 |
-| 指数概览     | `src/features/index-overview/IndexOverviewSection.vue` | 指数业务的应用级入口                            |
-| 指数状态     | `useIndexQuotesStore`                                  | 行情刷新、合并、健康状态和生命周期              |
-| 指数行情     | `fetchEastmoneyIndexQuotes`                            | 东方财富行情适配器的领域入口                    |
-| 市场状态     | `fetchTencentMarketStatus`                             | 腾讯市场状态适配器的领域入口                    |
-| 页面模型     | `toIndexOverviewViewModel`                             | 领域对象到分组展示对象的转换点                  |
-| 基金列表     | `src/features/fund-list/FundListSection.vue`           | 基金分类、排序、展示、删除和分组管理入口        |
-| 基金详情     | `src/features/fund-detail/FundDetailEntry.vue`         | 详情 Drawer、基础资料与历史图表会话入口         |
-| 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口      |
-| 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                  |
-| 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件        |
-| 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化          |
-| 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                |
-| 累计收益 API | `fetchTiantianFundCumulativeReturns`                   | 天天基金历史累计收益适配器的领域入口            |
-| 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口      |
-| 基金资料 API | `fetchTiantianFundBasicInfo`                           | 天天基金基础资料适配器的领域入口                |
-| 资产配置 API | `fetchTiantianFundAssetAllocation`                     | 天天基金资产配置历史适配器的领域入口            |
-| 基金持久化   | `loadFundState` / `saveFundState`                      | 版本化基金状态的加载、验证、恢复和保存          |
-| 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态               |
-| PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本              |
-| PWA 缓存     | `src/sw.ts`                                            | 预缓存、更新消息和允许缓存的网络请求            |
-| 构建配置     | `vite.config.ts`                                       | Vite 插件、PWA、自动导入和分包                  |
+| 要找什么     | 从哪里开始                                             | 说明                                                          |
+| ------------ | ------------------------------------------------------ | ------------------------------------------------------------- |
+| 客户端启动   | `src/main.ts`                                          | 加载样式、初始化天天基金 deviceid、注册 Pinia 并挂载 Vue 应用 |
+| 应用壳       | `src/App.vue`                                          | 组合全局 Provider、页头、内容区、页脚和功能入口               |
+| 指数概览     | `src/features/index-overview/IndexOverviewSection.vue` | 指数业务的应用级入口                                          |
+| 指数状态     | `useIndexQuotesStore`                                  | 行情刷新、合并、健康状态和生命周期                            |
+| 指数行情     | `fetchEastmoneyIndexQuotes`                            | 东方财富行情适配器的领域入口                                  |
+| 市场状态     | `fetchTencentMarketStatus`                             | 腾讯市场状态适配器的领域入口                                  |
+| 页面模型     | `toIndexOverviewViewModel`                             | 领域对象到分组展示对象的转换点                                |
+| 基金列表     | `src/features/fund-list/FundListSection.vue`           | 基金分类、排序、展示、删除和分组管理入口                      |
+| 基金详情     | `src/features/fund-detail/FundDetailEntry.vue`         | 详情 Drawer、基础资料与历史图表会话入口                       |
+| 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口                    |
+| 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                                |
+| 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件                      |
+| 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化                        |
+| 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                              |
+| 累计收益 API | `fetchTiantianFundCumulativeReturns`                   | 天天基金历史累计收益适配器的领域入口                          |
+| 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口                    |
+| 基金资料 API | `fetchTiantianFundBasicInfo`                           | 天天基金基础资料适配器的领域入口                              |
+| 资产配置 API | `fetchTiantianFundAssetAllocation`                     | 天天基金资产配置历史适配器的领域入口                          |
+| 基金设置模型 | `FundSettings`                                         | 基金代码、名称、分组、持仓等可跨页面恢复的设置                |
+| 基金持久化   | `loadFundSettings` / `saveFundSettings`                | 版本化基金设置的加载、验证、恢复和保存                        |
+| 基金行情刷新 | `fetchTiantianFundSnapshots`                           | 天天基金批量快照、缓存来源和实际数据时间                      |
+| 天天基金标识 | `initializeTiantianDeviceId` / `getTiantianDeviceId`   | 页面会话内稳定的天天基金专用 deviceid                         |
+| 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态                             |
+| PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本                            |
+| PWA 缓存     | `src/sw.ts`                                            | 预缓存、更新消息和允许缓存的网络请求                          |
+| 构建配置     | `vite.config.ts`                                       | Vite 插件、PWA、自动导入和分包                                |
 
 ## 架构选择
 
@@ -66,9 +69,13 @@ EastmoneyIndexQuoteDto
 
 ### Pinia 与 PWA 职责正交
 
-Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存基金状态，Service Worker 不替代 Vue 状态管理或领域持久化。
+Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存 `FundSettings`，Service Worker 不替代 Vue 状态管理或领域持久化。
 
-实时指数行情、基金搜索和基金实时行情不进入 Service Worker 缓存。离线重新打开应用时，指数定义仍可展示，已保存的基金和汇总持仓从领域持久化恢复；联网后 Store 重新获取实时数据。
+`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode`。Store 启动时从设置生成运行时 `FundState`，为每只基金创建空 `FundSnapshot`；行情刷新只更新 Pinia，接口返回的新名称变化时才回写设置。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情。
+
+基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
+
+实时指数行情、基金搜索和腾讯市场状态不进入 Service Worker 缓存。天天基金的 GET `/mm`、`/mm/**` 请求和精确匹配的快照 POST 请求由 Service Worker 处理；页面未被 Service Worker 控制时仍直接使用网络。离线重新打开应用时，指数定义以及已保存的基金设置和持仓仍可展示，行情由受控页面的缓存响应更新或先显示空快照。
 
 ## Code Map
 
@@ -89,8 +96,8 @@ src/
 │  └─ funds/
 │     ├─ models/                # 基金快照、持仓、历史数据和收益计算
 │     ├─ services/eastmoney/    # 东方财富基金搜索适配器
-│     ├─ services/tiantian/     # 天天基金实时行情、资料与历史适配器
-│     ├─ services/persistence/  # 版本化基金状态持久化与恢复
+│     ├─ services/tiantian/     # 天天基金实时行情、资料、历史和请求会话适配器
+│     ├─ services/persistence/  # 版本化基金设置持久化与恢复
 │     └─ stores/                # 基金共享领域状态与刷新事务
 ├─ features/
 │  ├─ index-overview/
@@ -144,11 +151,32 @@ indexDefinitions.json
   -> FundSearch feature 会话草稿
   -> FundAddition[]
   -> useFundsStore.addFunds
-  -> 完整候选 FundState 原子持久化
+  -> 候选 FundSettings 原子持久化
   -> 只刷新本次新增代码的实时行情
 ```
 
-搜索关键词、分页、请求取消、错误、累计选择、展开状态和未提交持仓字段只存在于 `fund-search` Feature。只有最终确认后的基金、汇总持仓和空行情快照进入 Funds Store。`addFunds` 成功表示完整候选状态已经本地保存，不表示随后发起的实时行情刷新成功；刷新失败保留已添加基金、持仓和空行情快照。
+搜索关键词、分页、请求取消、错误、累计选择、展开状态和未提交持仓字段只存在于 `fund-search` Feature。只有最终确认后的基金、汇总持仓和空行情快照进入 Funds Store。`addFunds` 成功表示基金设置已经本地保存，不表示随后发起的实时行情刷新成功；刷新失败保留已添加基金、持仓和空行情快照。
+
+基金设置与行情快照的生命周期分离：
+
+```text
+pure-hold:fund-settings:v1
+  -> loadFundSettings
+  -> FundSettings（代码、名称、分组、持仓）
+  -> useFundsStore
+  -> 运行时 FundState（包含空的 snapshotsByCode）
+
+main.ts 初始化天天基金 deviceid
+  -> fetchTiantianFundSnapshots
+  -> 天天基金快照 POST
+  -> Service Worker 原始响应缓存与来源/时间响应头
+  -> parseTiantianFundResponse
+  -> FundSnapshot
+  -> Pinia snapshotsByCode
+  -> 仅名称变化时 saveFundSettings
+```
+
+快照缓存保存原始 HTTP 响应，不保存领域 DTO；DTO 校验与转换仍由 `services/tiantian/` 完成。行情数值、标签和时间戳更新不会触发 localStorage 写入。
 
 单基金编辑的数据流是：
 
@@ -160,7 +188,7 @@ FundListSection 操作入口
   -> updateFundGroupMembership 再保存分组关系
 ```
 
-两个 Store 操作分别先持久化完整候选状态再替换对应内存引用，但编辑 Feature 不把两者合并为跨步骤事务。持仓草稿全部为空时跳过持仓操作，只保存自定义分组；部分填写时仍要求完整持仓合法，清空已有持仓不会删除原记录。分组保存失败时已保存持仓保留，界面继续打开；再次提交从持仓步骤重新开始。系统派生的“全部”和“持仓”不进入分组草稿。
+两个 Store 操作分别先持久化候选基金设置再替换对应内存引用，但编辑 Feature 不把两者合并为跨步骤事务。持仓草稿全部为空时跳过持仓操作，只保存自定义分组；部分填写时仍要求完整持仓合法，清空已有持仓不会删除原记录。分组保存失败时已保存持仓保留，界面继续打开；再次提交从持仓步骤重新开始。系统派生的“全部”和“持仓”不进入分组草稿。
 
 基金详情的数据流是：
 
@@ -207,7 +235,7 @@ FundDetailEntry 当前基金代码
   -> FundAssetAllocationChart 三柱一线双轴图
 ```
 
-资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 仍匹配 `src/sw.ts` 现有的 `fundcomapi.tiantianfunds.com/mm/**` 通用规则，但每次公共参数生成随机 `deviceid`，因此精确 URL 缓存通常不能跨请求命中并会共享 100 条容量；本数据的稳定会话复用依赖 Feature 内存缓存。
+资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 匹配 `src/sw.ts` 现有的 `fundcomapi.tiantianfunds.com/mm/**` GET 通用规则；稳定的页面会话 deviceid 允许相同请求复用 Service Worker 缓存，但 Feature 仍负责当前详情会话的成功数据和取消逻辑。
 
 基金详情净值历史与数据指标的数据流是：
 
@@ -258,11 +286,12 @@ FundDetailEntry 当前基金代码
 - `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、风险参数会话、内存重算、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
-- `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存后应用的原子事务和新增代码定向刷新。
+- `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存设置后应用的原子事务和新增代码定向刷新。
 - `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
-- `loadFundState` / `saveFundState` 隐藏基金状态 schema 版本、结构验证、损坏数据备份和恢复。
+- `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
+- `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
 
-天天基金适配器通过 `createTiantianRequestParams` 统一生成每次请求的新 UUID，以及 `plat`、`product` 和 `version` 固定参数。`isSuccessfulTiantianResponse` 只校验共享响应外壳；`data` 的数组或对象形状、空数据语义、附加字段和失败策略仍由各接口 parser 负责。
+天天基金适配器通过 `createTiantianRequestParams` 统一注入页面会话内稳定的 `deviceid`，以及 `plat`、`product` 和 `version` 固定参数。deviceid 从独立 key 读取，缺失或格式非法时重新生成；storage 读写失败时只保留本次页面会话内存值。该 deviceid 只用于天天基金，不进入基金设置或导入导出数据。`isSuccessfulTiantianResponse` 只校验共享响应外壳；`data` 的数组或对象形状、空数据语义、附加字段和失败策略仍由各接口 parser 负责。
 
 只有出现第二个真实指数行情适配器时，才在 `fetchEastmoneyIndexQuotes` 所在 seam 提取统一数据源接口；当前不为假设中的实现预建工厂。
 
@@ -281,7 +310,9 @@ FundDetailEntry 当前基金代码
 - **`snapshotsByCode` 的键必须与 `fundOrder` 完全一致，`holdingsByCode` 只能是 `fundOrder` 的子集；`holdingOrder` 必须与 `holdingsByCode` 的键集合完全一致并保存“持仓”分类的独立顺序；快照或持仓记录内的代码必须等于对应键。**
 - **自定义基金分组只能引用 `fundOrder` 中的代码；“全部”和“持仓”是运行时派生分类，不进入持久化分组。**
 - **删除基金必须同时清理快照、汇总持仓、`holdingOrder` 和全部自定义分组引用。**
-- **基金批量变更必须先完整持久化候选状态，再替换内存状态；后续行情刷新失败不得回滚已保存状态。**
+- **基金批量变更必须先持久化候选 `FundSettings`，再替换内存状态；后续行情刷新失败不得回滚已保存设置。**
+- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 只属于运行时 `FundState`，行情字段更新不得触发设置持久化。**
+- **天天基金 deviceid 只在该领域内复用，必须独立于基金设置和导入导出数据。**
 
 ## 横切关注点
 
@@ -289,13 +320,17 @@ FundDetailEntry 当前基金代码
 
 `useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
-`useFundsStore` 是基金共享领域状态的所有者。它保存全部基金顺序、独立持仓顺序、行情快照、自定义分组和可选汇总持仓，并通过版本化 localStorage 持久化完整状态。批量新增、单基金持仓更新、单基金分组关系更新和基金组织排序都先保存完整候选状态，再替换相关内存引用；基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选状态提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；持久化或网络失败通过稳定问题状态暴露，不把第三方错误泄漏给组件。具体 schema 版本、存储 key 和刷新实现分别以 `fundStateSchemaVersion.ts` 和 `useFundsStore.ts` 为权威来源。
+`useFundsStore` 是基金共享领域状态的所有者。它保存全部基金顺序、独立持仓顺序、行情快照、自定义分组和可选汇总持仓；其中 `snapshotsByCode` 只存在于当前运行时。批量新增、单基金持仓更新、单基金分组关系更新和基金组织排序都先把代码、名称、分组和持仓组成的 `FundSettings` 持久化，再替换相关内存引用；基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 Store，名称变化才回写设置，持久化或网络失败通过稳定问题状态暴露，不把第三方错误泄漏给组件。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts` 和 `useFundsStore.ts` 为权威来源。
 
 ### PWA 与缓存
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
 
-实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、天天基金实时行情、详情基础资料、净值历史和分红送配不进入 Service Worker 缓存。资产配置 endpoint 是现有 `fundcomapi.tiantianfunds.com/mm/**` 通用规则的例外，但随机 `deviceid` 限制了精确 URL 命中。详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、风险参数和风险计算输入的会话缓存不持久化。基金和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存。离线重新打开应用时，指数定义以及已保存的基金和持仓仍可展示；实时行情保留已持久化快照或显示占位，联网后由 Store 重新获取。
+实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。天天基金 GET `/mm`、`/mm/**` 请求按现有通用规则缓存；首页快照 POST 只有在来源、路径、方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时，才进入独立的快照缓存。固定的页面会话 deviceid 使相同天天基金请求可以复用精确 URL 缓存。
+
+天天基金快照 POST 缓存使用内部 GET `Request` 作为 key，key 包含 endpoint、规范化 form body 和 deviceid；不按单只基金拆分。GET 与快照 POST 各自拥有响应缓存、时间元数据缓存和最多 100 条记录。缓存新鲜期为 10 分钟，最多保留 24 小时；手动刷新通过 `cache: 'no-store'` 绕过新鲜缓存，网络失败时仅回退到 24 小时内的缓存。网络成功、正常缓存和回退缓存通过 `X-Pure-Hold-Data-Source`、`X-Pure-Hold-Cached-At` 和 `X-Pure-Hold-Cache-Fallback` 传给页面，缓存中保存的仍是原始接口响应。
+
+详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、风险参数和风险计算输入的 Feature 会话缓存不持久化。基金设置和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存；行情快照不从 localStorage 恢复，页面首次启动时可先显示空快照，再由受控 Service Worker 请求更新。
 
 ### UI 与响应式
 
@@ -337,11 +372,13 @@ ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以�
 | 指数目录更新规则             | `scripts/update-index-definitions.mjs`    |
 | 默认指数组                   | `defaultIndexGroups.ts`                   |
 | 指数刷新行为                 | `useIndexQuotesStore.ts`                  |
-| 基金状态形状                 | `fundState.ts`                            |
-| 基金持久化版本与 key         | `fundStateSchemaVersion.ts`               |
+| 基金运行时状态形状           | `fundState.ts`                            |
+| 基金设置形状                 | `fundSettings.ts`                         |
+| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`            |
 | 基金搜索协议                 | `services/eastmoney/`                     |
 | 基金实时行情、资料与历史协议 | `services/tiantian/`                      |
 | 基金状态与刷新行为           | `useFundsStore.ts`                        |
+| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                     |
 | 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量 |
 
 只有系统职责、模块关系、依赖方向或关键 seam 发生变化时才更新本文。具体命令和执行规则放在 `AGENTS.md`，单次实施过程放在 ExecPlan，不在本文记录变更历史。
