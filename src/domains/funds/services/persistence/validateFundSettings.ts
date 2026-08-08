@@ -1,60 +1,23 @@
 import type { FundGroupDefinition } from '../../models/fundGroupDefinition.ts'
 import type { FundHolding } from '../../models/fundHolding.ts'
-import type { FundReturns, FundSnapshot } from '../../models/fundSnapshot.ts'
-import type { FundState } from '../../models/fundState.ts'
+import type { FundSettings } from '../../models/fundSettings.ts'
 
-const returnKeys = [
-  'oneWeek',
-  'oneMonth',
-  'threeMonths',
-  'sixMonths',
-  'yearToDate',
-  'oneYear',
-  'twoYears',
-  'threeYears',
-  'fiveYears',
-  'sinceInception',
-] as const satisfies readonly (keyof FundReturns)[]
-
-export function validateAndCloneFundState(
+export function validateAndCloneFundSettings(
   value: unknown,
   filterUnknownGroupCodes = false,
-): FundState {
+): FundSettings {
   if (
     !isRecord(value) ||
-    !Array.isArray(value.fundOrder) ||
+    !Array.isArray(value.funds) ||
+    !Array.isArray(value.groups) ||
     !Array.isArray(value.holdingOrder) ||
-    !isRecord(value.holdingsByCode) ||
-    !isRecord(value.snapshotsByCode)
+    !isRecord(value.holdingsByCode)
   ) {
-    throw new TypeError('Fund state has an invalid shape')
+    throw new TypeError('Fund settings have an invalid shape')
   }
 
-  const fundOrder = validateUniqueStrings(value.fundOrder, 'fund codes')
-  const knownCodes = new Set(fundOrder)
-  const snapshotsRecord = value.snapshotsByCode
-  const snapshotKeys = Object.keys(snapshotsRecord)
-  if (
-    snapshotKeys.length !== fundOrder.length ||
-    snapshotKeys.some((code) => !knownCodes.has(code))
-  ) {
-    throw new TypeError('Fund snapshots must match fundOrder')
-  }
-
-  const snapshotsByCode = Object.fromEntries(
-    fundOrder.map((code) => {
-      const snapshot = snapshotsRecord[code]
-      if (!isFundSnapshot(snapshot) || snapshot.code !== code) {
-        throw new TypeError(`Fund snapshot ${code} has an invalid shape`)
-      }
-      return [code, cloneSnapshot(snapshot)]
-    }),
-  )
-
-  if (!Array.isArray(value.groups)) {
-    throw new TypeError('Fund groups have an invalid shape')
-  }
-
+  const funds = validateFunds(value.funds)
+  const knownCodes = new Set(funds.map(({ code }) => code))
   const groups = validateGroups(value.groups, knownCodes, filterUnknownGroupCodes)
   const holdingsByCode = validateHoldings(value.holdingsByCode, knownCodes, filterUnknownGroupCodes)
   const holdingOrder = validateHoldingOrder(
@@ -63,7 +26,22 @@ export function validateAndCloneFundState(
     holdingsByCode,
     filterUnknownGroupCodes,
   )
-  return { fundOrder, groups, holdingOrder, holdingsByCode, snapshotsByCode }
+  return { funds, groups, holdingOrder, holdingsByCode }
+}
+
+function validateFunds(values: readonly unknown[]): { code: string; name: string }[] {
+  const codes = new Set<string>()
+  return values.map((value) => {
+    if (!isRecord(value) || !isFundCode(value.code) || typeof value.name !== 'string') {
+      throw new TypeError('Fund setting has an invalid shape')
+    }
+    const name = value.name.trim()
+    if (name.length === 0 || codes.has(value.code)) {
+      throw new TypeError('Fund settings contain duplicate or invalid funds')
+    }
+    codes.add(value.code)
+    return { code: value.code, name }
+  })
 }
 
 function validateHoldingOrder(
@@ -170,45 +148,8 @@ function validateUniqueStrings(value: readonly unknown[], label: string): string
   return [...strings]
 }
 
-function isFundSnapshot(value: unknown): value is FundSnapshot {
-  if (
-    !isRecord(value) ||
-    typeof value.code !== 'string' ||
-    typeof value.name !== 'string' ||
-    value.name.length === 0 ||
-    !Array.isArray(value.tags) ||
-    !value.tags.every((tag) => typeof tag === 'string' && tag.length > 0) ||
-    !isNullableFiniteNumber(value.estimatedNav) ||
-    !isNullableFiniteNumber(value.estimatedChangePercent) ||
-    !isNullableString(value.estimatedAt) ||
-    !isNullableFiniteNumber(value.nav) ||
-    !isNullableString(value.navDate) ||
-    !isNullableFiniteNumber(value.dailyChangePercent) ||
-    !isNullableString(value.returnsDate) ||
-    !isNullableFiniteNumber(value.fetchedAt) ||
-    !isRecord(value.returns)
-  ) {
-    return false
-  }
-
-  const returns = value.returns
-  return returnKeys.every((key) => isNullableFiniteNumber(returns[key]))
-}
-
-function cloneSnapshot(snapshot: FundSnapshot): FundSnapshot {
-  return {
-    ...snapshot,
-    returns: { ...snapshot.returns },
-    tags: [...snapshot.tags],
-  }
-}
-
-function isNullableFiniteNumber(value: unknown): value is number | null {
-  return value === null || (typeof value === 'number' && Number.isFinite(value))
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === 'string'
+function isFundCode(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{6}$/.test(value)
 }
 
 function isPositiveNumberWithFourDecimals(value: unknown): value is number {

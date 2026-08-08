@@ -1,5 +1,6 @@
 export type FundRefreshIssueCode =
   | 'business-response-failed'
+  | 'cache-fallback'
   | 'malformed-record'
   | 'missing-record'
   | 'persistence-failed'

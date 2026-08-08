@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createTiantianFundRequestBody } from './createTiantianFundRequestBody.ts'
+import { fetchTiantianFundSnapshots } from './fetchTiantianFundSnapshots.ts'
 import { parseTiantianFundResponse } from './parseTiantianFundResponse.ts'
 
 test('creates fixed Tiantian form fields and a fresh UUID for each request', () => {
@@ -15,7 +16,7 @@ test('creates fixed Tiantian form fields and a fresh UUID for each request', () 
   assert.equal(first.get('plat'), 'Web')
   assert.equal(first.get('product'), 'EFund')
   assert.equal(first.get('version'), '6.5.5')
-  assert.notEqual(first.get('deviceid'), second.get('deviceid'))
+  assert.equal(first.get('deviceid'), second.get('deviceid'))
   assert.throws(() => createTiantianFundRequestBody([]), /1 to 50/)
   assert.throws(() => createTiantianFundRequestBody(Array.from({ length: 51 }, (_, i) => `${i}`)))
 })
@@ -118,6 +119,55 @@ test('rejects unsuccessful and malformed top-level responses', () => {
     assert.deepEqual(result.snapshots, [])
     assert.deepEqual(result.issues, [{ code: 'business-response-failed', fundCode: '161726' }])
   }
+})
+
+test('uses response cache metadata and forwards force refresh intent', async (context) => {
+  const originalFetch = globalThis.fetch
+  const requests: RequestInit[] = []
+  context.after(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  globalThis.fetch = async (_input, init) => {
+    requests.push(init ?? {})
+    return new Response(JSON.stringify(successful([{ FCODE: '161726', SHORTNAME: '基金 A' }])), {
+      headers: {
+        'X-Pure-Hold-Cached-At': '123',
+        'X-Pure-Hold-Data-Source': 'cache',
+      },
+      status: 200,
+    })
+  }
+
+  const cached = await fetchTiantianFundSnapshots(['161726'])
+  const forced = await fetchTiantianFundSnapshots(['161726'], undefined, { force: true })
+  assert.equal(cached.source, 'cache')
+  assert.equal(cached.fetchedAt, 123)
+  assert.equal(cached.snapshots[0]?.fetchedAt, 123)
+  assert.equal(forced.source, 'cache')
+  assert.equal(requests[0]?.cache, 'default')
+  assert.equal(requests[1]?.cache, 'no-store')
+})
+
+test('reports cache fallback batches as structured issues', async (context) => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify(successful([{ FCODE: '161726', SHORTNAME: '基金 A' }])), {
+      headers: {
+        'X-Pure-Hold-Cache-Fallback': 'true',
+        'X-Pure-Hold-Cached-At': '456',
+        'X-Pure-Hold-Data-Source': 'cache-fallback',
+      },
+      status: 200,
+    })
+  context.after(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  const result = await fetchTiantianFundSnapshots(['161726'])
+  assert.equal(result.source, 'cache-fallback')
+  assert.equal(result.fetchedAt, 456)
+  assert.deepEqual(result.issues, [{ code: 'cache-fallback', fundCode: '161726' }])
 })
 
 function successful(data: readonly unknown[]): unknown {

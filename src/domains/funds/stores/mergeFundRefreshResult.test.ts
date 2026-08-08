@@ -16,6 +16,7 @@ test('refresh merge only replaces valid current requested funds and preserves st
     {
       fetchedAt: 100,
       issues: [{ code: 'missing-record', fundCode: '161725' }],
+      source: 'network',
       snapshots: [freshA, unexpected],
     },
   )
@@ -33,6 +34,7 @@ test('refresh merge ignores a fund deleted while the request was active', () => 
   const result = mergeFundRefreshResult({}, [], ['161726'], {
     fetchedAt: 100,
     issues: [],
+    source: 'network',
     snapshots: [snapshot],
   })
   assert.equal(result.updatedCount, 0)

@@ -2,10 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
-import { fundStateStorageKey } from '@/domains/funds/services/persistence/fundStateSchemaVersion.ts'
-import { saveFundState } from '@/domains/funds/services/persistence/saveFundState.ts'
+import { fundSettingsStorageKey } from '@/domains/funds/services/persistence/fundSettingsSchemaVersion.ts'
+import { saveFundSettings } from '@/domains/funds/services/persistence/saveFundSettings.ts'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
-import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import { useFundGroupDraft } from './useFundGroupDraft.ts'
 
 test('fund group draft adds, renames, removes, reorders and commits an empty list', () => {
@@ -45,8 +44,12 @@ test('fund group draft adds, renames, removes, reorders and commits an empty lis
 
 test('fund group draft independently reorders categories and reports changed orders', () => {
   withStorage(() => {
-    saveFundState({
-      fundOrder: ['000001', '000002', '000003'],
+    saveFundSettings({
+      funds: [
+        { code: '000001', name: '基金一' },
+        { code: '000002', name: '基金二' },
+        { code: '000003', name: '基金三' },
+      ],
       groups: [
         { fundCodes: ['000001', '000003'], id: 'one', name: '一组' },
         { fundCodes: ['000002'], id: 'two', name: '二组' },
@@ -67,11 +70,6 @@ test('fund group draft independently reorders categories and reports changed ord
           purchaseDate: '2020-01-01',
           units: 1,
         },
-      },
-      snapshotsByCode: {
-        '000001': createTestFundSnapshot('000001'),
-        '000002': createTestFundSnapshot('000002'),
-        '000003': createTestFundSnapshot('000003'),
       },
     })
     setActivePinia(createPinia())
@@ -105,7 +103,7 @@ function withStorage(callback: () => void): void {
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
   try {
     callback()
-    assert.notEqual(storage.getItem(fundStateStorageKey), null)
+    assert.notEqual(storage.getItem(fundSettingsStorageKey), null)
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
     else Reflect.deleteProperty(globalThis, 'localStorage')

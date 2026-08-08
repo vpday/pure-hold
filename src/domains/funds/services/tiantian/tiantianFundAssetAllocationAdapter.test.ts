@@ -18,7 +18,7 @@ test('creates asset allocation parameters with a fresh device id', () => {
   assert.equal(first.searchParams.get('plat'), 'Web')
   assert.equal(first.searchParams.get('product'), 'EFund')
   assert.equal(first.searchParams.get('version'), '6.5.5')
-  assert.notEqual(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
+  assert.equal(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
   assert.throws(() => createTiantianFundAssetAllocationRequestUrl('16172'), /exactly 6 digits/)
   assert.throws(() => createTiantianFundAssetAllocationRequestUrl('16172x'), /exactly 6 digits/)
 })

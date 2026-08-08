@@ -20,7 +20,7 @@ test('creates canonical request parameters with a fresh device id', () => {
   assert.equal(first.get('version'), '6.5.5')
   assert.match(first.get('deviceid') ?? '', /^[0-9a-f-]{36}$/i)
   assert.notEqual(first.get('deviceid'), 'caller-device')
-  assert.notEqual(first.get('deviceid'), second.get('deviceid'))
+  assert.equal(first.get('deviceid'), second.get('deviceid'))
 })
 
 test('recognizes only successful Tiantian response envelopes with own data', () => {

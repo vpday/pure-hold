@@ -6,15 +6,20 @@ import { createEmptyFundSnapshot } from '../models/createEmptyFundSnapshot.ts'
 import type { FundGroupDefinition } from '../models/fundGroupDefinition.ts'
 import type { FundHolding } from '../models/fundHolding.ts'
 import type { FundSnapshot } from '../models/fundSnapshot.ts'
+import type { FundSettings } from '../models/fundSettings.ts'
 import type { FundState } from '../models/fundState.ts'
-import { loadFundState } from '../services/persistence/loadFundState.ts'
-import { saveFundState } from '../services/persistence/saveFundState.ts'
+import { loadFundSettings } from '../services/persistence/loadFundSettings.ts'
+import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
 import type { FundRefreshIssue } from '../services/tiantian/fundRefreshIssue.ts'
-import { fetchTiantianFundSnapshots } from '../services/tiantian/fetchTiantianFundSnapshots.ts'
+import {
+  fetchTiantianFundSnapshots,
+  type FundRefreshSource,
+} from '../services/tiantian/fetchTiantianFundSnapshots.ts'
 import { mergeFundRefreshResult } from './mergeFundRefreshResult.ts'
 
 export const useFundsStore = defineStore('funds', () => {
-  const initialState = loadFundState()
+  const initialSettings = loadFundSettings()
+  const initialState = createRuntimeState(initialSettings)
   const fundOrder = shallowRef<readonly string[]>(initialState.fundOrder)
   const groups = shallowRef<readonly FundGroupDefinition[]>(initialState.groups)
   const holdingOrder = shallowRef<readonly string[]>(initialState.holdingOrder)
@@ -26,9 +31,8 @@ export const useFundsStore = defineStore('funds', () => {
   )
   const isRefreshing = ref(false)
   const lastRefreshIssues = shallowRef<readonly FundRefreshIssue[]>([])
-  const lastSuccessfulRefreshAt = ref<number | undefined>(
-    latestFetchedAt(initialState.snapshotsByCode),
-  )
+  const lastSuccessfulRefreshAt = ref<number | undefined>()
+  const lastRefreshSource = ref<FundRefreshSource | undefined>()
 
   let activeController: AbortController | undefined
   let activeRefresh: Promise<void> | undefined
@@ -39,15 +43,18 @@ export const useFundsStore = defineStore('funds', () => {
     activeController?.abort()
   })
 
-  function refreshAll(): Promise<void> {
+  function refreshAll(options?: { readonly force?: boolean }): Promise<void> {
     if (activeRefresh) {
       return activeRefresh
     }
 
-    return refreshCodes(fundOrder.value)
+    return refreshCodes(fundOrder.value, options)
   }
 
-  function refreshCodes(codes: readonly string[]): Promise<void> {
+  function refreshCodes(
+    codes: readonly string[],
+    options?: { readonly force?: boolean },
+  ): Promise<void> {
     if (activeRefresh) return activeRefresh
     const currentCodes = new Set(fundOrder.value)
     const requestedCodes = [...new Set(codes)].filter((code) => currentCodes.has(code))
@@ -61,7 +68,7 @@ export const useFundsStore = defineStore('funds', () => {
     activeController = controller
     isRefreshing.value = true
 
-    const request = fetchTiantianFundSnapshots(requestedCodes, controller.signal)
+    const request = fetchTiantianFundSnapshots(requestedCodes, controller.signal, options)
       .then((batch) => {
         if (currentLifecycle !== lifecycle) {
           return
@@ -77,12 +84,20 @@ export const useFundsStore = defineStore('funds', () => {
           return
         }
 
+        const nameChanged = hasFundNameChanges(
+          snapshotsByCode.value,
+          merged.snapshotsByCode,
+          requestedCodes,
+        )
         snapshotsByCode.value = merged.snapshotsByCode
         lastSuccessfulRefreshAt.value = batch.fetchedAt
-        try {
-          saveFundState(currentState())
-        } catch {
-          lastRefreshIssues.value = [...merged.issues, { code: 'persistence-failed' as const }]
+        lastRefreshSource.value = batch.source
+        if (nameChanged) {
+          try {
+            saveFundSettings(toFundSettings(currentState()))
+          } catch {
+            lastRefreshIssues.value = [...merged.issues, { code: 'persistence-failed' as const }]
+          }
         }
       })
       .catch((error: unknown) => {
@@ -141,7 +156,7 @@ export const useFundsStore = defineStore('funds', () => {
       snapshotsByCode: nextSnapshots,
     }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '添加失败，未能保存基金数据' }
     }
@@ -169,7 +184,7 @@ export const useFundsStore = defineStore('funds', () => {
       snapshotsByCode: nextSnapshots,
     }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '删除失败，未能保存基金数据' }
     }
@@ -180,7 +195,7 @@ export const useFundsStore = defineStore('funds', () => {
   function replaceGroups(nextGroups: readonly FundGroupDefinition[]): { error?: string } {
     const candidate: FundState = { ...currentState(), groups: nextGroups }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '分组保存失败，请稍后重试' }
     }
@@ -207,7 +222,7 @@ export const useFundsStore = defineStore('funds', () => {
       holdingOrder: [...input.holdingOrder],
     }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '分组排序保存失败，请稍后重试' }
     }
@@ -229,7 +244,7 @@ export const useFundsStore = defineStore('funds', () => {
       holdingsByCode: { ...holdingsByCode.value, [holding.code]: holding },
     }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '持仓保存失败，请稍后重试' }
     }
@@ -262,7 +277,7 @@ export const useFundsStore = defineStore('funds', () => {
       }),
     }
     try {
-      saveFundState(candidate)
+      saveFundSettings(toFundSettings(candidate))
     } catch {
       return { error: '基金分组保存失败，请稍后重试' }
     }
@@ -302,6 +317,7 @@ export const useFundsStore = defineStore('funds', () => {
     holdingsByCode,
     isRefreshing,
     lastRefreshIssues,
+    lastRefreshSource,
     lastSuccessfulRefreshAt,
     refreshAll,
     replaceFundOrganization,
@@ -311,6 +327,34 @@ export const useFundsStore = defineStore('funds', () => {
     updateFundHolding,
   }
 })
+
+function createRuntimeState(settings: FundSettings): FundState {
+  const fundOrder = settings.funds.map(({ code }) => code)
+  return {
+    fundOrder,
+    groups: settings.groups,
+    holdingOrder: settings.holdingOrder,
+    holdingsByCode: settings.holdingsByCode,
+    snapshotsByCode: Object.fromEntries(
+      settings.funds.map(({ code, name }) => [code, createEmptyFundSnapshot(code, name)]),
+    ),
+  }
+}
+
+function toFundSettings(state: FundState): FundSettings {
+  return {
+    funds: state.fundOrder.map((code) => {
+      const snapshot = state.snapshotsByCode[code]
+      if (!snapshot) {
+        throw new TypeError(`Fund snapshot ${code} is missing`)
+      }
+      return { code, name: snapshot.name }
+    }),
+    groups: state.groups,
+    holdingOrder: state.holdingOrder,
+    holdingsByCode: state.holdingsByCode,
+  }
+}
 
 function haveSameItems(first: readonly string[], second: readonly string[]): boolean {
   return (
@@ -324,11 +368,10 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
-function latestFetchedAt(
-  snapshotsByCode: Readonly<Record<string, FundSnapshot>>,
-): number | undefined {
-  const timestamps = Object.values(snapshotsByCode).flatMap((snapshot) =>
-    snapshot.fetchedAt === null ? [] : [snapshot.fetchedAt],
-  )
-  return timestamps.length > 0 ? Math.max(...timestamps) : undefined
+function hasFundNameChanges(
+  previous: Readonly<Record<string, FundSnapshot>>,
+  next: Readonly<Record<string, FundSnapshot>>,
+  codes: readonly string[],
+): boolean {
+  return codes.some((code) => previous[code]?.name !== next[code]?.name)
 }

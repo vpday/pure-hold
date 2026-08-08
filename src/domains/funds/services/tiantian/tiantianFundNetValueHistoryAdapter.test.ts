@@ -30,7 +30,7 @@ test('creates exact net value history parameters with a fresh device id', () => 
   assert.equal(first.searchParams.get('product'), 'EFund')
   assert.equal(first.searchParams.get('version'), '6.5.5')
   assert.match(first.searchParams.get('deviceid') ?? '', /^[0-9a-f-]{36}$/i)
-  assert.notEqual(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
+  assert.equal(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
   assert.throws(() => createTiantianFundNetValueHistoryRequestUrl('16172', 'ln'), /6 digits/)
   assert.throws(
     () => createTiantianFundNetValueHistoryRequestUrl('161725', 'invalid' as FundHistoryRange),

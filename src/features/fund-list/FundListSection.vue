@@ -58,7 +58,7 @@ const latestNavDate = computed(() =>
   formatNavDisplayDate(latestText(rows.value.map((row) => row.navDateText))),
 )
 
-const refreshObserver = () => store.refreshAll()
+const refreshObserver = () => store.refreshAll({ force: true })
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {
   unsubscribeRefresh = subscribeGlobalRefresh(refreshObserver)
@@ -76,9 +76,14 @@ watch(isRefreshing, (refreshing, wasRefreshing) => {
   if (refreshing || !wasRefreshing) return
   if (lastRefreshIssues.value.some((issue) => issue.code === 'persistence-failed')) {
     MessagePlugin.warning('刷新成功，但未能保存；刷新页面后可能恢复旧数据')
-    return
   }
-  if (lastRefreshIssues.value.length > 0) {
+  if (lastRefreshIssues.value.some((issue) => issue.code === 'cache-fallback')) {
+    MessagePlugin.warning('网络刷新失败，已显示缓存数据')
+  }
+  const hasOtherIssues = lastRefreshIssues.value.some(
+    (issue) => issue.code !== 'persistence-failed' && issue.code !== 'cache-fallback',
+  )
+  if (hasOtherIssues) {
     const hasFreshData = rows.value.some(
       (row) => snapshotsByCode.value[row.code]?.fetchedAt !== null,
     )

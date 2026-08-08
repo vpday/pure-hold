@@ -2,17 +2,18 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
-import type { FundState } from '../models/fundState.ts'
-import { fundStateStorageKey } from '../services/persistence/fundStateSchemaVersion.ts'
-import { saveFundState } from '../services/persistence/saveFundState.ts'
-import { createTestFundSnapshot } from '../testing/createTestFundSnapshot.ts'
+import type { FundSettings } from '../models/fundSettings.ts'
+import { fundSettingsStorageKey } from '../services/persistence/fundSettingsSchemaVersion.ts'
+import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
 import { useFundsStore } from './useFundsStore.ts'
 
 test('fund store deduplicates refreshes, merges partial success and reports save failure', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState(createTestFundState())
+    saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
+    assert.equal(store.snapshotsByCode['161726']?.estimatedNav, null)
+    assert.equal(store.snapshotsByCode['161726']?.name, '基金 161726')
     let fetchCalls = 0
     let releaseFetch: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -24,7 +25,13 @@ test('fund store deduplicates refreshes, merges partial success and reports save
       await gate
       return new Response(
         JSON.stringify({
-          data: [{ FCODE: '161726', GSZ: '1.5', SHORTNAME: '更新基金' }],
+          data: [
+            {
+              FCODE: '161726',
+              GSZ: fetchCalls > 1 ? '1.6' : '1.5',
+              SHORTNAME: fetchCalls > 1 ? '第二次名称' : '更新基金',
+            },
+          ],
           errorCode: 0,
           success: true,
           totalCount: 1,
@@ -50,7 +57,7 @@ test('fund store deduplicates refreshes, merges partial success and reports save
         store.lastRefreshIssues.some((issue) => issue.code === 'persistence-failed'),
         true,
       )
-      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.5)
+      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.6)
     } finally {
       globalThis.fetch = originalFetch
       store.$dispose()
@@ -60,8 +67,8 @@ test('fund store deduplicates refreshes, merges partial success and reports save
 
 test('fund deletion persists first and removes every group relation', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState({
-      ...createTestFundState(),
+    saveFundSettings({
+      ...createTestFundSettings(),
       groups: [
         { fundCodes: ['161726', '161725'], id: 'one', name: '一组' },
         { fundCodes: ['161726'], id: 'two', name: '二组' },
@@ -87,9 +94,39 @@ test('fund deletion persists first and removes every group relation', async () =
   })
 })
 
+test('forced refresh bypasses the browser cache and exposes the refresh source', async () => {
+  await withEnvironment(async () => {
+    saveFundSettings(createTestFundSettings())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const requests: RequestInit[] = []
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async (_input, init) => {
+      requests.push(init ?? {})
+      return new Response(
+        JSON.stringify({
+          data: [{ FCODE: '161726', GSZ: '1.5', SHORTNAME: '基金 161726' }],
+          errorCode: 0,
+          success: true,
+          totalCount: 1,
+        }),
+        { status: 200 },
+      )
+    }
+    try {
+      await store.refreshAll({ force: true })
+      assert.equal(requests[0]?.cache, 'no-store')
+      assert.equal(store.lastRefreshSource, 'network')
+    } finally {
+      globalThis.fetch = originalFetch
+      store.$dispose()
+    }
+  })
+})
+
 test('fund addition persists atomically and refreshes only the new funds', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState(createTestFundState())
+    saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
     const requestedBodies: string[] = []
@@ -151,7 +188,7 @@ test('fund addition persists atomically and refreshes only the new funds', async
 
 test('single holding update covers replacement, first creation and failures', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState(createTestFundState())
+    saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
     const replacement = {
@@ -184,7 +221,7 @@ test('single holding update covers replacement, first creation and failures', as
 
 test('fund organization replacement persists all orders atomically', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState(createTestFundState())
+    saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
     const input = {
@@ -221,8 +258,8 @@ test('fund organization replacement persists all orders atomically', async () =>
 
 test('single fund group membership preserves ordering and rejects invalid updates', async () => {
   await withEnvironment(async (storage) => {
-    saveFundState({
-      ...createTestFundState(),
+    saveFundSettings({
+      ...createTestFundSettings(),
       groups: [
         { fundCodes: ['161725'], id: 'one', name: '一组' },
         { fundCodes: ['161726', '161725'], id: 'two', name: '二组' },
@@ -260,9 +297,12 @@ test('single fund group membership preserves ordering and rejects invalid update
   })
 })
 
-function createTestFundState(): FundState {
+function createTestFundSettings(): FundSettings {
   return {
-    fundOrder: ['161726', '161725'],
+    funds: [
+      { code: '161726', name: '基金 161726' },
+      { code: '161725', name: '基金 161725' },
+    ],
     groups: [],
     holdingOrder: ['161726'],
     holdingsByCode: {
@@ -273,10 +313,6 @@ function createTestFundState(): FundState {
         purchaseDate: '2020-01-01',
         units: 100,
       },
-    },
-    snapshotsByCode: {
-      '161725': createTestFundSnapshot('161725'),
-      '161726': createTestFundSnapshot('161726'),
     },
   }
 }
@@ -319,7 +355,7 @@ class ToggleStorage implements Storage {
     this.values.delete(key)
   }
   setItem(key: string, value: string): void {
-    if (this.failWrites && key === fundStateStorageKey) {
+    if (this.failWrites && key === fundSettingsStorageKey) {
       throw new Error('quota exceeded')
     }
     this.values.set(key, value)

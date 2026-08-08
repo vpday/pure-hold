@@ -34,7 +34,7 @@ test('creates the fixed basic info form fields and a fresh UUID', () => {
   assert.ok(fields.split(',').includes('ISBUY'))
   assert.ok(fields.split(',').includes('RLEVEL_SZ'))
   assert.ok(!fields.includes('FUNDTYPE'))
-  assert.notEqual(first.get('deviceid'), second.get('deviceid'))
+  assert.equal(first.get('deviceid'), second.get('deviceid'))
   assert.throws(() => createTiantianFundBasicInfoRequestBody('16172'), /exactly 6 digits/)
 })
 

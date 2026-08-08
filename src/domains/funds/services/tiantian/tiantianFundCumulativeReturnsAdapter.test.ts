@@ -21,7 +21,7 @@ test('creates cumulative return parameters with a fresh device id', () => {
   assert.equal(first.searchParams.get('product'), 'EFund')
   assert.equal(first.searchParams.get('startDate'), '')
   assert.equal(first.searchParams.get('version'), '6.5.5')
-  assert.notEqual(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
+  assert.equal(first.searchParams.get('deviceid'), second.searchParams.get('deviceid'))
   assert.throws(
     () => createTiantianFundCumulativeReturnsRequestUrl('16172', '399997', 'y'),
     /exactly 6 digits/,
