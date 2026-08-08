@@ -29,6 +29,7 @@ test('formats stock and bond rows, totals and explicit quote signs', () => {
     dailyChangePercentText: '+1.2%',
     heavyQuarterText: '重仓 21 个季度',
     industryName: '食品饮料',
+    market: 'sh',
     name: '贵州茅台',
     netAssetPercentText: '18.33%',
     priceText: '1400.5',
@@ -84,6 +85,29 @@ test('formats decreases, zero, unchanged, missing values and unknown markets', (
   assert.equal(model.stocks[1]!.dailyChangePercentText, '--')
   assert.equal(model.stocks[1]!.heavyQuarterText, null)
   assert.equal(model.bondTotalLabel, '前 0 只持仓占比合计')
+})
+
+test('preserves the source of ETF fallback stock holdings', () => {
+  const model = toFundHoldingsSectionModel({
+    activeView: 'positions',
+    disclosure: {
+      ...disclosure(),
+      stockHoldingsSource: { code: '159792', name: '港股通互联网ETF富国' },
+    },
+    holdingsError: '',
+    holdingsWarning: '',
+    isDatesLoading: false,
+    isHoldingsLoading: false,
+    isQuotesLoading: false,
+    quoteWarning: '',
+    quotes: [],
+    reportDates: [],
+  })
+
+  assert.deepEqual(model.stockHoldingsSource, {
+    code: '159792',
+    name: '港股通互联网ETF富国',
+  })
 })
 
 function disclosure(): FundHoldingsDisclosure {

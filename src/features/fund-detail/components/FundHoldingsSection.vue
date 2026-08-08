@@ -104,7 +104,14 @@ function trendClass(trend: FundHoldingsTrend): string {
 
               <div class="holdings-tables">
                 <section class="min-w-0">
-                  <h3 class="mb-3 text-base font-medium">股票持仓</h3>
+                  <div class="mb-3 flex flex-wrap items-center gap-2">
+                    <h3 class="text-base font-medium">股票持仓</h3>
+                    <t-tag v-if="model.stockHoldingsSource" size="small">
+                      来自目标 ETF<span v-if="model.stockHoldingsSource.name"
+                        >：{{ model.stockHoldingsSource.name }}</span
+                      >（{{ model.stockHoldingsSource.code }}）
+                    </t-tag>
+                  </div>
                   <t-table
                     bordered
                     :columns="stockColumns"
@@ -119,9 +126,18 @@ function trendClass(trend: FundHoldingsTrend): string {
                     <template #name="{ row }">
                       <div>
                         <p>{{ row.name }}</p>
-                        <t-tag v-if="row.industryName" class="mt-1" size="small" variant="light">
-                          {{ row.industryName }}
-                        </t-tag>
+                        <div class="mt-1 flex flex-wrap gap-1">
+                          <t-tag
+                            v-if="row.market === 'hk' || row.market === 'us'"
+                            size="small"
+                            variant="light"
+                          >
+                            {{ row.market === 'hk' ? 'HK' : 'US' }}
+                          </t-tag>
+                          <t-tag v-if="row.industryName" size="small" variant="light">
+                            {{ row.industryName }}
+                          </t-tag>
+                        </div>
                       </div>
                     </template>
                     <template #price="{ row }">

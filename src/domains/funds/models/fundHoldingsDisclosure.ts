@@ -1,4 +1,4 @@
-export type FundHoldingMarket = 'sh' | 'sz'
+export type FundHoldingMarket = 'hk' | 'sh' | 'sz' | 'us'
 
 export type FundHoldingChangeType = 'decreased' | 'increased' | 'new' | 'unchanged' | 'unknown'
 
@@ -20,9 +20,15 @@ export interface FundBondHoldingDisclosure {
   readonly netAssetPercent: number | null
 }
 
+export interface FundStockHoldingsSource {
+  readonly code: string
+  readonly name: string | null
+}
+
 export interface FundHoldingsDisclosure {
   readonly bonds: readonly FundBondHoldingDisclosure[]
   readonly fundCode: string
   readonly reportDate: string
+  readonly stockHoldingsSource?: FundStockHoldingsSource
   readonly stocks: readonly FundStockHoldingDisclosure[]
 }

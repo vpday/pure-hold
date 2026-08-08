@@ -19,9 +19,19 @@ test('creates one HTTPS batch URL and preserves first occurrence order', () => {
   assert.equal(url.protocol, 'https:')
   assert.equal(url.host, 'qt.gtimg.cn')
   assert.equal(url.searchParams.get('q'), 'sh600000,sh118034')
+  assert.match(url.searchParams.get('_') ?? '', /^\d+$/)
+  assert.equal(
+    createTencentFundHoldingQuotesRequestUrl([
+      ...requests,
+      { code: '60000', market: 'sh' },
+      { code: '00700', market: 'hk' },
+      { code: 'NVDA', market: 'us' },
+    ]).searchParams.get('q'),
+    'sh600000,sh118034,sh60000,s_hk00700,s_usNVDA',
+  )
   assert.throws(() => createTencentFundHoldingQuotesRequestUrl([]), /at least one/)
   assert.throws(
-    () => createTencentFundHoldingQuotesRequestUrl([{ code: '60000', market: 'sh' }]),
+    () => createTencentFundHoldingQuotesRequestUrl([{ code: '', market: 'sh' }]),
     /invalid/,
   )
 })
@@ -35,6 +45,25 @@ test('parses mixed stock and bond prices with partial nullable fields', () => {
   assert.deepEqual(parseTencentFundHoldingQuotesResponse(response, requests), [
     { code: '600000', dailyChangePercent: -1.2, latestPrice: 10.5, market: 'sh' },
     { code: '118034', dailyChangePercent: null, latestPrice: 118.798, market: 'sh' },
+  ])
+})
+
+test('parses Tencent HK and US quote symbols with market-specific fields', () => {
+  const requests: readonly FundHoldingQuoteRequest[] = [
+    { code: 'NVDA', market: 'us' },
+    { code: 'AAPL', market: 'us' },
+    { code: '00700', market: 'hk' },
+  ]
+  const response = [
+    'v_s_usNVDA="200~英伟达~NVDA.OQ~223.96~4.97~2.27~105669440~23567997731~54245.35160~";',
+    'v_s_usAAPL="200~苹果~AAPL.OQ~313.33~0.92~0.29~34437191~10776446647~45727.94419~";',
+    'v_s_hk00700="100~腾讯控股~00700~478.800~-0.400~-0.08~16319939.0~7803757295.250~~43488.0714";',
+  ].join(' ')
+
+  assert.deepEqual(parseTencentFundHoldingQuotesResponse(response, requests), [
+    { code: 'NVDA', dailyChangePercent: 2.27, latestPrice: 223.96, market: 'us' },
+    { code: 'AAPL', dailyChangePercent: 0.29, latestPrice: 313.33, market: 'us' },
+    { code: '00700', dailyChangePercent: -0.08, latestPrice: 478.8, market: 'hk' },
   ])
 })
 

@@ -47,9 +47,9 @@ function parseStocks(records: readonly unknown[]): readonly FundStockHoldingDisc
   const holdings: FundStockHoldingDisclosure[] = []
   const seen = new Set<string>()
   for (const value of records) {
-    if (!isRecord(value) || value.ISINVISBL !== '0') continue
+    if (!isRecord(value) || !isVisibleStock(value.ISINVISBL)) continue
     const record = value as TiantianFundStockHoldingDto
-    const code = parseCode(record.GPDM)
+    const code = parseStockCode(record.GPDM)
     const name = parseText(record.GPJC)
     if (!code || !name) continue
     const market = parseMarket(record.NEWTEXCH)
@@ -97,13 +97,26 @@ function parseChangeType(value: unknown): FundHoldingChangeType {
 }
 
 function parseMarket(value: unknown): FundHoldingMarket | null {
+  if (value === '105') return 'us'
+  if (value === '106' || value === '107') return 'us'
+  if (value === '116' || value === '128') return 'hk'
   if (value === '1') return 'sh'
   if (value === '0') return 'sz'
   return null
 }
 
+function parseStockCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const code = value.trim()
+  return /^[A-Za-z0-9][A-Za-z0-9.-]*$/.test(code) ? code : null
+}
+
 function parseCode(value: unknown): string | null {
   return typeof value === 'string' && /^\d{6}$/.test(value.trim()) ? value.trim() : null
+}
+
+function isVisibleStock(value: unknown): boolean {
+  return value === '0' || value === '--'
 }
 
 function parseText(value: unknown): string | null {

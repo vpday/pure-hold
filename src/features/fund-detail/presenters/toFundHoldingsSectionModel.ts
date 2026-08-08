@@ -39,6 +39,7 @@ export function toFundHoldingsSectionModel(
         heavyQuarterText:
           holding.heavyQuarterCount === null ? null : `重仓 ${holding.heavyQuarterCount} 个季度`,
         industryName: holding.industryName,
+        market: holding.market,
         name: holding.name,
         netAssetPercentText: formatPercent(holding.netAssetPercent),
         priceText: formatNumber(quote?.latestPrice ?? null, 3),
@@ -78,6 +79,7 @@ export function toFundHoldingsSectionModel(
     reportDateOptions: state.reportDates.map((date) => ({ label: date, value: date })),
     reportDateText: state.disclosure?.reportDate ?? '--',
     selectedReportDate: state.selectedReportDate ?? '',
+    stockHoldingsSource: state.disclosure?.stockHoldingsSource,
     stockTotalLabel: `前 ${stocks.length} 只持仓占比合计`,
     stockTotalText: formatPercent(sumPercent(state.disclosure?.stocks ?? [])),
     stocks,

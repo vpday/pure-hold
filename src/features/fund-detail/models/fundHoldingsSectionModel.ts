@@ -1,3 +1,7 @@
+import type {
+  FundHoldingMarket,
+  FundStockHoldingsSource,
+} from '@/domains/funds/models/fundHoldingsDisclosure.ts'
 import type { FundAssetAllocationChartModel } from './fundAssetAllocationChart.ts'
 
 export type FundHoldingsView = 'positions' | 'allocation'
@@ -23,6 +27,7 @@ export interface FundStockHoldingRow {
   readonly dailyChangePercentText: string
   readonly heavyQuarterText: string | null
   readonly industryName: string | null
+  readonly market: FundHoldingMarket | null
   readonly name: string
   readonly netAssetPercentText: string
   readonly priceText: string
@@ -55,5 +60,6 @@ export interface FundHoldingsSectionModel {
   readonly selectedReportDate: string
   readonly stockTotalLabel: string
   readonly stockTotalText: string
+  readonly stockHoldingsSource?: FundStockHoldingsSource
   readonly stocks: readonly FundStockHoldingRow[]
 }

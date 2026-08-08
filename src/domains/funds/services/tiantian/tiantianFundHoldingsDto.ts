@@ -18,6 +18,8 @@ export interface TiantianFundBondHoldingDto {
 }
 
 export interface TiantianFundHoldingsDto {
+  readonly ETFCODE?: unknown
+  readonly ETFSHORTNAME?: unknown
   readonly fundStocks?: unknown
   readonly fundboods?: unknown
 }

@@ -38,9 +38,12 @@ export function buildFundAssetAllocationChartOption(
     dataZoom: [
       {
         endValue: lastIndex,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false,
         realtime: true,
         startValue: firstVisibleIndex,
         type: 'inside',
+        zoomOnMouseWheel: false,
       },
     ],
     grid: {

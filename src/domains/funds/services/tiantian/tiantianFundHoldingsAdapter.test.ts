@@ -69,6 +69,7 @@ test('maps stocks and bonds while filtering hidden and duplicate securities', ()
           stock({ GPDM: '000001', GPJC: '隐藏股票', ISINVISBL: 0 }),
           stock({ GPDM: '600519', GPJC: '重复股票' }),
           stock({ GPDM: '000858', GPJC: '五粮液', JZBL: 'bad', NEWTEXCH: '9' }),
+          stock({ GPDM: 'NVDA', GPJC: '英伟达', ISINVISBL: '--', NEWTEXCH: '105' }),
         ],
         fundboods: [
           { NEWTEXCH: '1', ZJZBL: '0.0', ZQDM: '118034', ZQMC: '晶能转债' },
@@ -106,6 +107,16 @@ test('maps stocks and bonds while filtering hidden and duplicate securities', ()
         name: '五粮液',
         netAssetPercent: null,
       },
+      {
+        changePercent: null,
+        changeType: 'unknown',
+        code: 'NVDA',
+        heavyQuarterCount: null,
+        industryName: null,
+        market: 'us',
+        name: '英伟达',
+        netAssetPercent: null,
+      },
     ],
   })
 })
@@ -130,6 +141,105 @@ test('allows empty disclosure arrays and rejects malformed roots or dates', () =
       parseTiantianFundHoldingsDisclosureResponse(response, '161725', '2026-06-30'),
     )
   }
+})
+
+test('maps all supported Tiantian security markets', () => {
+  const result = parseTiantianFundHoldingsDisclosureResponse(
+    successful(
+      {
+        fundStocks: [
+          stock({ GPDM: '000001', GPJC: '深交所', NEWTEXCH: '0' }),
+          stock({ GPDM: '600000', GPJC: '上交所', NEWTEXCH: '1' }),
+          stock({ GPDM: '00700', GPJC: '港交所', NEWTEXCH: '116' }),
+          stock({ GPDM: '00005', GPJC: '港交所扩展码', NEWTEXCH: '128' }),
+          stock({ GPDM: 'NVDA', GPJC: '纳斯达克', ISINVISBL: '--', NEWTEXCH: '105' }),
+          stock({ GPDM: 'AAPL', GPJC: '纽交所', ISINVISBL: '--', NEWTEXCH: '106' }),
+          stock({ GPDM: 'MSFT', GPJC: '美交所', ISINVISBL: '--', NEWTEXCH: '107' }),
+        ],
+      },
+      '2026-06-30',
+    ),
+    '161725',
+    '2026-06-30',
+  )
+
+  assert.deepEqual(
+    result.stocks.map(({ code, market }) => ({ code, market })),
+    [
+      { code: '000001', market: 'sz' },
+      { code: '600000', market: 'sh' },
+      { code: '00700', market: 'hk' },
+      { code: '00005', market: 'hk' },
+      { code: 'NVDA', market: 'us' },
+      { code: 'AAPL', market: 'us' },
+      { code: 'MSFT', market: 'us' },
+    ],
+  )
+})
+
+test('loads linked ETF stocks when the fund disclosure has no stocks', async (context) => {
+  const originalFetch = globalThis.fetch
+  const requested: string[] = []
+  const responses = [
+    successful(
+      {
+        ETFCODE: '159792',
+        ETFSHORTNAME: '港股通互联网ETF富国',
+        fundStocks: null,
+        fundboods: [{ NEWTEXCH: '1', ZJZBL: '5.65', ZQDM: '019792', ZQMC: '25国债19' }],
+      },
+      '2026-06-30',
+    ),
+    successful(
+      {
+        fundStocks: [
+          stock({
+            GPDM: '00700',
+            GPJC: '腾讯控股',
+            JZBL: '8.5',
+            NEWTEXCH: '116',
+            PCTNVCHG: '1.2',
+            PCTNVCHGTYPE: '增持',
+          }),
+        ],
+      },
+      '2026-06-30',
+    ),
+  ]
+  globalThis.fetch = async (input) => {
+    requested.push(String(input))
+    return {
+      ok: true,
+      status: 200,
+      json: async () => responses.shift(),
+    } as Response
+  }
+  context.after(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  const result = await fetchTiantianFundHoldingsDisclosure('014674', '2026-06-30')
+
+  assert.deepEqual(result, {
+    bonds: [{ code: '019792', market: 'sh', name: '25国债19', netAssetPercent: 5.65 }],
+    fundCode: '014674',
+    reportDate: '2026-06-30',
+    stockHoldingsSource: { code: '159792', name: '港股通互联网ETF富国' },
+    stocks: [
+      {
+        changePercent: 1.2,
+        changeType: 'increased',
+        code: '00700',
+        heavyQuarterCount: null,
+        industryName: null,
+        market: 'hk',
+        name: '腾讯控股',
+        netAssetPercent: 8.5,
+      },
+    ],
+  })
+  assert.equal(requested.length, 2)
+  assert.equal(new URL(requested[1]!).searchParams.get('FCODE'), '159792')
 })
 
 test('fetches holding dates and disclosure with GET and propagates cancellation', async (context) => {
