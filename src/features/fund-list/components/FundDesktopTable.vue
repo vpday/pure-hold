@@ -245,7 +245,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 
 .fund-code-tags {
   @apply mt-1 flex max-w-35 gap-1 overflow-x-auto scrollbar-thumb-transparent
-  hover:scrollbar-thumb-current;
+  hover:scrollbar-thumb-current scrollbar-thin;
 }
 
 .fund-name-button {

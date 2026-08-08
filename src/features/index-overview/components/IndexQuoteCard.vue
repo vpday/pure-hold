@@ -40,6 +40,6 @@ const trendClass = computed(() => ({
 }
 
 .index-quote-change {
-  @apply flex flex-row items-baseline space-x-2 font-mono text-xs;
+  @apply flex flex-row items-baseline space-x-1 font-mono text-xs;
 }
 </style>
