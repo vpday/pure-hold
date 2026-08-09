@@ -83,7 +83,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             class="min-w-0"
           >
             <h2 id="fund-detail-overview-title" class="section-title">基金概览</h2>
-            <div class="mt-4 grid gap-2 grid-cols-2 lg:grid-cols-5 lg:gap-5">
+            <div class="details-grid mt-4">
               <div v-if="viewModel.estimatedNavText !== '--'">
                 <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
                 <p class="nav-value">

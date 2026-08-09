@@ -193,6 +193,56 @@ test('activates drawdown comparison lazily and routes its local range lifecycle'
   assert.equal(performance.model.value.drawdownComparison.chart, undefined)
 })
 
+test('activates rolling excess lazily and routes range, retry, refresh and reopen', async () => {
+  const isVisible = ref(true)
+  const benchmarkCalls: string[] = []
+  const distributionCalls: string[] = []
+  const netValueCalls: FundHistoryRange[] = []
+  const performance = useFundPerformance(isVisible, {
+    loadBenchmarkHistory: async (endDate) => {
+      benchmarkCalls.push(endDate)
+      return benchmarkResult(endDate)
+    },
+    loadDistribution: async (fundCode) => {
+      distributionCalls.push(fundCode)
+      return distributionResult(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      netValueCalls.push(range)
+      return netValueResult(fundCode, range)
+    },
+  })
+
+  performance.open('161725')
+  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'n')
+  assert.deepEqual(benchmarkCalls, [])
+
+  await performance.selectView('rolling-excess-return')
+  assert.equal(performance.model.value.activeView, 'rolling-excess-return')
+  assert.equal(performance.model.value.rollingExcessReturn.chart?.series.name, '滚动12个月超额收益')
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.equal(benchmarkCalls.length, 1)
+
+  await performance.selectRange('rolling-excess-return', 'ln')
+  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'ln')
+  assert.deepEqual(netValueCalls, ['ln'])
+
+  await performance.retry('rolling-excess-return')
+  await performance.refresh()
+  assert.deepEqual(netValueCalls, ['ln', 'ln', 'ln'])
+  assert.equal(benchmarkCalls.length, 3)
+
+  isVisible.value = false
+  await performance.refresh()
+  assert.deepEqual(netValueCalls, ['ln', 'ln', 'ln'])
+
+  performance.open('000001')
+  assert.equal(performance.model.value.activeView, 'cumulative-returns')
+  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'n')
+  assert.equal(performance.model.value.rollingExcessReturn.chart, undefined)
+})
+
 test('refreshes only the visible active view and resets on reopen', async () => {
   const isVisible = ref(false)
   const distributionCalls: unknown[][] = []
@@ -247,27 +297,30 @@ test('shares history requests with the metrics session in both directions', asyn
       return netValueResult(fundCode, range)
     },
   })
-  const performance = useFundPerformance(ref(true), { historyDataSource })
-  const metrics = useFundMetrics(
-    historyDataSource,
-    useFundBenchmarkDataSource({
-      load: async (endDate) => ({
-        endDate,
-        indexCode: 'H00300',
-        indexName: '沪深300全收益指数',
-        issues: [],
-        points: [
-          { date: '2025-07-31', value: 1000 },
-          { date: '2026-07-29', value: 1100 },
-        ],
-        startDate: '20041231',
-      }),
+  const benchmarkDataSource = useFundBenchmarkDataSource({
+    load: async (endDate) => ({
+      endDate,
+      indexCode: 'H00300',
+      indexName: '沪深300全收益指数',
+      issues: [],
+      points: [
+        { date: '2025-07-29', value: 900 },
+        { date: '2025-07-31', value: 1000 },
+        { date: '2026-07-29', value: 1100 },
+      ],
+      startDate: '20041231',
     }),
-  )
+  })
+  const performance = useFundPerformance(ref(true), { benchmarkDataSource, historyDataSource })
+  const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
   performance.open('161725')
   metrics.open('161725')
 
   await metrics.activate()
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.deepEqual(netValueCalls, ['ln'])
+
+  await performance.selectView('rolling-excess-return')
   assert.deepEqual(distributionCalls, ['161725'])
   assert.deepEqual(netValueCalls, ['ln'])
 
@@ -354,6 +407,18 @@ function netValueResult(fundCode: string, range: FundHistoryRange): FundNetValue
       {
         cumulativeNetValue: 1,
         dailyGrowthPercent: 0,
+        date: '2025-01-29',
+        unitNetValue: 1,
+      },
+      {
+        cumulativeNetValue: 1,
+        dailyGrowthPercent: 0,
+        date: '2025-07-29',
+        unitNetValue: 1,
+      },
+      {
+        cumulativeNetValue: 1,
+        dailyGrowthPercent: 0,
         date: '2026-01-29',
         unitNetValue: 1,
       },
@@ -376,6 +441,8 @@ function benchmarkResult(endDate: string) {
     issues: [],
     points: [
       { date: '2004-12-31', value: 1000 },
+      { date: '2025-01-29', value: 1800 },
+      { date: '2025-07-29', value: 1900 },
       { date: '2026-01-29', value: 2000 },
       { date: '2026-07-29', value: 2100 },
     ],

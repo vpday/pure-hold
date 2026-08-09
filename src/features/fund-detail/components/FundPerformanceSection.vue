@@ -5,16 +5,19 @@ import type { TableProps } from 'tdesign-vue-next'
 
 import { fundHistoryRangeOptions } from '../config/fundHistoryRangeOptions'
 import { fundDrawdownRangeOptions } from '../config/fundDrawdownRangeOptions'
+import { fundRollingExcessRangeOptions } from '../config/fundRollingExcessRangeOptions'
 import type {
   FundConversionTableRow,
   FundDividendTableRow,
 } from '../models/fundDistributionTableModel'
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
+import type { FundRollingExcessRange } from '../models/fundRollingExcessReturn'
 import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
 import FundDrawdownComparisonChart from './FundDrawdownComparisonChart.vue'
 import FundNetValueChart from './FundNetValueChart.vue'
 import FundRelativeBenchmarkChart from './FundRelativeBenchmarkChart.vue'
+import FundRollingExcessReturnChart from './FundRollingExcessReturnChart.vue'
 
 const props = defineProps<{ model: FundPerformanceSectionModel }>()
 const emit = defineEmits<{
@@ -29,6 +32,7 @@ const emit = defineEmits<{
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
   { label: '相对基准', value: 'relative-benchmark' },
+  { label: '滚动超额', value: 'rolling-excess-return' },
   { label: '回撤对比', value: 'drawdown-comparison' },
   { label: '净值走势', value: 'net-value' },
   { label: '复权净值', value: 'reinvested-net-value' },
@@ -155,6 +159,30 @@ onBeforeUnmount(() => {
             :visible="model.isVisible && activeTab === 'drawdown-comparison'"
             :warning="model.drawdownComparison.warning"
             @retry="emit('retry', 'drawdown-comparison')"
+          />
+        </div>
+        <div v-else-if="performanceTab.value === 'rolling-excess-return'" class="pt-4">
+          <div class="performance-filters">
+            <t-select
+              label="日期范围："
+              :options="fundRollingExcessRangeOptions"
+              :value="model.rollingExcessReturn.selectedRange"
+              @update:value="
+                emit(
+                  'selectRange',
+                  'rolling-excess-return',
+                  String($event) as FundRollingExcessRange,
+                )
+              "
+            />
+          </div>
+          <FundRollingExcessReturnChart
+            :error="model.rollingExcessReturn.error"
+            :is-loading="model.rollingExcessReturn.isLoading"
+            :model="model.rollingExcessReturn.chart"
+            :visible="model.isVisible && activeTab === 'rolling-excess-return'"
+            :warning="model.rollingExcessReturn.warning"
+            @retry="emit('retry', 'rolling-excess-return')"
           />
         </div>
         <div v-else-if="performanceTab.value === 'net-value'" class="pt-4">

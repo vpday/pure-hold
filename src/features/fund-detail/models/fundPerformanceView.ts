@@ -4,3 +4,4 @@ export type FundPerformanceView =
   | 'net-value'
   | 'reinvested-net-value'
   | 'relative-benchmark'
+  | 'rolling-excess-return'
