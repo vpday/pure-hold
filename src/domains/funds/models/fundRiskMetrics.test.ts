@@ -104,9 +104,11 @@ test('returns null ratios for zero drawdown, volatility and downside deviation',
   ).oneYear
 
   assert.equal(flat.calmarRatio, null)
+  assert.equal(flat.maximumDrawdown, 0)
   assert.equal(flat.sharpeRatio, null)
   assert.equal(flat.sortinoRatio, null)
   assert.equal(rising.calmarRatio, null)
+  assert.equal(rising.maximumDrawdown, 0)
   assert.equal(rising.sortinoRatio, null)
 })
 

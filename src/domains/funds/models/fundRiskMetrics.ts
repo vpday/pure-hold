@@ -1,4 +1,5 @@
 import type { ReturnMetricPoint } from './fundReturnMetrics.ts'
+import { calculateDrawdownPath } from './drawdownPath.ts'
 
 export const fundRiskPeriodKeys = [
   'oneYear',
@@ -173,14 +174,8 @@ function coverageSegments(
 }
 
 function calculateMaximumDrawdown(points: readonly ReturnMetricPoint[]): number | null {
-  if (points.length < 2) return null
-  let peak = points[0]!.value
-  let maximumDrawdown = 0
-  for (const { value } of points.slice(1)) {
-    peak = Math.max(peak, value)
-    maximumDrawdown = Math.max(maximumDrawdown, (peak - value) / peak)
-  }
-  return finiteOrNull(maximumDrawdown)
+  const maximumDrawdown = calculateDrawdownPath(points).maximumDrawdown
+  return maximumDrawdown === null ? null : Math.abs(maximumDrawdown)
 }
 
 function annualizeSampleDeviation(values: readonly number[]): number | null {

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { TableProps } from 'tdesign-vue-next'
 
 import { fundHistoryRangeOptions } from '../config/fundHistoryRangeOptions'
+import { fundDrawdownRangeOptions } from '../config/fundDrawdownRangeOptions'
 import type {
   FundConversionTableRow,
   FundDividendTableRow,
@@ -11,6 +12,7 @@ import type {
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
+import FundDrawdownComparisonChart from './FundDrawdownComparisonChart.vue'
 import FundNetValueChart from './FundNetValueChart.vue'
 import FundRelativeBenchmarkChart from './FundRelativeBenchmarkChart.vue'
 
@@ -27,6 +29,7 @@ const emit = defineEmits<{
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
   { label: '相对基准', value: 'relative-benchmark' },
+  { label: '回撤对比', value: 'drawdown-comparison' },
   { label: '净值走势', value: 'net-value' },
   { label: '复权净值', value: 'reinvested-net-value' },
 ] as const
@@ -132,6 +135,26 @@ onBeforeUnmount(() => {
             :visible="model.isVisible && activeTab === 'relative-benchmark'"
             :warning="model.relativeBenchmark.warning"
             @retry="emit('retry', 'relative-benchmark')"
+          />
+        </div>
+        <div v-else-if="performanceTab.value === 'drawdown-comparison'" class="pt-4">
+          <div class="performance-filters">
+            <t-select
+              label="日期范围："
+              :options="fundDrawdownRangeOptions"
+              :value="model.drawdownComparison.selectedRange"
+              @update:value="
+                emit('selectRange', 'drawdown-comparison', String($event) as FundHistoryRange)
+              "
+            />
+          </div>
+          <FundDrawdownComparisonChart
+            :error="model.drawdownComparison.error"
+            :is-loading="model.drawdownComparison.isLoading"
+            :model="model.drawdownComparison.chart"
+            :visible="model.isVisible && activeTab === 'drawdown-comparison'"
+            :warning="model.drawdownComparison.warning"
+            @retry="emit('retry', 'drawdown-comparison')"
           />
         </div>
         <div v-else-if="performanceTab.value === 'net-value'" class="pt-4">

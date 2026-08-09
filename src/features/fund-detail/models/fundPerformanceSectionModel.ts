@@ -1,5 +1,7 @@
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
 
+import type { FundDrawdownRange } from './fundDrawdownComparison'
+import type { FundDrawdownComparisonChartModel } from './fundDrawdownComparisonChart'
 import type {
   FundCumulativeReturnsChartModel,
   FundReferenceIndexOption,
@@ -34,6 +36,11 @@ interface FundRelativeBenchmarkPanelModel extends FundChartState<FundRelativeBen
   readonly warning: string
 }
 
+interface FundDrawdownComparisonPanelModel extends FundChartState<FundDrawdownComparisonChartModel> {
+  readonly selectedRange: FundDrawdownRange
+  readonly warning: string
+}
+
 interface FundDistributionPanelModel extends FundDistributionTableModel {
   readonly error: string
   readonly hasLoaded: boolean
@@ -44,6 +51,7 @@ export interface FundPerformanceSectionModel {
   readonly activeView: FundPerformanceView
   readonly cumulativeReturns: FundCumulativeReturnsPanelModel
   readonly distribution: FundDistributionPanelModel
+  readonly drawdownComparison: FundDrawdownComparisonPanelModel
   readonly isVisible: boolean
   readonly netValue: FundNetValuePanelModel
   readonly reinvestedNetValue: FundReinvestedNavPanelModel

@@ -7,8 +7,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
-import type { FundRelativeBenchmarkChartModel } from '../models/fundRelativeBenchmarkChart'
-import { buildFundRelativeBenchmarkChartOption } from '../presenters/buildFundRelativeBenchmarkChartOption'
+import type { FundDrawdownComparisonChartModel } from '../models/fundDrawdownComparisonChart'
+import { buildFundDrawdownComparisonChartOption } from '../presenters/buildFundDrawdownComparisonChartOption'
 
 echarts.use([
   LineChart,
@@ -22,7 +22,7 @@ echarts.use([
 const props = defineProps<{
   error: string
   isLoading: boolean
-  model?: FundRelativeBenchmarkChartModel
+  model?: FundDrawdownComparisonChartModel
   visible: boolean
   warning: string
 }>()
@@ -37,10 +37,12 @@ let resizeObserver: ResizeObserver | undefined
 function render(): void {
   if (!chart || !props.model || !hasChart.value) return
   chart.setOption(
-    buildFundRelativeBenchmarkChartOption(props.model, {
+    buildFundDrawdownComparisonChartOption(props.model, {
       showLegend: isLgUp.value,
       theme: {
-        line: themeColor('--td-brand-color-6'),
+        benchmark: themeColor('--td-brand-color-6'),
+        fund: themeColor('--td-error-color-6'),
+        zeroLine: themeColor('--td-component-border'),
       },
     }),
     true,
@@ -62,18 +64,8 @@ function themeColor(name: string): string | undefined {
   return value || undefined
 }
 
-function summaryColor(color: FundRelativeBenchmarkChartModel['summary'][number]['color']): string {
-  if (color === 'fund') return 'var(--td-error-color-6)'
-  if (color === 'benchmark') return 'var(--td-brand-color-4)'
-  return 'var(--td-brand-color-6)'
-}
-
-function summaryValueColor(
-  trend: FundRelativeBenchmarkChartModel['summary'][number]['trend'],
-): string | undefined {
-  if (trend === 'up') return 'var(--td-error-color)'
-  if (trend === 'down') return 'var(--td-success-color)'
-  return undefined
+function summaryColor(index: number): string {
+  return index === 0 ? 'var(--td-error-color-6)' : 'var(--td-brand-color-6)'
 }
 
 onMounted(() => {
@@ -88,7 +80,7 @@ watch(
   () => props.model,
   () => void syncChart(),
 )
-watch(isLgUp, () => render())
+watch(isLgUp, render)
 watch(() => props.visible, syncChart)
 
 onBeforeUnmount(() => {
@@ -104,22 +96,20 @@ onBeforeUnmount(() => {
 
     <div
       v-if="model && hasChart"
-      class="summary-grid"
+      class="summary-block"
       :class="{ 'mt-4': warning, 'lg:absolute lg:top-0 lg:left-0 lg:z-10': !warning }"
     >
-      <div v-for="item in model.summary" :key="item.label" class="summary-item">
-        <span class="summary-dot" :style="{ backgroundColor: summaryColor(item.color) }" />
+      <div v-for="(item, index) in model.summary" :key="item.label" class="summary-item">
+        <span class="summary-dot" :style="{ backgroundColor: summaryColor(index) }" />
         <span class="truncate">
-          {{ item.label }}：<span :style="{ color: summaryValueColor(item.trend) }">
-            {{ item.valueText }}
-          </span>
+          {{ item.label }}：<span>{{ item.valueText }}</span>
         </span>
       </div>
     </div>
     <div v-show="hasChart" ref="container" class="h-90 w-full" />
 
     <div v-if="isLoading" class="loading-overlay">
-      <t-loading text="相对基准加载中" />
+      <t-loading text="回撤对比加载中" />
     </div>
 
     <div v-if="error && model && hasChart" class="error-overlay">
@@ -130,7 +120,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="!hasChart && !isLoading" class="flex min-h-80 items-center justify-center py-8">
-      <t-empty :description="error || model?.emptyText || '暂无相对基准数据'">
+      <t-empty :description="error || model?.emptyText || '暂无回撤对比数据'">
         <template #action>
           <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
         </template>
@@ -150,7 +140,7 @@ onBeforeUnmount(() => {
   @apply absolute right-3 bottom-3 left-3 flex items-center justify-between gap-3 rounded-md bg-(--td-error-color-light-9) p-3 text-sm text-(--td-error-color);
 }
 
-.summary-grid {
+.summary-block {
   @apply grid grid-cols-2 text-xs text-(--td-text-color-primary) lg:flex lg:flex-nowrap lg:gap-3;
 }
 

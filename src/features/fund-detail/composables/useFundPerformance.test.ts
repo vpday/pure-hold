@@ -148,6 +148,51 @@ test('activates, filters, retries and resets the relative benchmark session', as
   assert.equal(performance.model.value.relativeBenchmark.chart, undefined)
 })
 
+test('activates drawdown comparison lazily and routes its local range lifecycle', async () => {
+  const benchmarkCalls: string[] = []
+  const distributionCalls: string[] = []
+  const netValueCalls: FundHistoryRange[] = []
+  const performance = useFundPerformance(ref(true), {
+    loadBenchmarkHistory: async (endDate) => {
+      benchmarkCalls.push(endDate)
+      return benchmarkResult(endDate)
+    },
+    loadDistribution: async (fundCode) => {
+      distributionCalls.push(fundCode)
+      return distributionResult(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      netValueCalls.push(range)
+      return netValueResult(fundCode, range)
+    },
+  })
+
+  performance.open('161725')
+  assert.equal(performance.model.value.drawdownComparison.selectedRange, 'n')
+  assert.deepEqual(benchmarkCalls, [])
+
+  await performance.selectView('drawdown-comparison')
+  assert.equal(performance.model.value.activeView, 'drawdown-comparison')
+  assert.equal(performance.model.value.drawdownComparison.chart?.series[0].name, '基金回撤')
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.equal(benchmarkCalls.length, 1)
+
+  await performance.selectRange('drawdown-comparison', '3n')
+  assert.equal(performance.model.value.drawdownComparison.selectedRange, '3n')
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.equal(benchmarkCalls.length, 1)
+
+  await performance.retry('drawdown-comparison')
+  assert.deepEqual(netValueCalls, ['ln', 'ln'])
+  assert.equal(benchmarkCalls.length, 2)
+
+  performance.open('000001')
+  assert.equal(performance.model.value.activeView, 'cumulative-returns')
+  assert.equal(performance.model.value.drawdownComparison.selectedRange, 'n')
+  assert.equal(performance.model.value.drawdownComparison.chart, undefined)
+})
+
 test('refreshes only the visible active view and resets on reopen', async () => {
   const isVisible = ref(false)
   const distributionCalls: unknown[][] = []

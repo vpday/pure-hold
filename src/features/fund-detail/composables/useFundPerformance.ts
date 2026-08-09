@@ -10,14 +10,17 @@ import {
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
+import { fundDrawdownRangeOptions } from '../config/fundDrawdownRangeOptions'
 import { fundHistoryRangeOptions } from '../config/fundHistoryRangeOptions'
 import type { LoadFundCumulativeReturns } from '../models/fundCumulativeReturnsChart'
 import type { LoadFundDistribution } from '../models/fundDistributionTableModel'
+import type { FundDrawdownRange } from '../models/fundDrawdownComparison'
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
 import { toFundCumulativeReturnsChartModel } from '../presenters/toFundCumulativeReturnsChartModel'
 import { toFundDistributionTableModel } from '../presenters/toFundDistributionTableModel'
+import { toFundDrawdownComparisonChartModel } from '../presenters/toFundDrawdownComparisonChartModel'
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
 import { toFundRelativeBenchmarkChartModel } from '../presenters/toFundRelativeBenchmarkChartModel'
 import { toFundReinvestedNavChartModel } from '../presenters/toFundReinvestedNavChartModel'
@@ -28,6 +31,7 @@ import {
 } from './useFundBenchmarkDataSource'
 import { useFundCumulativeReturns } from './useFundCumulativeReturns'
 import { useFundDistribution } from './useFundDistribution'
+import { useFundDrawdownComparison } from './useFundDrawdownComparison'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
 import { useFundRelativeBenchmark } from './useFundRelativeBenchmark'
@@ -59,6 +63,7 @@ export function useFundPerformance(
     })
   const cumulativeReturns = useFundCumulativeReturns(options.loadCumulativeReturns)
   const distribution = useFundDistribution(historyDataSource)
+  const drawdownComparison = useFundDrawdownComparison(historyDataSource, benchmarkDataSource)
   const netValueHistory = useFundNetValueHistory(historyDataSource)
   const relativeBenchmark = useFundRelativeBenchmark(historyDataSource, benchmarkDataSource)
   const reinvestedNavHistory = useFundReinvestedNavHistory(historyDataSource)
@@ -77,6 +82,9 @@ export function useFundPerformance(
   const selectedRelativeRangeOption = computed(() =>
     fundHistoryRangeOptions.find(({ value }) => value === relativeBenchmark.selectedRange.value),
   )
+  const selectedDrawdownRangeOption = computed(() =>
+    fundDrawdownRangeOptions.find(({ value }) => value === drawdownComparison.selectedRange.value),
+  )
   const cumulativeReturnsChart = computed(() => {
     const returns = cumulativeReturns.data.value
     const referenceIndex = selectedReferenceIndex.value
@@ -88,6 +96,13 @@ export function useFundPerformance(
   const netValueChart = computed(() => {
     const history = netValueHistory.data.value
     return history ? toFundNetValueChartModel(history) : undefined
+  })
+  const drawdownComparisonChart = computed(() => {
+    const result = drawdownComparison.data.value
+    const rangeOption = selectedDrawdownRangeOption.value
+    return result && rangeOption
+      ? toFundDrawdownComparisonChartModel(result, rangeOption.label)
+      : undefined
   })
   const relativeBenchmarkChart = computed(() => {
     const result = relativeBenchmark.data.value
@@ -119,6 +134,13 @@ export function useFundPerformance(
       error: distribution.error.value,
       hasLoaded: distribution.hasLoaded.value,
       isLoading: distribution.isLoading.value,
+    },
+    drawdownComparison: {
+      chart: drawdownComparisonChart.value,
+      error: drawdownComparison.error.value,
+      isLoading: drawdownComparison.isLoading.value,
+      selectedRange: drawdownComparison.selectedRange.value,
+      warning: drawdownComparison.warning.value,
     },
     isVisible: toValue(isVisible),
     netValue: {
@@ -152,6 +174,8 @@ export function useFundPerformance(
     cumulativeReturns.close()
     distribution.close()
     distribution.initialize(code)
+    drawdownComparison.close()
+    drawdownComparison.initialize(code)
     netValueHistory.close()
     netValueHistory.initialize(code)
     reinvestedNavHistory.close()
@@ -165,6 +189,7 @@ export function useFundPerformance(
     basicInfo.value = undefined
     cumulativeReturns.close()
     distribution.close()
+    drawdownComparison.close()
     netValueHistory.close()
     reinvestedNavHistory.close()
     relativeBenchmark.close()
@@ -187,6 +212,7 @@ export function useFundPerformance(
       return
     }
     if (view === 'relative-benchmark') await relativeBenchmark.activate()
+    else if (view === 'drawdown-comparison') await drawdownComparison.activate()
     else await (view === 'net-value' ? netValueHistory.activate() : reinvestedNavHistory.activate())
   }
 
@@ -194,6 +220,8 @@ export function useFundPerformance(
     if (view === 'cumulative-returns') await cumulativeReturns.selectRange(range)
     else if (view === 'net-value') await netValueHistory.selectRange(range)
     else if (view === 'relative-benchmark') relativeBenchmark.selectRange(range)
+    else if (view === 'drawdown-comparison')
+      drawdownComparison.selectRange(range as FundDrawdownRange)
     else reinvestedNavHistory.selectRange(range)
   }
 
@@ -205,6 +233,7 @@ export function useFundPerformance(
     if (view === 'cumulative-returns') await cumulativeReturns.retry()
     else if (view === 'net-value') await netValueHistory.retry()
     else if (view === 'relative-benchmark') await relativeBenchmark.retry()
+    else if (view === 'drawdown-comparison') await drawdownComparison.retry()
     else await reinvestedNavHistory.retry()
   }
 
@@ -226,7 +255,9 @@ export function useFundPerformance(
           ? netValueHistory.refresh()
           : view === 'relative-benchmark'
             ? relativeBenchmark.refresh()
-            : reinvestedNavHistory.refresh()
+            : view === 'drawdown-comparison'
+              ? drawdownComparison.refresh()
+              : reinvestedNavHistory.refresh()
     await Promise.all([chartRefresh, distribution.refresh()])
   }
 
