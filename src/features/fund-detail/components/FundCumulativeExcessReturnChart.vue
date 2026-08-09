@@ -131,8 +131,8 @@ onBeforeUnmount(() => {
       </t-button>
     </div>
 
-    <div v-if="!hasChart && !isLoading" class="flex min-h-80 items-center justify-center py-8">
-      <t-empty :description="error || model?.emptyText || '暂无累计超额收益数据'">
+    <div v-if="!hasChart && !isLoading" class="flex min-h-80 items-center justify-center">
+      <t-empty :title="error || model?.emptyText || '暂无累计超额收益数据'">
         <template #action>
           <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
         </template>

@@ -116,8 +116,8 @@ onBeforeUnmount(() => {
       </t-button>
     </div>
 
-    <div v-if="!model && !isLoading" class="flex min-h-80 items-center justify-center py-8">
-      <t-empty :description="error || '暂无基金净值数据'">
+    <div v-if="!model && !isLoading" class="flex min-h-80 items-center justify-center">
+      <t-empty :title="error || '暂无基金净值数据'">
         <template #action>
           <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
         </template>

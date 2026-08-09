@@ -25,13 +25,13 @@ export function toFundCumulativeExcessReturnChartModel(
       {
         color: 'fund',
         label: '基金累计收益',
-        trend: 'neutral',
+        trend: toTrend(result.fundReturn),
         valueText: formatSignedPercent(result.fundReturn),
       },
       {
         color: 'benchmark',
         label: '沪深300全收益',
-        trend: 'neutral',
+        trend: toTrend(result.benchmarkReturn),
         valueText: formatSignedPercent(result.benchmarkReturn),
       },
       {

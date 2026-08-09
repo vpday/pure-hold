@@ -13,11 +13,11 @@ test('maps one percentage series, three signed summaries and the actual common p
     values: [0, (1.08 / 1.05 - 1) * 100],
   })
   assert.deepEqual(model.summary, [
-    { color: 'fund', label: '基金累计收益', trend: 'neutral', valueText: '+8.00%' },
+    { color: 'fund', label: '基金累计收益', trend: 'up', valueText: '+8.00%' },
     {
       color: 'benchmark',
       label: '沪深300全收益',
-      trend: 'neutral',
+      trend: 'up',
       valueText: '+5.00%',
     },
     {
@@ -32,14 +32,20 @@ test('maps one percentage series, three signed summaries and the actual common p
   assert.equal(model.rangeLabel, '近1月')
 })
 
-test('uses down and neutral excess trends while preserving explicit signs', () => {
+test('uses signed trends for every summary while preserving explicit signs', () => {
   const down = toFundCumulativeExcessReturnChartModel(result(-0.02, 0.01, -0.03), '近6月')
   assert.equal(down.summary[0].valueText, '-2.00%')
-  assert.equal(down.summary[2].trend, 'down')
+  assert.deepEqual(
+    down.summary.map(({ trend }) => trend),
+    ['down', 'up', 'down'],
+  )
 
   const neutral = toFundCumulativeExcessReturnChartModel(result(0, 0, 0), '近6月')
   assert.equal(neutral.summary[2].valueText, '+0.00%')
-  assert.equal(neutral.summary[2].trend, 'neutral')
+  assert.deepEqual(
+    neutral.summary.map(({ trend }) => trend),
+    ['neutral', 'neutral', 'neutral'],
+  )
 })
 
 test('presents insufficient data without inventing a zero curve', () => {
@@ -63,6 +69,10 @@ test('presents insufficient data without inventing a zero curve', () => {
   assert.deepEqual(
     model.summary.map(({ valueText }) => valueText),
     ['--', '--', '--'],
+  )
+  assert.deepEqual(
+    model.summary.map(({ trend }) => trend),
+    ['neutral', 'neutral', 'neutral'],
   )
 })
 
