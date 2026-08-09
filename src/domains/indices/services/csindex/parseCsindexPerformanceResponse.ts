@@ -47,7 +47,7 @@ export function parseCsindexPerformanceResponse(
       continue
     }
     if (pointsByDate.has(date)) duplicateCount += 1
-    pointsByDate.set(date, { date, value })
+    if (!pointsByDate.has(date)) pointsByDate.set(date, { date, value })
   }
 
   const points = [...pointsByDate.values()].sort((left, right) =>

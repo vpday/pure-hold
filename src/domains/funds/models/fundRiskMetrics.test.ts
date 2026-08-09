@@ -212,6 +212,16 @@ test('filters non-finite points and produces the same result for shuffled input'
   )
 })
 
+test('keeps the first valid point when a risk date is duplicated', () => {
+  const dates = weekdays('2024-01-01', '2025-01-02')
+  const points = [...values(dates, () => 100), { date: '2024-01-02', value: 200 }]
+
+  assert.equal(
+    calculate(points, dates, '2025-01-02', '2024-01-01').sinceInception.maximumDrawdown,
+    0,
+  )
+})
+
 function calculate(
   points: readonly ReturnMetricPoint[],
   expectedDates: readonly string[],

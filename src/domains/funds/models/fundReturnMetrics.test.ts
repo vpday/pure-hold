@@ -90,6 +90,16 @@ test('returns an empty stable result for no usable points', () => {
   assert.deepEqual(metrics.quarterlyReturns, [])
 })
 
+test('keeps the first valid point when a date is duplicated', () => {
+  const metrics = calculateReturnMetrics([
+    { date: '2025-01-01', value: 100 },
+    { date: '2026-01-01', value: 120 },
+    { date: '2026-01-01', value: 900 },
+  ])
+
+  assertClose(metrics.periods.sinceInception, 0.2)
+})
+
 function point(date: string, reinvestedNetValue: number): FundReinvestedNavPoint {
   return { date, reinvestedNetValue, unitNetValue: reinvestedNetValue }
 }

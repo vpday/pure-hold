@@ -23,7 +23,7 @@ test('maps, sorts and deduplicates H00300 total-return points', () => {
     issues: [{ code: 'duplicate-date', count: 1 }],
     points: [
       { date: '2004-12-31', value: 1000 },
-      { date: '2005-01-04', value: 982.79 },
+      { date: '2005-01-04', value: 980 },
       { date: '2005-01-05', value: 992.56 },
     ],
     startDate: '20041231',

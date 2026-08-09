@@ -34,8 +34,8 @@ test('uses the latest exact common date and relative excess return', () => {
   assertClose(result.periods.yearToDate.benchmark, 0.1)
   assertClose(result.periods.yearToDate.excess, 1.2 / 1.1 - 1)
   assertClose(result.periods.sinceInception.fund, 0.2)
-  assert.equal(result.periods.sinceInception.benchmark, null)
-  assert.equal(result.periods.sinceInception.excess, null)
+  assertClose(result.periods.sinceInception.benchmark, 0.1)
+  assertClose(result.periods.sinceInception.excess, 1.2 / 1.1 - 1)
   assert.equal(result.quarterlyReturns[0]?.quarter, 1)
 })
 
@@ -55,7 +55,7 @@ test('uses the previous common trading day when the fund already has current-day
   assert.equal(result.commonCutoffDate, '2026-07-31')
 })
 
-test('keeps a benchmark result when the fund period is unavailable', () => {
+test('uses only exact common dates for both sides of every period', () => {
   const result = calculateFundMetricsComparison(
     fund([
       ['2025-06-25', 1],
@@ -69,11 +69,11 @@ test('keeps a benchmark result when the fund period is unavailable', () => {
   )
 
   assert.equal(result.periods.oneWeek.fund, null)
-  assertClose(result.periods.oneWeek.benchmark, 1050 / 1010 - 1)
+  assert.equal(result.periods.oneWeek.benchmark, null)
   assert.equal(result.periods.oneWeek.excess, null)
 })
 
-test('retains every completed fund year even without benchmark coverage', () => {
+test('retains only completed years present in the exact common date series', () => {
   const result = calculateFundMetricsComparison(
     fund([
       ['2002-12-31', 1],
@@ -91,9 +91,8 @@ test('retains every completed fund year even without benchmark coverage', () => 
 
   assert.deepEqual(
     result.annualReturns.map(({ year }) => year),
-    [2005, 2004, 2003, 2002],
+    [2005, 2004],
   )
-  assert.equal(result.annualReturns.find(({ year }) => year === 2003)?.benchmark, null)
   assertClose(result.annualReturns.find(({ year }) => year === 2005)?.benchmark ?? null, 0.1)
 })
 
@@ -103,6 +102,19 @@ test('rejects series without an exact common date', () => {
       calculateFundMetricsComparison(fund([['2026-07-30', 1]]), benchmark([['2026-07-31', 1000]])),
     /no common performance date/,
   )
+})
+
+test('keeps the existing mixed risk contract when no dates are common', () => {
+  const dates = weekdays('2020-01-01', '2026-01-02')
+  const result = calculateFundRiskMetricsComparison(
+    fund([['2019-01-01', 100]]),
+    benchmarkHistory(dates.map((date, index) => [date, 1000 + index])),
+    '2026-01-02',
+    { riskFreeAnnualRate: 0, targetAnnualRate: 0 },
+  )
+
+  assert.equal(result.periods.oneYear.maximumDrawdown.fund, null)
+  assert.ok(result.periods.oneYear.maximumDrawdown.benchmark !== null)
 })
 
 test('returns relative growth and rejects unavailable or invalid benchmark growth', () => {

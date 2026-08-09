@@ -77,10 +77,10 @@ test('maps, sorts and deduplicates net value points while preserving holes', () 
         unitNetValue: null,
       },
       {
-        cumulativeNetValue: null,
-        dailyGrowthPercent: -1.25,
+        cumulativeNetValue: 2.2784,
+        dailyGrowthPercent: 0.9,
         date: '2026-07-29',
-        unitNetValue: 0.6,
+        unitNetValue: 0.5623,
       },
     ],
   })

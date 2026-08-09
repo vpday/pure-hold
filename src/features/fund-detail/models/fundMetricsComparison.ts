@@ -17,6 +17,7 @@ import type {
   IndexPerformanceHistory,
   IndexPerformancePoint,
 } from '@/domains/indices/models/indexPerformanceHistory.ts'
+import { alignFundBenchmarkTimeSeries } from './fundBenchmarkTimeSeriesAlignment.ts'
 
 type PeriodKey = keyof FundReturnMetrics['periods']
 type AnnualizedKey = keyof FundReturnMetrics['annualized']
@@ -118,26 +119,22 @@ export function calculateFundMetricsComparison(
   fundSource: readonly FundReinvestedNavPoint[],
   benchmarkSource: readonly IndexPerformancePoint[],
 ): FundMetricsComparison {
-  const fundPoints = validFundPoints(fundSource)
-  const benchmarkPoints = validBenchmarkPoints(benchmarkSource)
-  const benchmarkDates = new Set(benchmarkPoints.map(({ date }) => date))
-  const commonCutoffDate = latestCommonDate(fundPoints, benchmarkDates)
+  const aligned = alignFundBenchmarkTimeSeries(fundSource, benchmarkSource)
+  const { commonCutoffDate } = aligned
   if (!commonCutoffDate) throw new Error('Fund and benchmark have no common performance date')
 
   const fundMetrics = calculateFundReturnMetrics(
-    fundPoints.filter(({ date }) => date <= commonCutoffDate),
+    aligned.commonPoints.map(({ fundPoint }) => fundPoint),
   )
   const benchmarkMetrics = calculateReturnMetrics(
-    benchmarkPoints.filter(({ date }) => date <= commonCutoffDate),
+    aligned.commonPoints.map(({ benchmarkPoint }) => benchmarkPoint),
   )
 
   return {
     annualized: Object.fromEntries(
       annualizedKeys.map((key) => [
         key,
-        key === 'sinceInception'
-          ? comparison(fundMetrics.annualized[key], null)
-          : comparison(fundMetrics.annualized[key], benchmarkMetrics.annualized[key]),
+        comparison(fundMetrics.annualized[key], benchmarkMetrics.annualized[key]),
       ]),
     ) as Readonly<Record<AnnualizedKey, FundMetricComparisonValue>>,
     annualReturns: fundMetrics.annualReturns.map(({ value, year }) =>
@@ -151,9 +148,7 @@ export function calculateFundMetricsComparison(
     periods: Object.fromEntries(
       periodKeys.map((key) => [
         key,
-        key === 'sinceInception'
-          ? comparison(fundMetrics.periods[key], null)
-          : comparison(fundMetrics.periods[key], benchmarkMetrics.periods[key]),
+        comparison(fundMetrics.periods[key], benchmarkMetrics.periods[key]),
       ]),
     ) as Readonly<Record<PeriodKey, FundMetricComparisonValue>>,
     quarterlyReturns: fundMetrics.quarterlyReturns.flatMap((fundRow) => {
@@ -181,20 +176,34 @@ export function calculateFundRiskMetricsComparison(
   commonCutoffDate: string,
   assumptions: FundRiskAssumptions,
 ): FundRiskMetricsComparison {
-  const fundPoints = validFundPoints(fundSource).filter(({ date }) => date <= commonCutoffDate)
-  const benchmarkPoints = validBenchmarkPoints(benchmarkHistory.points).filter(
-    ({ date }) => date <= commonCutoffDate,
-  )
+  const aligned = alignFundBenchmarkTimeSeries(fundSource, benchmarkHistory.points)
+  const effectiveCutoffDate = aligned.commonCutoffDate
+    ? aligned.commonCutoffDate < commonCutoffDate
+      ? aligned.commonCutoffDate
+      : commonCutoffDate
+    : commonCutoffDate
+  const fundPoints = aligned.commonPoints.length
+    ? aligned.commonPoints
+        .filter(({ date }) => date <= effectiveCutoffDate)
+        .map(({ fundPoint }) => fundPoint)
+    : aligned.fundPoints.filter(({ date }) => date <= effectiveCutoffDate)
+  const benchmarkPoints = aligned.commonPoints.length
+    ? aligned.commonPoints
+        .filter(({ date }) => date <= effectiveCutoffDate)
+        .map(({ benchmarkPoint }) => benchmarkPoint)
+    : aligned.benchmarkPoints.filter(({ date }) => date <= effectiveCutoffDate)
   const inceptionDate = fundPoints[0]?.date ?? commonCutoffDate
-  const expectedDates = benchmarkPoints.map(({ date }) => date)
+  const expectedDates = aligned.benchmarkPoints
+    .filter(({ date }) => date <= effectiveCutoffDate)
+    .map(({ date }) => date)
   const fundMetrics = calculateRollingFundRiskMetrics(
     fundPoints.map(({ date, reinvestedNetValue: value }) => ({ date, value })),
     expectedDates,
-    { assumptions, commonCutoffDate, inceptionDate },
+    { assumptions, commonCutoffDate: effectiveCutoffDate, inceptionDate },
   )
   const benchmarkMetrics = calculateRollingFundRiskMetrics(benchmarkPoints, expectedDates, {
     assumptions,
-    commonCutoffDate,
+    commonCutoffDate: effectiveCutoffDate,
     inceptionDate,
     sourceIncompletePeriods: benchmarkIncompletePeriods(benchmarkHistory),
   })
@@ -215,7 +224,8 @@ export function calculateFundRiskMetricsComparison(
               } as const)
             : fullYears !== null &&
                 fundMetric.qualityIssue !== null &&
-                benchmarkMetric.qualityIssue === null &&
+                (benchmarkMetric.qualityIssue === null ||
+                  benchmarkMetric.qualityIssue === 'insufficient-observations') &&
                 !hasFullYearsHistory(inceptionDate, commonCutoffDate, fullYears)
               ? ({ kind: 'fund-history-too-short', requiredYears: fullYears } as const)
               : fundMetric.qualityIssue || benchmarkMetric.qualityIssue
@@ -303,42 +313,6 @@ function benchmarkIncompletePeriods(
     : new Set()
 }
 
-function validFundPoints(
-  source: readonly FundReinvestedNavPoint[],
-): readonly FundReinvestedNavPoint[] {
-  return source
-    .filter(
-      ({ date, reinvestedNetValue }) =>
-        isIsoDate(date) && Number.isFinite(reinvestedNetValue) && reinvestedNetValue > 0,
-    )
-    .sort((left, right) => left.date.localeCompare(right.date))
-}
-
-function validBenchmarkPoints(
-  source: readonly IndexPerformancePoint[],
-): readonly IndexPerformancePoint[] {
-  return source
-    .filter(({ date, value }) => isIsoDate(date) && Number.isFinite(value) && value > 0)
-    .sort((left, right) => left.date.localeCompare(right.date))
-}
-
-function latestCommonDate(
-  fundPoints: readonly FundReinvestedNavPoint[],
-  benchmarkDates: ReadonlySet<string>,
-): string | undefined {
-  for (let index = fundPoints.length - 1; index >= 0; index -= 1) {
-    const date = fundPoints[index]?.date
-    if (date && benchmarkDates.has(date)) return date
-  }
-  return undefined
-}
-
 function quarterEndDate(year: number, quarter: 1 | 2 | 3 | 4): string {
   return new Date(Date.UTC(year, quarter * 3, 0)).toISOString().slice(0, 10)
-}
-
-function isIsoDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const date = new Date(`${value}T00:00:00.000Z`)
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }

@@ -23,7 +23,7 @@ export function parseTiantianFundNetValueHistoryResponse(
   const pointsByDate = new Map<string, FundNetValuePoint>()
   for (const item of value.data) {
     const point = mapPoint(item)
-    if (point) pointsByDate.set(point.date, point)
+    if (point && !pointsByDate.has(point.date)) pointsByDate.set(point.date, point)
   }
   const points = [...pointsByDate.values()].sort((left, right) =>
     left.date.localeCompare(right.date),

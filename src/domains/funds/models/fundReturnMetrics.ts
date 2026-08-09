@@ -55,9 +55,9 @@ export function calculateFundReturnMetrics(
 }
 
 export function calculateReturnMetrics(source: readonly ReturnMetricPoint[]): FundReturnMetrics {
-  const points = source
-    .filter((point) => isDate(point.date) && Number.isFinite(point.value) && point.value > 0)
-    .sort((left, right) => left.date.localeCompare(right.date))
+  const points = uniqueByDate(
+    source.filter((point) => isDate(point.date) && Number.isFinite(point.value) && point.value > 0),
+  )
   const end = points.at(-1)
   if (!end) return emptyMetrics()
 
@@ -221,6 +221,14 @@ function formatDate(date: Date): string {
 
 function isDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && formatDate(parseDate(value)) === value
+}
+
+function uniqueByDate(source: readonly ReturnMetricPoint[]): readonly ReturnMetricPoint[] {
+  const byDate = new Map<string, ReturnMetricPoint>()
+  for (const point of source) {
+    if (!byDate.has(point.date)) byDate.set(point.date, point)
+  }
+  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
 }
 
 function emptyMetrics(): FundReturnMetrics {

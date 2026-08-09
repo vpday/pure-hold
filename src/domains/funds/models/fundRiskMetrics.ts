@@ -249,9 +249,18 @@ function findPointAtOrBefore(
 }
 
 function validPoints(source: readonly ReturnMetricPoint[]): readonly ReturnMetricPoint[] {
-  return source
-    .filter(({ date, value }) => isDate(date) && Number.isFinite(value) && value > 0)
-    .sort((left, right) => left.date.localeCompare(right.date))
+  const byDate = new Map<string, ReturnMetricPoint>()
+  for (const point of source) {
+    if (
+      isDate(point.date) &&
+      Number.isFinite(point.value) &&
+      point.value > 0 &&
+      !byDate.has(point.date)
+    ) {
+      byDate.set(point.date, point)
+    }
+  }
+  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
 }
 
 function validDates(source: readonly string[]): readonly string[] {

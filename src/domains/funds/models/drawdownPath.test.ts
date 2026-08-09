@@ -55,3 +55,22 @@ test('does not mutate its input', () => {
 
   assert.deepEqual(source, before)
 })
+
+test('filters invalid dates, sorts points and keeps the first duplicate', () => {
+  const result = calculateDrawdownPath([
+    { date: '2024-01-02', value: 80 },
+    { date: 'invalid', value: 1 },
+    { date: '2024-01-01', value: 100 },
+    { date: '2024-01-02', value: 999 },
+  ])
+
+  assert.deepEqual(
+    result.points.map(({ date }) => date),
+    ['2024-01-01', '2024-01-02'],
+  )
+  assert.deepEqual(
+    result.points.map(({ drawdown }) => drawdown.toFixed(2)),
+    ['0.00', '-0.20'],
+  )
+  assert.equal(result.maximumDrawdown?.toFixed(2), '-0.20')
+})

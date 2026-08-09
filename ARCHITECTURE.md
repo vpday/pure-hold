@@ -264,16 +264,16 @@ FundDetailEntry 当前基金代码
      -> toFundDrawdownComparisonChartModel -> FundDrawdownComparisonChart
   -> useFundMetrics 首次进入数据指标时加载基金成立来历史与基准完整历史
      -> calculateFundReinvestedNav -> 复权净值点 + 被忽略的数据问题
-     -> 取基金与基准最近共同日期并截断双方序列
-     -> calculateReturnMetrics -> 基金、基准、相对超额的阶段、季/年度和 CAGR
-     -> calculateRollingFundRiskMetrics -> 同窗口的路径质量、回撤、波动率和风险调整收益
+     -> fundBenchmarkTimeSeriesAlignment -> 第一条有效记录、精确共同日期、共同截止日和基准预期日历
+     -> calculateReturnMetrics -> 同一共同日期序列上的基金、基准、相对超额的阶段、季/年度和 CAGR
+     -> calculateRollingFundRiskMetrics -> 同一共同日期窗口的路径质量、回撤、波动率和风险调整收益
      -> calculateFundRiskMetricsComparison -> 基金、基准和简单差值
      -> toFundMetricsSectionModel -> FundMetricsSection
 ```
 
-净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额与回撤对比属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
+净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额、回撤对比、数据指标和风险比较属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；它们共用 `src/features/fund-detail/models/fundBenchmarkTimeSeriesAlignment.ts`，在 feature 边界执行有效点过滤、升序排序、重复日期第一条有效记录优先、精确共同日期交集和共同截止日。只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
 
-复权净值把现金分红按除息日单位净值立即再投资，并把份额折算计入连续收益。`calculateFundCumulativeExcessReturn` 集中累计超额曲线口径：先取基金复权序列与 `H00300` 的最近精确共同日期作为截止日，再按该截止日选择 UTC 日历范围，只保留范围内精确共同日期并把第一个共同点归零；不做前值填充、最近日期匹配或插值。逐点复合超额复用 `(1 + 基金收益) / (1 + 基准收益) - 1`，范围切换仅重算内存结果。`calculateFundRollingExcessReturn` 复用成立来的精确共同日序列，在每个已完成日历月保留最后一个共同观测，并且只把当前月与准确向前12个日历月的端点配对；当前请求日处于月中时排除当月，处于日历月末时允许使用当月最后共同交易日。近 1/3/5 年与成立来范围只裁剪已经完成的滚动结果，年轻基金达到固定窗口后允许部分展示；每点基金、基准和超额仍使用复合增长公式，现有累计超额的固定起点累计语义保持不变。`calculateFundDrawdownComparison` 复用相同的共同截止、UTC 范围和精确共同日期语义，但基金与基准在每个所选范围内分别维护运行中高点；两条路径首点为 `0`，其余值非正，领域最大回撤保留负号。Presenter 在最大回撤摘要和 Tooltip 中显示其正幅度，曲线和 Y 轴仍保留非正水下语义。风险计算是 Funds Domain 的纯函数，以固定 `H00300` 日期作为当前唯一预期交易日历，独立检查最少观察数、12个月区段覆盖率和连续缺口；风险差值只使用基金值减基准值。无风险利率和目标收益率草稿、已应用参数及最近成功计算输入只存在于 `useFundMetrics` 会话内，不进入 Pinia 或持久化；点击应用只基于内存输入重算，不发网络请求。无效单位净值、无效或无法对齐的企业行动以及重复折算会被排除并形成结构化问题；中证响应部分不完整时展示可计算结果。指数刷新失败保留旧缓存和旧对比模型。领域层保留完整数值精度，Presenter 才负责两位百分比、显式正负号和展示语义。
+复权净值把现金分红按除息日单位净值立即再投资，并把份额折算计入连续收益。`fundBenchmarkTimeSeriesAlignment` 集中基金与 `H00300` 的共同日期口径：先保留第一条有效重复记录并排序，再取精确日期交集与最近共同截止日；不做前值填充、最近日期匹配或插值。`calculateFundCumulativeExcessReturn` 按共同截止日选择 UTC 日历范围，只保留范围内精确共同日期并把第一个共同点归零；逐点复合超额复用 `(1 + 基金收益) / (1 + 基准收益) - 1`，范围切换仅重算内存结果。`calculateFundRollingExcessReturn` 复用成立来的精确共同日序列，在每个已完成日历月保留最后一个共同观测，并且只把当前月与准确向前12个日历月的端点配对；当前请求日处于月中时排除当月，处于日历月末时允许使用当月最后共同交易日。近 1/3/5 年与成立来范围只裁剪已经完成的滚动结果，年轻基金达到固定窗口后允许部分展示；每点基金、基准和超额仍使用复合增长公式，现有累计超额的固定起点累计语义保持不变。`calculateFundDrawdownComparison` 消费同一组共同点，随后通过 `calculateDrawdownPath` 对两条单序列按日期排序、第一条重复优先并维护各自运行中高点；两条路径首点为 `0`，其余值非正，领域最大回撤保留负号。`calculateFundMetricsComparison` 与风险比较也只把精确共同点传给指标计算；风险数值使用共同点，覆盖率、连续缺口和最小样本判断仍使用规范化的 H00300 预期日历。风险计算的样本标准差、252 期年化、365.2425 日 CAGR、无风险/目标收益率、Sharpe、Sortino、Calmar 和质量阈值不因对齐重构改变。无风险利率和目标收益率草稿、已应用参数及最近成功计算输入只存在于 `useFundMetrics` 会话内，不进入 Pinia 或持久化；点击应用只基于内存输入重算，不发网络请求。无效单位净值、无效或无法对齐的企业行动以及重复折算会被排除并形成结构化问题；中证响应部分不完整时展示可计算结果。指数刷新失败保留旧缓存和旧对比模型。领域层保留完整数值精度，Presenter 才负责两位百分比、显式正负号和展示语义。
 
 关键 seam：
 
@@ -294,12 +294,13 @@ FundDetailEntry 当前基金代码
 - `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、重试和过期响应隔离。
 - `useFundReinvestedNavHistory` 隐藏成立来复权计算、本地范围截取、共享缓存订阅、重试和过期响应隔离。
 - `useFundCumulativeExcessReturn` 隐藏三份历史的并行订阅、懒激活、本地范围重算、刷新保旧数据、取消和过期响应隔离。
-- `calculateFundCumulativeExcessReturn` 隐藏精确日期交集、共同截止、UTC 范围、首点归零和逐点复合相对收益口径。
+- `fundBenchmarkTimeSeriesAlignment` 隐藏基金与 H00300 的有效点过滤、第一条重复日期优先、排序、精确日期交集、共同截止日和基准预期日历。
+- `calculateFundCumulativeExcessReturn` 隐藏共同对齐结果、共同截止、UTC 范围、首点归零和逐点复合相对收益口径。
 - `useFundRollingExcessReturn` 隐藏三份共享历史的懒订阅、近 1 年默认、四项本地范围重算、刷新保旧数据、取消和过期响应隔离。
 - `calculateFundRollingExcessReturn` 隐藏已完成月末、最后精确共同观测、准确12个月配对、复合超额和按日历月裁剪口径。
 - `useFundDrawdownComparison` 隐藏近 1 年默认、四项本地范围重算、共享历史订阅、刷新保旧数据、取消和过期响应隔离。
-- `calculateFundDrawdownComparison` 与 `calculateDrawdownPath` 隐藏精确共同日期、区间内独立高点、非正水下路径和带符号最大回撤口径。
-- `calculateFundReinvestedNav`、`calculateFundReturnMetrics` 与 `calculateReturnMetrics` 隐藏复权公式、异常记录处理、通用正值序列、UTC 日期端点和 CAGR 口径。
+- `calculateFundDrawdownComparison` 与 `calculateDrawdownPath` 隐藏精确共同日期、单序列第一条重复优先、区间内独立高点、非正水下路径和带符号最大回撤口径。
+- `calculateFundReinvestedNav`、`calculateFundReturnMetrics` 与 `calculateReturnMetrics` 隐藏复权公式、异常记录处理、第一条重复日期优先、通用正值序列、UTC 日期端点和 CAGR 口径。
 - `calculateRollingFundRiskMetrics` 隐藏滚动窗口、252期年化、路径质量门槛和五项风险指标；跨市场日历、回撤峰谷和修复指标不在当前 seam 内。
 - `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、风险参数会话、内存重算、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
