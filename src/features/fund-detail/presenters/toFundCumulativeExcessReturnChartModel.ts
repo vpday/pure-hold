@@ -1,13 +1,13 @@
-import type { FundRelativeBenchmarkResult } from '../models/fundRelativeBenchmark.ts'
+import type { FundCumulativeExcessReturnResult } from '../models/fundCumulativeExcessReturn.ts'
 import type {
-  FundRelativeBenchmarkChartModel,
-  FundRelativeBenchmarkSummaryTrend,
-} from '../models/fundRelativeBenchmarkChart.ts'
+  FundCumulativeExcessReturnChartModel,
+  FundCumulativeExcessReturnSummaryTrend,
+} from '../models/fundCumulativeExcessReturnChart.ts'
 
-export function toFundRelativeBenchmarkChartModel(
-  result: FundRelativeBenchmarkResult,
+export function toFundCumulativeExcessReturnChartModel(
+  result: FundCumulativeExcessReturnResult,
   rangeLabel: string,
-): FundRelativeBenchmarkChartModel {
+): FundCumulativeExcessReturnChartModel {
   return {
     actualRangeText:
       result.startDate && result.commonCutoffDate
@@ -19,7 +19,7 @@ export function toFundRelativeBenchmarkChartModel(
     rangeLabel,
     series: {
       name: '累计超额收益',
-      values: result.points.map(({ relativeReturn }) => relativeReturn * 100),
+      values: result.points.map(({ excessReturn }) => excessReturn * 100),
     },
     summary: [
       {
@@ -35,10 +35,10 @@ export function toFundRelativeBenchmarkChartModel(
         valueText: formatSignedPercent(result.benchmarkReturn),
       },
       {
-        color: 'relative',
+        color: 'excess',
         label: '累计超额收益',
-        trend: toTrend(result.relativeReturn),
-        valueText: formatSignedPercent(result.relativeReturn),
+        trend: toTrend(result.excessReturn),
+        valueText: formatSignedPercent(result.excessReturn),
       },
     ],
   }
@@ -50,7 +50,7 @@ function formatSignedPercent(value: number | null): string {
   return `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`
 }
 
-function toTrend(value: number | null): FundRelativeBenchmarkSummaryTrend {
+function toTrend(value: number | null): FundCumulativeExcessReturnSummaryTrend {
   if (value === null || value === 0) return 'neutral'
   return value > 0 ? 'up' : 'down'
 }

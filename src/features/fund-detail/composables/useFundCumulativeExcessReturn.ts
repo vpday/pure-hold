@@ -8,9 +8,9 @@ import {
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
 import { defaultFundHistoryRange } from '../config/fundHistoryRangeOptions.ts'
 import {
-  calculateFundRelativeBenchmark,
-  type FundRelativeBenchmarkResult,
-} from '../models/fundRelativeBenchmark.ts'
+  calculateFundCumulativeExcessReturn,
+  type FundCumulativeExcessReturnResult,
+} from '../models/fundCumulativeExcessReturn.ts'
 import type { FundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
 import type { FundHistoryDataSource } from './useFundHistoryDataSource.ts'
 
@@ -19,12 +19,12 @@ interface SuccessfulInputs {
   readonly fund: FundReinvestedNavResult
 }
 
-export function useFundRelativeBenchmark(
+export function useFundCumulativeExcessReturn(
   historyDataSource: FundHistoryDataSource,
   benchmarkDataSource: FundBenchmarkDataSource,
 ) {
   const currentFundCode = ref<string>()
-  const data = shallowRef<FundRelativeBenchmarkResult>()
+  const data = shallowRef<FundCumulativeExcessReturnResult>()
   const error = ref('')
   const isLoading = ref(false)
   const selectedRange = ref<FundHistoryRange>(defaultFundHistoryRange)
@@ -93,7 +93,7 @@ export function useFundRelativeBenchmark(
       if (data.value) {
         warning.value = '刷新失败，当前展示旧数据'
       } else {
-        error.value = '相对基准加载失败，请稍后重试'
+        error.value = '累计超额加载失败，请稍后重试'
       }
     } finally {
       if (isCurrentRequest(fundCode, pending.generation)) isLoading.value = false
@@ -122,7 +122,7 @@ export function useFundRelativeBenchmark(
   }
 
   function applyInputs(inputs: SuccessfulInputs): void {
-    const result = calculateFundRelativeBenchmark(
+    const result = calculateFundCumulativeExcessReturn(
       inputs.fund,
       inputs.benchmark,
       selectedRange.value,

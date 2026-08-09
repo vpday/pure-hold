@@ -9,7 +9,7 @@ import type {
 import type { FundDistributionTableModel } from './fundDistributionTableModel'
 import type { FundNetValueChartModel } from './fundNetValueChart'
 import type { FundPerformanceView } from './fundPerformanceView'
-import type { FundRelativeBenchmarkChartModel } from './fundRelativeBenchmarkChart'
+import type { FundCumulativeExcessReturnChartModel } from './fundCumulativeExcessReturnChart'
 import type { FundRollingExcessRange } from './fundRollingExcessReturn'
 import type { FundRollingExcessReturnChartModel } from './fundRollingExcessReturnChart'
 
@@ -33,7 +33,7 @@ interface FundReinvestedNavPanelModel extends FundNetValuePanelModel {
   readonly warning: string
 }
 
-interface FundRelativeBenchmarkPanelModel extends FundChartState<FundRelativeBenchmarkChartModel> {
+interface FundCumulativeExcessReturnPanelModel extends FundChartState<FundCumulativeExcessReturnChartModel> {
   readonly selectedRange: FundHistoryRange
   readonly warning: string
 }
@@ -62,6 +62,6 @@ export interface FundPerformanceSectionModel {
   readonly isVisible: boolean
   readonly netValue: FundNetValuePanelModel
   readonly reinvestedNetValue: FundReinvestedNavPanelModel
-  readonly relativeBenchmark: FundRelativeBenchmarkPanelModel
+  readonly cumulativeExcessReturn: FundCumulativeExcessReturnPanelModel
   readonly rollingExcessReturn: FundRollingExcessReturnPanelModel
 }

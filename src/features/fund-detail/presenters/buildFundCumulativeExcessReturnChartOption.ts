@@ -6,23 +6,23 @@ import type {
 } from 'echarts/components'
 import type { ComposeOption } from 'echarts/core'
 
-import type { FundRelativeBenchmarkChartModel } from '../models/fundRelativeBenchmarkChart.ts'
+import type { FundCumulativeExcessReturnChartModel } from '../models/fundCumulativeExcessReturnChart.ts'
 
-export type FundRelativeBenchmarkChartOption = ComposeOption<
+export type FundCumulativeExcessReturnChartOption = ComposeOption<
   GridComponentOption | LegendComponentOption | LineSeriesOption | TooltipComponentOption
 >
 
-export interface BuildFundRelativeBenchmarkChartOptionOptions {
+export interface BuildFundCumulativeExcessReturnChartOptionOptions {
   readonly showLegend?: boolean
   readonly theme?: {
     readonly line?: string
   }
 }
 
-export function buildFundRelativeBenchmarkChartOption(
-  model: FundRelativeBenchmarkChartModel,
-  options: BuildFundRelativeBenchmarkChartOptionOptions = {},
-): FundRelativeBenchmarkChartOption {
+export function buildFundCumulativeExcessReturnChartOption(
+  model: FundCumulativeExcessReturnChartModel,
+  options: BuildFundCumulativeExcessReturnChartOptionOptions = {},
+): FundCumulativeExcessReturnChartOption {
   const { showLegend = true, theme = {} } = options
   const maxAbs = symmetricMaximum(model.series.values)
   const series: LineSeriesOption = {

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundRelativeBenchmarkResult } from '../models/fundRelativeBenchmark.ts'
-import { toFundRelativeBenchmarkChartModel } from './toFundRelativeBenchmarkChartModel.ts'
+import type { FundCumulativeExcessReturnResult } from '../models/fundCumulativeExcessReturn.ts'
+import { toFundCumulativeExcessReturnChartModel } from './toFundCumulativeExcessReturnChartModel.ts'
 
 test('maps one percentage series, three signed summaries and the actual common period', () => {
-  const model = toFundRelativeBenchmarkChartModel(result(0.08, 0.05, 1.08 / 1.05 - 1), '近1月')
+  const model = toFundCumulativeExcessReturnChartModel(result(0.08, 0.05, 1.08 / 1.05 - 1), '近1月')
 
   assert.deepEqual(model.dates, ['2026-07-10', '2026-08-07'])
   assert.deepEqual(model.series, {
@@ -21,7 +21,7 @@ test('maps one percentage series, three signed summaries and the actual common p
       valueText: '+5.00%',
     },
     {
-      color: 'relative',
+      color: 'excess',
       label: '累计超额收益',
       trend: 'up',
       valueText: '+2.86%',
@@ -32,30 +32,30 @@ test('maps one percentage series, three signed summaries and the actual common p
   assert.equal(model.rangeLabel, '近1月')
 })
 
-test('uses down and neutral relative trends while preserving explicit signs', () => {
-  const down = toFundRelativeBenchmarkChartModel(result(-0.02, 0.01, -0.03), '近6月')
+test('uses down and neutral excess trends while preserving explicit signs', () => {
+  const down = toFundCumulativeExcessReturnChartModel(result(-0.02, 0.01, -0.03), '近6月')
   assert.equal(down.summary[0].valueText, '-2.00%')
   assert.equal(down.summary[2].trend, 'down')
 
-  const neutral = toFundRelativeBenchmarkChartModel(result(0, 0, 0), '近6月')
+  const neutral = toFundCumulativeExcessReturnChartModel(result(0, 0, 0), '近6月')
   assert.equal(neutral.summary[2].valueText, '+0.00%')
   assert.equal(neutral.summary[2].trend, 'neutral')
 })
 
 test('presents insufficient data without inventing a zero curve', () => {
-  const empty: FundRelativeBenchmarkResult = {
+  const empty: FundCumulativeExcessReturnResult = {
     benchmarkName: '沪深300全收益指数',
     benchmarkReturn: null,
     commonCutoffDate: null,
     fundReturn: null,
     points: [],
-    relativeReturn: null,
+    excessReturn: null,
     sourceIssues: { benchmark: [], fund: [] },
     startDate: null,
     status: 'insufficient-data',
   }
 
-  const model = toFundRelativeBenchmarkChartModel(empty, '成立来')
+  const model = toFundCumulativeExcessReturnChartModel(empty, '成立来')
 
   assert.deepEqual(model.dates, [])
   assert.deepEqual(model.series.values, [])
@@ -69,23 +69,23 @@ test('presents insufficient data without inventing a zero curve', () => {
 function result(
   fundReturn: number,
   benchmarkReturn: number,
-  relativeReturn: number,
-): FundRelativeBenchmarkResult {
+  excessReturn: number,
+): FundCumulativeExcessReturnResult {
   return {
     benchmarkName: '沪深300全收益指数',
     benchmarkReturn,
     commonCutoffDate: '2026-08-07',
     fundReturn,
     points: [
-      { benchmarkReturn: 0, date: '2026-07-10', fundReturn: 0, relativeReturn: 0 },
+      { benchmarkReturn: 0, date: '2026-07-10', excessReturn: 0, fundReturn: 0 },
       {
         benchmarkReturn,
         date: '2026-08-07',
         fundReturn,
-        relativeReturn,
+        excessReturn,
       },
     ],
-    relativeReturn,
+    excessReturn,
     sourceIssues: { benchmark: [], fund: [] },
     startDate: '2026-07-10',
     status: 'ready',

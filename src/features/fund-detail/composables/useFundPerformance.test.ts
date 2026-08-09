@@ -105,7 +105,7 @@ test('routes ranges and retries through the active performance session', async (
   )
 })
 
-test('activates, filters, retries and resets the relative benchmark session', async () => {
+test('activates, filters, retries and resets the cumulative excess return session', async () => {
   const benchmarkCalls: string[] = []
   const distributionCalls: string[] = []
   const netValueCalls: FundHistoryRange[] = []
@@ -126,26 +126,26 @@ test('activates, filters, retries and resets the relative benchmark session', as
 
   performance.open('161725')
   assert.deepEqual(benchmarkCalls, [])
-  await performance.selectView('relative-benchmark')
-  assert.equal(performance.model.value.activeView, 'relative-benchmark')
-  assert.equal(performance.model.value.relativeBenchmark.chart?.series.name, '累计超额收益')
+  await performance.selectView('cumulative-excess-return')
+  assert.equal(performance.model.value.activeView, 'cumulative-excess-return')
+  assert.equal(performance.model.value.cumulativeExcessReturn.chart?.series.name, '累计超额收益')
   assert.deepEqual(netValueCalls, ['ln'])
   assert.deepEqual(distributionCalls, ['161725'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.selectRange('relative-benchmark', 'ln')
-  assert.equal(performance.model.value.relativeBenchmark.selectedRange, 'ln')
+  await performance.selectRange('cumulative-excess-return', 'ln')
+  assert.equal(performance.model.value.cumulativeExcessReturn.selectedRange, 'ln')
   assert.deepEqual(netValueCalls, ['ln'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.retry('relative-benchmark')
+  await performance.retry('cumulative-excess-return')
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
   assert.equal(benchmarkCalls.length, 2)
 
   performance.open('000001')
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.relativeBenchmark.selectedRange, '6y')
-  assert.equal(performance.model.value.relativeBenchmark.chart, undefined)
+  assert.equal(performance.model.value.cumulativeExcessReturn.selectedRange, '6y')
+  assert.equal(performance.model.value.cumulativeExcessReturn.chart, undefined)
 })
 
 test('activates drawdown comparison lazily and routes its local range lifecycle', async () => {
@@ -339,7 +339,7 @@ test('shares history requests with the metrics session in both directions', asyn
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
 })
 
-test('merges concurrent relative benchmark and metrics force refreshes', async () => {
+test('merges concurrent cumulative excess return and metrics force refreshes', async () => {
   let benchmarkCalls = 0
   const distributionCalls: string[] = []
   const netValueCalls: FundHistoryRange[] = []
@@ -366,7 +366,7 @@ test('merges concurrent relative benchmark and metrics force refreshes', async (
   const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
   performance.open('161725')
   metrics.open('161725')
-  await Promise.all([performance.selectView('relative-benchmark'), metrics.activate()])
+  await Promise.all([performance.selectView('cumulative-excess-return'), metrics.activate()])
 
   assert.equal(benchmarkCalls, 1)
   assert.deepEqual(netValueCalls, ['ln'])

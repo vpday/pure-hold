@@ -2,10 +2,10 @@ import type { FundReinvestedNavResult } from '@/domains/funds/models/fundReinves
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
 import { calculateRelativeReturn } from './fundMetricsComparison.ts'
 import {
-  calculateFundRelativeBenchmark,
-  type FundRelativeBenchmarkPoint,
-  type FundRelativeBenchmarkSourceIssues,
-} from './fundRelativeBenchmark.ts'
+  calculateFundCumulativeExcessReturn,
+  type FundCumulativeExcessReturnPoint,
+  type FundBenchmarkSourceIssues,
+} from './fundCumulativeExcessReturn.ts'
 
 export type FundRollingExcessRange = 'n' | '3n' | '5n' | 'ln'
 
@@ -20,14 +20,14 @@ export interface FundRollingExcessReturnResult {
   readonly benchmarkName: string
   readonly commonCutoffDate: string | null
   readonly points: readonly FundRollingExcessReturnPoint[]
-  readonly sourceIssues: FundRelativeBenchmarkSourceIssues
+  readonly sourceIssues: FundBenchmarkSourceIssues
   readonly startDate: string | null
   readonly status: 'insufficient-data' | 'ready'
 }
 
 interface MonthlyEndpoint {
   readonly month: string
-  readonly point: FundRelativeBenchmarkPoint
+  readonly point: FundCumulativeExcessReturnPoint
 }
 
 const rangeMonthCounts: Readonly<Record<Exclude<FundRollingExcessRange, 'ln'>, number>> = {
@@ -41,7 +41,7 @@ export function calculateFundRollingExcessReturn(
   benchmark: IndexPerformanceHistory,
   range: FundRollingExcessRange,
 ): FundRollingExcessReturnResult {
-  const aligned = calculateFundRelativeBenchmark(fund, benchmark, 'ln')
+  const aligned = calculateFundCumulativeExcessReturn(fund, benchmark, 'ln')
   const completion = completedMonthCutoff(benchmark.endDate)
   if (!completion) return emptyResult(aligned)
 
@@ -89,7 +89,7 @@ export function calculateFundRollingExcessReturn(
 }
 
 function emptyResult(
-  aligned: ReturnType<typeof calculateFundRelativeBenchmark>,
+  aligned: ReturnType<typeof calculateFundCumulativeExcessReturn>,
 ): FundRollingExcessReturnResult {
   return {
     benchmarkName: aligned.benchmarkName,
@@ -102,9 +102,9 @@ function emptyResult(
 }
 
 function monthlyEndpoints(
-  points: readonly FundRelativeBenchmarkPoint[],
+  points: readonly FundCumulativeExcessReturnPoint[],
 ): readonly MonthlyEndpoint[] {
-  const byMonth = new Map<string, FundRelativeBenchmarkPoint>()
+  const byMonth = new Map<string, FundCumulativeExcessReturnPoint>()
   for (const point of points) byMonth.set(point.date.slice(0, 7), point)
   return [...byMonth].map(([month, point]) => ({ month, point }))
 }

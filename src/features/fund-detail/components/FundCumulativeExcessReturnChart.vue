@@ -7,8 +7,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
-import type { FundRelativeBenchmarkChartModel } from '../models/fundRelativeBenchmarkChart'
-import { buildFundRelativeBenchmarkChartOption } from '../presenters/buildFundRelativeBenchmarkChartOption'
+import type { FundCumulativeExcessReturnChartModel } from '../models/fundCumulativeExcessReturnChart'
+import { buildFundCumulativeExcessReturnChartOption } from '../presenters/buildFundCumulativeExcessReturnChartOption'
 
 echarts.use([
   LineChart,
@@ -22,7 +22,7 @@ echarts.use([
 const props = defineProps<{
   error: string
   isLoading: boolean
-  model?: FundRelativeBenchmarkChartModel
+  model?: FundCumulativeExcessReturnChartModel
   visible: boolean
   warning: string
 }>()
@@ -37,7 +37,7 @@ let resizeObserver: ResizeObserver | undefined
 function render(): void {
   if (!chart || !props.model || !hasChart.value) return
   chart.setOption(
-    buildFundRelativeBenchmarkChartOption(props.model, {
+    buildFundCumulativeExcessReturnChartOption(props.model, {
       showLegend: isLgUp.value,
       theme: {
         line: themeColor('--td-brand-color-6'),
@@ -62,14 +62,16 @@ function themeColor(name: string): string | undefined {
   return value || undefined
 }
 
-function summaryColor(color: FundRelativeBenchmarkChartModel['summary'][number]['color']): string {
+function summaryColor(
+  color: FundCumulativeExcessReturnChartModel['summary'][number]['color'],
+): string {
   if (color === 'fund') return 'var(--td-error-color-6)'
   if (color === 'benchmark') return 'var(--td-brand-color-4)'
   return 'var(--td-brand-color-6)'
 }
 
 function summaryValueColor(
-  trend: FundRelativeBenchmarkChartModel['summary'][number]['trend'],
+  trend: FundCumulativeExcessReturnChartModel['summary'][number]['trend'],
 ): string | undefined {
   if (trend === 'up') return 'var(--td-error-color)'
   if (trend === 'down') return 'var(--td-success-color)'
@@ -119,7 +121,7 @@ onBeforeUnmount(() => {
     <div v-show="hasChart" ref="container" class="h-90 w-full" />
 
     <div v-if="isLoading" class="loading-overlay">
-      <t-loading text="相对基准加载中" />
+      <t-loading text="累计超额加载中" />
     </div>
 
     <div v-if="error && model && hasChart" class="error-overlay">
@@ -130,7 +132,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="!hasChart && !isLoading" class="flex min-h-80 items-center justify-center py-8">
-      <t-empty :description="error || model?.emptyText || '暂无相对基准数据'">
+      <t-empty :description="error || model?.emptyText || '暂无累计超额收益数据'">
         <template #action>
           <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
         </template>

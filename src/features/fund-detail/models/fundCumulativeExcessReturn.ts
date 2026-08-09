@@ -12,35 +12,35 @@ import type {
 import { calculateRelativeReturn } from './fundMetricsComparison.ts'
 import { selectFundReinvestedNavRange } from './fundReinvestedNavRange.ts'
 
-export interface FundRelativeBenchmarkPoint {
+export interface FundCumulativeExcessReturnPoint {
   readonly benchmarkReturn: number
   readonly date: string
   readonly fundReturn: number
-  readonly relativeReturn: number
+  readonly excessReturn: number
 }
 
-export interface FundRelativeBenchmarkSourceIssues {
+export interface FundBenchmarkSourceIssues {
   readonly benchmark: readonly IndexPerformanceHistoryIssue[]
   readonly fund: readonly FundReinvestedNavIssue[]
 }
 
-export interface FundRelativeBenchmarkResult {
+export interface FundCumulativeExcessReturnResult {
   readonly benchmarkName: string
   readonly benchmarkReturn: number | null
   readonly commonCutoffDate: string | null
   readonly fundReturn: number | null
-  readonly points: readonly FundRelativeBenchmarkPoint[]
-  readonly relativeReturn: number | null
-  readonly sourceIssues: FundRelativeBenchmarkSourceIssues
+  readonly points: readonly FundCumulativeExcessReturnPoint[]
+  readonly excessReturn: number | null
+  readonly sourceIssues: FundBenchmarkSourceIssues
   readonly startDate: string | null
   readonly status: 'insufficient-data' | 'ready'
 }
 
-export function calculateFundRelativeBenchmark(
+export function calculateFundCumulativeExcessReturn(
   fund: FundReinvestedNavResult,
   benchmark: IndexPerformanceHistory,
   range: FundHistoryRange,
-): FundRelativeBenchmarkResult {
+): FundCumulativeExcessReturnResult {
   const fundPoints = validFundPoints(fund.points)
   const benchmarkPoints = validBenchmarkPoints(benchmark.points)
   const benchmarkByDate = new Map(benchmarkPoints.map((point) => [point.date, point]))
@@ -67,8 +67,8 @@ export function calculateFundRelativeBenchmark(
   const points = commonPoints.map(({ benchmarkPoint, fundPoint }) => {
     const fundReturn = fundPoint.reinvestedNetValue / first.fundPoint.reinvestedNetValue - 1
     const benchmarkReturn = benchmarkPoint.value / first.benchmarkPoint.value - 1
-    const relativeReturn = calculateRelativeReturn(fundReturn, benchmarkReturn)!
-    return { benchmarkReturn, date: fundPoint.date, fundReturn, relativeReturn }
+    const excessReturn = calculateRelativeReturn(fundReturn, benchmarkReturn)!
+    return { benchmarkReturn, date: fundPoint.date, excessReturn, fundReturn }
   })
   const latest = points.at(-1)!
 
@@ -78,7 +78,7 @@ export function calculateFundRelativeBenchmark(
     commonCutoffDate,
     fundReturn: latest.fundReturn,
     points,
-    relativeReturn: latest.relativeReturn,
+    excessReturn: latest.excessReturn,
     sourceIssues: sourceIssues(fund, benchmark),
     startDate: points[0]!.date,
     status: 'ready',
@@ -89,14 +89,14 @@ function emptyResult(
   fund: FundReinvestedNavResult,
   benchmark: IndexPerformanceHistory,
   commonCutoffDate: string | null,
-): FundRelativeBenchmarkResult {
+): FundCumulativeExcessReturnResult {
   return {
     benchmarkName: benchmark.indexName,
     benchmarkReturn: null,
     commonCutoffDate,
     fundReturn: null,
     points: [],
-    relativeReturn: null,
+    excessReturn: null,
     sourceIssues: sourceIssues(fund, benchmark),
     startDate: null,
     status: 'insufficient-data',
@@ -106,7 +106,7 @@ function emptyResult(
 function sourceIssues(
   fund: FundReinvestedNavResult,
   benchmark: IndexPerformanceHistory,
-): FundRelativeBenchmarkSourceIssues {
+): FundBenchmarkSourceIssues {
   return { benchmark: benchmark.issues, fund: fund.issues }
 }
 

@@ -3,5 +3,5 @@ export type FundPerformanceView =
   | 'drawdown-comparison'
   | 'net-value'
   | 'reinvested-net-value'
-  | 'relative-benchmark'
+  | 'cumulative-excess-return'
   | 'rolling-excess-return'

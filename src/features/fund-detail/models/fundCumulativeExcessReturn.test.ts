@@ -9,7 +9,7 @@ import type {
   IndexPerformanceHistory,
   IndexPerformanceHistoryIssue,
 } from '@/domains/indices/models/indexPerformanceHistory.ts'
-import { calculateFundRelativeBenchmark } from './fundRelativeBenchmark.ts'
+import { calculateFundCumulativeExcessReturn } from './fundCumulativeExcessReturn.ts'
 
 test('aligns exact dates, uses the latest common cutoff and starts the selected range at zero', () => {
   const fund = fundHistory([
@@ -27,7 +27,7 @@ test('aligns exact dates, uses the latest common cutoff and starts the selected 
     ['2026-08-07', 1050],
   ])
 
-  const result = calculateFundRelativeBenchmark(fund, benchmark, 'y')
+  const result = calculateFundCumulativeExcessReturn(fund, benchmark, 'y')
 
   assert.equal(result.status, 'ready')
   assert.equal(result.commonCutoffDate, '2026-08-07')
@@ -40,11 +40,11 @@ test('aligns exact dates, uses the latest common cutoff and starts the selected 
     benchmarkReturn: 0,
     date: '2026-07-10',
     fundReturn: 0,
-    relativeReturn: 0,
+    excessReturn: 0,
   })
   assertClose(result.fundReturn, 1.08 / 1.02 - 1)
   assertClose(result.benchmarkReturn, 0.05)
-  assertClose(result.relativeReturn, 1.08 / 1.02 / 1.05 - 1)
+  assertClose(result.excessReturn, 1.08 / 1.02 / 1.05 - 1)
 })
 
 test('supports every range with UTC month, year, year-to-date and inception boundaries', () => {
@@ -72,7 +72,7 @@ test('supports every range with UTC month, year, year-to-date and inception boun
   } as const
 
   for (const [range, startDate] of Object.entries(expectedStarts)) {
-    const result = calculateFundRelativeBenchmark(
+    const result = calculateFundCumulativeExcessReturn(
       fund,
       benchmark,
       range as keyof typeof expectedStarts,
@@ -86,7 +86,7 @@ test('supports every range with UTC month, year, year-to-date and inception boun
 })
 
 test('clamps leap-day year subtraction and uses the next common observation', () => {
-  const result = calculateFundRelativeBenchmark(
+  const result = calculateFundCumulativeExcessReturn(
     fundHistory([
       ['2023-02-27', 1],
       ['2023-03-01', 1.1],
@@ -103,13 +103,13 @@ test('clamps leap-day year subtraction and uses the next common observation', ()
   assert.equal(result.startDate, '2023-03-01')
 })
 
-test('calculates positive, negative and zero compound relative returns', () => {
+test('calculates positive, negative and zero compound excess returns', () => {
   for (const [fundEnd, benchmarkEnd, expectedSign] of [
     [1.2, 110, 1],
     [1.05, 110, -1],
     [1.1, 110, 0],
   ] as const) {
-    const result = calculateFundRelativeBenchmark(
+    const result = calculateFundCumulativeExcessReturn(
       fundHistory([
         ['2026-01-01', 1],
         ['2026-02-01', fundEnd],
@@ -120,7 +120,7 @@ test('calculates positive, negative and zero compound relative returns', () => {
       ]),
       'ln',
     )
-    assert.equal(Math.sign(result.relativeReturn!), expectedSign)
+    assert.equal(Math.sign(result.excessReturn!), expectedSign)
   }
 })
 
@@ -142,7 +142,7 @@ test('sorts, filters and deterministically keeps the first duplicate without mut
   const fundSnapshot = [...fund.points]
   const benchmarkSnapshot = [...benchmark.points]
 
-  const result = calculateFundRelativeBenchmark(fund, benchmark, 'ln')
+  const result = calculateFundCumulativeExcessReturn(fund, benchmark, 'ln')
 
   assertClose(result.fundReturn, 0.2)
   assertClose(result.benchmarkReturn, 0.2)
@@ -151,7 +151,7 @@ test('sorts, filters and deterministically keeps the first duplicate without mut
 })
 
 test('returns stable insufficient results for zero or one common observation', () => {
-  const none = calculateFundRelativeBenchmark(
+  const none = calculateFundCumulativeExcessReturn(
     fundHistory([['2026-01-01', 1]]),
     benchmarkHistory([['2026-01-02', 100]]),
     'ln',
@@ -160,7 +160,7 @@ test('returns stable insufficient results for zero or one common observation', (
   assert.equal(none.commonCutoffDate, null)
   assert.equal(none.status, 'insufficient-data')
 
-  const one = calculateFundRelativeBenchmark(
+  const one = calculateFundCumulativeExcessReturn(
     fundHistory([
       ['2000-01-01', 1],
       ['2004-12-31', 2],
@@ -180,7 +180,7 @@ test('preserves source issues without blocking a valid curve', () => {
     date: '2026-01-02',
   }
   const benchmarkIssue: IndexPerformanceHistoryIssue = { code: 'malformed-record', count: 1 }
-  const result = calculateFundRelativeBenchmark(
+  const result = calculateFundCumulativeExcessReturn(
     fundHistory(
       [
         ['2026-01-01', 1],

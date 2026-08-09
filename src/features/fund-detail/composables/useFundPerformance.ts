@@ -24,7 +24,7 @@ import { toFundCumulativeReturnsChartModel } from '../presenters/toFundCumulativ
 import { toFundDistributionTableModel } from '../presenters/toFundDistributionTableModel'
 import { toFundDrawdownComparisonChartModel } from '../presenters/toFundDrawdownComparisonChartModel'
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
-import { toFundRelativeBenchmarkChartModel } from '../presenters/toFundRelativeBenchmarkChartModel'
+import { toFundCumulativeExcessReturnChartModel } from '../presenters/toFundCumulativeExcessReturnChartModel'
 import { toFundReinvestedNavChartModel } from '../presenters/toFundReinvestedNavChartModel'
 import { toFundRollingExcessReturnChartModel } from '../presenters/toFundRollingExcessReturnChartModel'
 import {
@@ -37,7 +37,7 @@ import { useFundDistribution } from './useFundDistribution'
 import { useFundDrawdownComparison } from './useFundDrawdownComparison'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
-import { useFundRelativeBenchmark } from './useFundRelativeBenchmark'
+import { useFundCumulativeExcessReturn } from './useFundCumulativeExcessReturn'
 import { useFundReinvestedNavHistory } from './useFundReinvestedNavHistory'
 import { useFundRollingExcessReturn } from './useFundRollingExcessReturn'
 
@@ -69,7 +69,10 @@ export function useFundPerformance(
   const distribution = useFundDistribution(historyDataSource)
   const drawdownComparison = useFundDrawdownComparison(historyDataSource, benchmarkDataSource)
   const netValueHistory = useFundNetValueHistory(historyDataSource)
-  const relativeBenchmark = useFundRelativeBenchmark(historyDataSource, benchmarkDataSource)
+  const cumulativeExcessReturn = useFundCumulativeExcessReturn(
+    historyDataSource,
+    benchmarkDataSource,
+  )
   const reinvestedNavHistory = useFundReinvestedNavHistory(historyDataSource)
   const rollingExcessReturn = useFundRollingExcessReturn(historyDataSource, benchmarkDataSource)
   const activeView = ref<FundPerformanceView>('cumulative-returns')
@@ -84,8 +87,10 @@ export function useFundPerformance(
   const selectedRangeOption = computed(() =>
     fundHistoryRangeOptions.find(({ value }) => value === cumulativeReturns.selectedRange.value),
   )
-  const selectedRelativeRangeOption = computed(() =>
-    fundHistoryRangeOptions.find(({ value }) => value === relativeBenchmark.selectedRange.value),
+  const selectedCumulativeExcessReturnRangeOption = computed(() =>
+    fundHistoryRangeOptions.find(
+      ({ value }) => value === cumulativeExcessReturn.selectedRange.value,
+    ),
   )
   const selectedDrawdownRangeOption = computed(() =>
     fundDrawdownRangeOptions.find(({ value }) => value === drawdownComparison.selectedRange.value),
@@ -114,11 +119,11 @@ export function useFundPerformance(
       ? toFundDrawdownComparisonChartModel(result, rangeOption.label)
       : undefined
   })
-  const relativeBenchmarkChart = computed(() => {
-    const result = relativeBenchmark.data.value
-    const rangeOption = selectedRelativeRangeOption.value
+  const cumulativeExcessReturnChart = computed(() => {
+    const result = cumulativeExcessReturn.data.value
+    const rangeOption = selectedCumulativeExcessReturnRangeOption.value
     return result && rangeOption
-      ? toFundRelativeBenchmarkChartModel(result, rangeOption.label)
+      ? toFundCumulativeExcessReturnChartModel(result, rangeOption.label)
       : undefined
   })
   const rollingExcessReturnChart = computed(() => {
@@ -175,12 +180,12 @@ export function useFundPerformance(
         ? '部分净值、分红或份额折算数据异常，已忽略异常记录'
         : '',
     },
-    relativeBenchmark: {
-      chart: relativeBenchmarkChart.value,
-      error: relativeBenchmark.error.value,
-      isLoading: relativeBenchmark.isLoading.value,
-      selectedRange: relativeBenchmark.selectedRange.value,
-      warning: relativeBenchmark.warning.value,
+    cumulativeExcessReturn: {
+      chart: cumulativeExcessReturnChart.value,
+      error: cumulativeExcessReturn.error.value,
+      isLoading: cumulativeExcessReturn.isLoading.value,
+      selectedRange: cumulativeExcessReturn.selectedRange.value,
+      warning: cumulativeExcessReturn.warning.value,
     },
     rollingExcessReturn: {
       chart: rollingExcessReturnChart.value,
@@ -204,8 +209,8 @@ export function useFundPerformance(
     netValueHistory.initialize(code)
     reinvestedNavHistory.close()
     reinvestedNavHistory.initialize(code)
-    relativeBenchmark.close()
-    relativeBenchmark.initialize(code)
+    cumulativeExcessReturn.close()
+    cumulativeExcessReturn.initialize(code)
     rollingExcessReturn.close()
     rollingExcessReturn.initialize(code)
   }
@@ -218,7 +223,7 @@ export function useFundPerformance(
     drawdownComparison.close()
     netValueHistory.close()
     reinvestedNavHistory.close()
-    relativeBenchmark.close()
+    cumulativeExcessReturn.close()
     rollingExcessReturn.close()
   }
 
@@ -238,7 +243,7 @@ export function useFundPerformance(
       if (code && info) await cumulativeReturns.initialize(code, info)
       return
     }
-    if (view === 'relative-benchmark') await relativeBenchmark.activate()
+    if (view === 'cumulative-excess-return') await cumulativeExcessReturn.activate()
     else if (view === 'rolling-excess-return') await rollingExcessReturn.activate()
     else if (view === 'drawdown-comparison') await drawdownComparison.activate()
     else await (view === 'net-value' ? netValueHistory.activate() : reinvestedNavHistory.activate())
@@ -247,7 +252,7 @@ export function useFundPerformance(
   async function selectRange(view: FundPerformanceView, range: FundHistoryRange): Promise<void> {
     if (view === 'cumulative-returns') await cumulativeReturns.selectRange(range)
     else if (view === 'net-value') await netValueHistory.selectRange(range)
-    else if (view === 'relative-benchmark') relativeBenchmark.selectRange(range)
+    else if (view === 'cumulative-excess-return') cumulativeExcessReturn.selectRange(range)
     else if (view === 'rolling-excess-return')
       rollingExcessReturn.selectRange(range as FundRollingExcessRange)
     else if (view === 'drawdown-comparison')
@@ -262,7 +267,7 @@ export function useFundPerformance(
   async function retry(view: FundPerformanceView): Promise<void> {
     if (view === 'cumulative-returns') await cumulativeReturns.retry()
     else if (view === 'net-value') await netValueHistory.retry()
-    else if (view === 'relative-benchmark') await relativeBenchmark.retry()
+    else if (view === 'cumulative-excess-return') await cumulativeExcessReturn.retry()
     else if (view === 'rolling-excess-return') await rollingExcessReturn.retry()
     else if (view === 'drawdown-comparison') await drawdownComparison.retry()
     else await reinvestedNavHistory.retry()
@@ -284,8 +289,8 @@ export function useFundPerformance(
         ? cumulativeReturns.refresh()
         : view === 'net-value'
           ? netValueHistory.refresh()
-          : view === 'relative-benchmark'
-            ? relativeBenchmark.refresh()
+          : view === 'cumulative-excess-return'
+            ? cumulativeExcessReturn.refresh()
             : view === 'rolling-excess-return'
               ? rollingExcessReturn.refresh()
               : view === 'drawdown-comparison'

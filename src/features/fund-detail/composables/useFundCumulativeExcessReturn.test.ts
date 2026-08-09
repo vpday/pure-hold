@@ -7,11 +7,11 @@ import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHis
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
 import { useFundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
 import { useFundHistoryDataSource } from './useFundHistoryDataSource.ts'
-import { useFundRelativeBenchmark } from './useFundRelativeBenchmark.ts'
+import { useFundCumulativeExcessReturn } from './useFundCumulativeExcessReturn.ts'
 
 test('loads lazily, defaults to six months and changes ranges without requesting', async () => {
   const calls: string[] = []
-  const session = useFundRelativeBenchmark(historySource(calls), benchmarkSource(calls))
+  const session = useFundCumulativeExcessReturn(historySource(calls), benchmarkSource(calls))
 
   session.initialize('161725')
   assert.equal(session.selectedRange.value, '6y')
@@ -44,11 +44,11 @@ test('retries an initial failure and preserves successful data after a failed re
     },
     loadNetValueHistory: async (fundCode, range) => netValues(fundCode, range),
   })
-  const session = useFundRelativeBenchmark(dataSource, benchmarkSource([]))
+  const session = useFundCumulativeExcessReturn(dataSource, benchmarkSource([]))
   session.initialize('161725')
 
   await session.activate()
-  assert.equal(session.error.value, '相对基准加载失败，请稍后重试')
+  assert.equal(session.error.value, '累计超额加载失败，请稍后重试')
   assert.equal(Boolean(session.data.value), false)
 
   fail = false
@@ -72,7 +72,7 @@ test('surfaces source quality warnings without blocking a usable result', async 
   const benchmark = useFundBenchmarkDataSource({
     load: async (endDate) => benchmarkHistory(endDate, true),
   })
-  const session = useFundRelativeBenchmark(history, benchmark)
+  const session = useFundCumulativeExcessReturn(history, benchmark)
   session.initialize('161725')
 
   await session.activate()
@@ -107,7 +107,7 @@ test('closes without aborting another subscriber to the shared sources', async (
   const directNetValues = history.loadNetValueHistory('161725', 'ln')
   const directDistribution = history.loadDistribution('161725')
   const directBenchmark = benchmark.load()
-  const session = useFundRelativeBenchmark(history, benchmark)
+  const session = useFundCumulativeExcessReturn(history, benchmark)
   session.initialize('161725')
   const activation = session.activate()
 
@@ -129,7 +129,7 @@ test('ignores late results from an obsolete fund and resets the range on reopen'
     loadNetValueHistory: async (fundCode, range) =>
       fundCode === '161725' ? firstNetValues.promise : netValues(fundCode, range),
   })
-  const session = useFundRelativeBenchmark(dataSource, benchmarkSource([]))
+  const session = useFundCumulativeExcessReturn(dataSource, benchmarkSource([]))
   session.initialize('161725')
   session.selectRange('ln')
   const first = session.activate()
@@ -146,7 +146,7 @@ test('ignores late results from an obsolete fund and resets the range on reopen'
 
 test('does not refresh until activated', async () => {
   const calls: string[] = []
-  const session = useFundRelativeBenchmark(historySource(calls), benchmarkSource(calls))
+  const session = useFundCumulativeExcessReturn(historySource(calls), benchmarkSource(calls))
   session.initialize('161725')
   await session.refresh()
   assert.deepEqual(calls, [])

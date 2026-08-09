@@ -16,7 +16,7 @@ import type { FundRollingExcessRange } from '../models/fundRollingExcessReturn'
 import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
 import FundDrawdownComparisonChart from './FundDrawdownComparisonChart.vue'
 import FundNetValueChart from './FundNetValueChart.vue'
-import FundRelativeBenchmarkChart from './FundRelativeBenchmarkChart.vue'
+import FundCumulativeExcessReturnChart from './FundCumulativeExcessReturnChart.vue'
 import FundRollingExcessReturnChart from './FundRollingExcessReturnChart.vue'
 
 const props = defineProps<{ model: FundPerformanceSectionModel }>()
@@ -31,7 +31,7 @@ const emit = defineEmits<{
 
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
-  { label: '相对基准', value: 'relative-benchmark' },
+  { label: '累计超额', value: 'cumulative-excess-return' },
   { label: '滚动超额', value: 'rolling-excess-return' },
   { label: '回撤对比', value: 'drawdown-comparison' },
   { label: '净值走势', value: 'net-value' },
@@ -121,24 +121,24 @@ onBeforeUnmount(() => {
             @retry="emit('retry', 'cumulative-returns')"
           />
         </div>
-        <div v-else-if="performanceTab.value === 'relative-benchmark'" class="pt-4">
+        <div v-else-if="performanceTab.value === 'cumulative-excess-return'" class="pt-4">
           <div class="performance-filters">
             <t-select
               label="日期范围："
               :options="fundHistoryRangeOptions"
-              :value="model.relativeBenchmark.selectedRange"
+              :value="model.cumulativeExcessReturn.selectedRange"
               @update:value="
-                emit('selectRange', 'relative-benchmark', String($event) as FundHistoryRange)
+                emit('selectRange', 'cumulative-excess-return', String($event) as FundHistoryRange)
               "
             />
           </div>
-          <FundRelativeBenchmarkChart
-            :error="model.relativeBenchmark.error"
-            :is-loading="model.relativeBenchmark.isLoading"
-            :model="model.relativeBenchmark.chart"
-            :visible="model.isVisible && activeTab === 'relative-benchmark'"
-            :warning="model.relativeBenchmark.warning"
-            @retry="emit('retry', 'relative-benchmark')"
+          <FundCumulativeExcessReturnChart
+            :error="model.cumulativeExcessReturn.error"
+            :is-loading="model.cumulativeExcessReturn.isLoading"
+            :model="model.cumulativeExcessReturn.chart"
+            :visible="model.isVisible && activeTab === 'cumulative-excess-return'"
+            :warning="model.cumulativeExcessReturn.warning"
+            @retry="emit('retry', 'cumulative-excess-return')"
           />
         </div>
         <div v-else-if="performanceTab.value === 'drawdown-comparison'" class="pt-4">
