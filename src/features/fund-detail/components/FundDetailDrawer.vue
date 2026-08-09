@@ -74,11 +74,8 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
       />
     </template>
 
-    <div
-      ref="scrollContainer"
-      class="h-full min-h-0 overflow-x-hidden overflow-y-auto fund-detail-scroll"
-    >
-      <div class="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_9rem] lg:gap-4">
+    <div class="fund-detail-layout">
+      <div ref="scrollContainer" class="fund-detail-scroll">
         <main class="min-w-0">
           <section
             id="fund-detail-overview"
@@ -86,7 +83,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             class="min-w-0"
           >
             <h2 id="fund-detail-overview-title" class="section-title">基金概览</h2>
-            <div class="mt-4 grid grid-cols-3 lg:grid-cols-5 lg:gap-5">
+            <div class="mt-4 grid gap-2 grid-cols-2 lg:grid-cols-5 lg:gap-5">
               <div v-if="viewModel.estimatedNavText !== '--'">
                 <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
                 <p class="nav-value">
@@ -239,28 +236,28 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             <p class="section-placeholder">成交记录功能后续开发</p>
           </section>
         </main>
-
-        <aside
-          v-if="scrollContainer"
-          class="sticky top-1 hidden self-start lg:block"
-          aria-label="基金详情章节导航"
-        >
-          <t-anchor
-            size="small"
-            :container="getScrollContainer"
-            :target-offset="sectionTargetOffset"
-            @change="syncSectionFromAnchor"
-            @click="preventAnchorHash"
-          >
-            <t-anchor-item
-              v-for="section in sections"
-              :key="section.value"
-              :href="section.href"
-              :title="section.label"
-            />
-          </t-anchor>
-        </aside>
       </div>
+
+      <aside
+        v-if="scrollContainer"
+        class="hidden self-start lg:block"
+        aria-label="基金详情章节导航"
+      >
+        <t-anchor
+          size="small"
+          :container="getScrollContainer"
+          :target-offset="sectionTargetOffset"
+          @change="syncSectionFromAnchor"
+          @click="preventAnchorHash"
+        >
+          <t-anchor-item
+            v-for="section in sections"
+            :key="section.value"
+            :href="section.href"
+            :title="section.label"
+          />
+        </t-anchor>
+      </aside>
     </div>
   </t-drawer>
 </template>
@@ -273,7 +270,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 .details-grid {
-  @apply grid grid-cols-3 lg:grid-cols-5;
+  @apply grid gap-2 grid-cols-2 lg:grid-cols-5 lg:gap-5;
 }
 
 .detail-section {
@@ -281,7 +278,16 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 .fund-detail-scroll {
+  @apply h-full overflow-y-auto scrollbar-none;
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.fund-detail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.fund-detail-layout {
+  @apply grid h-full lg:grid-cols-[minmax(0,1fr)_7rem] lg:gap-4;
 }
 
 .section-placeholder {
