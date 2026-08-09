@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": ["auto-imports.d.ts", "components.d.ts"],
   "semi": false,
   "singleQuote": true
 }
