@@ -7,6 +7,11 @@ import type { FundCumulativeReturns } from '@/domains/funds/models/fundCumulativ
 import type { FundDistributionHistory } from '@/domains/funds/models/fundDistributionHistory'
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory'
+import type {
+  FundPerformancePanelId,
+  FundPerformancePanelModel,
+} from '../models/fundPerformancePanel'
+import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
 import { useFundBenchmarkDataSource } from './useFundBenchmarkDataSource'
 import { useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundMetrics } from './useFundMetrics'
@@ -35,24 +40,45 @@ test('owns performance initialization and builds every chart model', async () =>
   await performance.updateBasicInfo('161725', basicInfo('161725', '399997', '中证白酒指数'))
 
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.cumulativeReturns.chart?.series[1].name, '中证白酒指数')
+  assert.deepEqual(
+    performance.model.value.panels.map(({ id }) => id),
+    [
+      'cumulative-returns',
+      'cumulative-excess-return',
+      'rolling-excess-return',
+      'drawdown-comparison',
+      'net-value',
+      'reinvested-net-value',
+      'distribution',
+    ],
+  )
+  assert.equal(
+    panel(performance.model.value, 'cumulative-returns').chart?.series[1].name,
+    '中证白酒指数',
+  )
   assert.deepEqual(cumulativeCalls[0]?.slice(0, 3), ['161725', '399997', '6y'])
   assert.equal(distributionCalls.length, 0)
   assert.equal(netValueCalls.length, 0)
 
-  await performance.activateDistribution()
-  await performance.selectView('net-value')
+  await performance.dispatch({ panelId: 'distribution', type: 'activate-panel' })
+  await performance.dispatch({ type: 'select-view', view: 'net-value' })
 
-  assert.equal(performance.model.value.distribution.dividends[0]?.dividendPerTenUnits, '0.4500')
+  assert.equal(
+    panel(performance.model.value, 'distribution').dividends[0]?.dividendPerTenUnits,
+    '0.4500',
+  )
   assert.equal(distributionCalls.length, 1)
   assert.equal(performance.model.value.activeView, 'net-value')
-  assert.equal(performance.model.value.netValue.chart?.series[0].values[0], 1)
+  assert.equal(panel(performance.model.value, 'net-value').chart?.series[0].values[0], 1)
   assert.deepEqual(netValueCalls[0]?.slice(0, 2), ['161725', '6y'])
 
-  await performance.selectView('reinvested-net-value')
-  assert.equal(performance.model.value.reinvestedNetValue.chart?.series[1].name, '复权净值')
+  await performance.dispatch({ type: 'select-view', view: 'reinvested-net-value' })
   assert.equal(
-    performance.model.value.reinvestedNetValue.warning,
+    panel(performance.model.value, 'reinvested-net-value').chart?.series[1].name,
+    '复权净值',
+  )
+  assert.equal(
+    panel(performance.model.value, 'reinvested-net-value').warning,
     '部分净值、分红或份额折算数据异常，已忽略异常记录',
   )
   assert.deepEqual(netValueCalls[1]?.slice(0, 2), ['161725', 'ln'])
@@ -76,14 +102,14 @@ test('routes ranges and retries through the active performance session', async (
 
   performance.open('161725')
   await performance.updateBasicInfo('161725', basicInfo('161725'))
-  await performance.selectRange('cumulative-returns', 'n')
-  await performance.retry('cumulative-returns')
-  await performance.selectView('net-value')
-  await performance.selectRange('net-value', '3n')
-  await performance.retry('net-value')
-  await performance.selectView('reinvested-net-value')
-  await performance.selectRange('reinvested-net-value', 'y')
-  await performance.retry('reinvested-net-value')
+  await performance.dispatch({ range: 'n', type: 'select-range', view: 'cumulative-returns' })
+  await performance.dispatch({ panelId: 'cumulative-returns', type: 'retry-panel' })
+  await performance.dispatch({ type: 'select-view', view: 'net-value' })
+  await performance.dispatch({ range: '3n', type: 'select-range', view: 'net-value' })
+  await performance.dispatch({ panelId: 'net-value', type: 'retry-panel' })
+  await performance.dispatch({ type: 'select-view', view: 'reinvested-net-value' })
+  await performance.dispatch({ range: 'y', type: 'select-range', view: 'reinvested-net-value' })
+  await performance.dispatch({ panelId: 'reinvested-net-value', type: 'retry-panel' })
 
   assert.deepEqual(
     cumulativeCalls.map((call) => call.slice(0, 3)),
@@ -126,26 +152,33 @@ test('activates, filters, retries and resets the cumulative excess return sessio
 
   performance.open('161725')
   assert.deepEqual(benchmarkCalls, [])
-  await performance.selectView('cumulative-excess-return')
+  await performance.dispatch({ type: 'select-view', view: 'cumulative-excess-return' })
   assert.equal(performance.model.value.activeView, 'cumulative-excess-return')
-  assert.equal(performance.model.value.cumulativeExcessReturn.chart?.series.name, '累计超额收益')
+  assert.equal(
+    panel(performance.model.value, 'cumulative-excess-return').chart?.series.name,
+    '累计超额收益',
+  )
   assert.deepEqual(netValueCalls, ['ln'])
   assert.deepEqual(distributionCalls, ['161725'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.selectRange('cumulative-excess-return', 'ln')
-  assert.equal(performance.model.value.cumulativeExcessReturn.selectedRange, 'ln')
+  await performance.dispatch({
+    range: 'ln',
+    type: 'select-range',
+    view: 'cumulative-excess-return',
+  })
+  assert.equal(panel(performance.model.value, 'cumulative-excess-return').selectedRange, 'ln')
   assert.deepEqual(netValueCalls, ['ln'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.retry('cumulative-excess-return')
+  await performance.dispatch({ panelId: 'cumulative-excess-return', type: 'retry-panel' })
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
   assert.equal(benchmarkCalls.length, 2)
 
   performance.open('000001')
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.cumulativeExcessReturn.selectedRange, '6y')
-  assert.equal(performance.model.value.cumulativeExcessReturn.chart, undefined)
+  assert.equal(panel(performance.model.value, 'cumulative-excess-return').selectedRange, '6y')
+  assert.equal(panel(performance.model.value, 'cumulative-excess-return').chart, undefined)
 })
 
 test('activates drawdown comparison lazily and routes its local range lifecycle', async () => {
@@ -168,29 +201,32 @@ test('activates drawdown comparison lazily and routes its local range lifecycle'
   })
 
   performance.open('161725')
-  assert.equal(performance.model.value.drawdownComparison.selectedRange, 'n')
+  assert.equal(panel(performance.model.value, 'drawdown-comparison').selectedRange, 'n')
   assert.deepEqual(benchmarkCalls, [])
 
-  await performance.selectView('drawdown-comparison')
+  await performance.dispatch({ type: 'select-view', view: 'drawdown-comparison' })
   assert.equal(performance.model.value.activeView, 'drawdown-comparison')
-  assert.equal(performance.model.value.drawdownComparison.chart?.series[0].name, '基金回撤')
+  assert.equal(
+    panel(performance.model.value, 'drawdown-comparison').chart?.series[0].name,
+    '基金回撤',
+  )
   assert.deepEqual(netValueCalls, ['ln'])
   assert.deepEqual(distributionCalls, ['161725'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.selectRange('drawdown-comparison', '3n')
-  assert.equal(performance.model.value.drawdownComparison.selectedRange, '3n')
+  await performance.dispatch({ range: '3n', type: 'select-range', view: 'drawdown-comparison' })
+  assert.equal(panel(performance.model.value, 'drawdown-comparison').selectedRange, '3n')
   assert.deepEqual(netValueCalls, ['ln'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.retry('drawdown-comparison')
+  await performance.dispatch({ panelId: 'drawdown-comparison', type: 'retry-panel' })
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
   assert.equal(benchmarkCalls.length, 2)
 
   performance.open('000001')
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.drawdownComparison.selectedRange, 'n')
-  assert.equal(performance.model.value.drawdownComparison.chart, undefined)
+  assert.equal(panel(performance.model.value, 'drawdown-comparison').selectedRange, 'n')
+  assert.equal(panel(performance.model.value, 'drawdown-comparison').chart, undefined)
 })
 
 test('activates rolling excess lazily and routes range, retry, refresh and reopen', async () => {
@@ -214,21 +250,24 @@ test('activates rolling excess lazily and routes range, retry, refresh and reope
   })
 
   performance.open('161725')
-  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'n')
+  assert.equal(panel(performance.model.value, 'rolling-excess-return').selectedRange, 'n')
   assert.deepEqual(benchmarkCalls, [])
 
-  await performance.selectView('rolling-excess-return')
+  await performance.dispatch({ type: 'select-view', view: 'rolling-excess-return' })
   assert.equal(performance.model.value.activeView, 'rolling-excess-return')
-  assert.equal(performance.model.value.rollingExcessReturn.chart?.series.name, '滚动12个月超额收益')
+  assert.equal(
+    panel(performance.model.value, 'rolling-excess-return').chart?.series.name,
+    '滚动12个月超额收益',
+  )
   assert.deepEqual(netValueCalls, ['ln'])
   assert.deepEqual(distributionCalls, ['161725'])
   assert.equal(benchmarkCalls.length, 1)
 
-  await performance.selectRange('rolling-excess-return', 'ln')
-  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'ln')
+  await performance.dispatch({ range: 'ln', type: 'select-range', view: 'rolling-excess-return' })
+  assert.equal(panel(performance.model.value, 'rolling-excess-return').selectedRange, 'ln')
   assert.deepEqual(netValueCalls, ['ln'])
 
-  await performance.retry('rolling-excess-return')
+  await performance.dispatch({ panelId: 'rolling-excess-return', type: 'retry-panel' })
   await performance.refresh()
   assert.deepEqual(netValueCalls, ['ln', 'ln', 'ln'])
   assert.equal(benchmarkCalls.length, 3)
@@ -239,8 +278,8 @@ test('activates rolling excess lazily and routes range, retry, refresh and reope
 
   performance.open('000001')
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.rollingExcessReturn.selectedRange, 'n')
-  assert.equal(performance.model.value.rollingExcessReturn.chart, undefined)
+  assert.equal(panel(performance.model.value, 'rolling-excess-return').selectedRange, 'n')
+  assert.equal(panel(performance.model.value, 'rolling-excess-return').chart, undefined)
 })
 
 test('refreshes only the visible active view and resets on reopen', async () => {
@@ -261,8 +300,8 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   })
 
   performance.open('161725')
-  await performance.activateDistribution()
-  await performance.selectView('net-value')
+  await performance.dispatch({ panelId: 'distribution', type: 'activate-panel' })
+  await performance.dispatch({ type: 'select-view', view: 'net-value' })
   await performance.refresh()
   assert.equal(netValueCalls.length, 1)
   assert.equal(distributionCalls.length, 1)
@@ -272,16 +311,16 @@ test('refreshes only the visible active view and resets on reopen', async () => 
   assert.equal(netValueCalls.length, 2)
   assert.equal(distributionCalls.length, 2)
 
-  await performance.selectRange('net-value', 'n')
+  await performance.dispatch({ range: 'n', type: 'select-range', view: 'net-value' })
   performance.close()
   performance.open('000001')
 
   assert.equal(performance.model.value.activeView, 'cumulative-returns')
-  assert.equal(performance.model.value.netValue.selectedRange, '6y')
-  assert.equal(performance.model.value.netValue.chart, undefined)
-  assert.equal(performance.model.value.reinvestedNetValue.selectedRange, '6y')
-  assert.equal(performance.model.value.reinvestedNetValue.chart, undefined)
-  assert.equal(performance.model.value.distribution.hasLoaded, false)
+  assert.equal(panel(performance.model.value, 'net-value').selectedRange, '6y')
+  assert.equal(panel(performance.model.value, 'net-value').chart, undefined)
+  assert.equal(panel(performance.model.value, 'reinvested-net-value').selectedRange, '6y')
+  assert.equal(panel(performance.model.value, 'reinvested-net-value').chart, undefined)
+  assert.equal(panel(performance.model.value, 'distribution').hasLoaded, false)
 })
 
 test('shares history requests with the metrics session in both directions', async () => {
@@ -320,17 +359,17 @@ test('shares history requests with the metrics session in both directions', asyn
   assert.deepEqual(distributionCalls, ['161725'])
   assert.deepEqual(netValueCalls, ['ln'])
 
-  await performance.selectView('rolling-excess-return')
+  await performance.dispatch({ type: 'select-view', view: 'rolling-excess-return' })
   assert.deepEqual(distributionCalls, ['161725'])
   assert.deepEqual(netValueCalls, ['ln'])
 
-  await performance.selectView('reinvested-net-value')
+  await performance.dispatch({ type: 'select-view', view: 'reinvested-net-value' })
   assert.deepEqual(distributionCalls, ['161725'])
   assert.deepEqual(netValueCalls, ['ln'])
 
   performance.open('000001')
   metrics.open('000001')
-  await performance.selectView('reinvested-net-value')
+  await performance.dispatch({ type: 'select-view', view: 'reinvested-net-value' })
   assert.deepEqual(distributionCalls, ['161725', '000001'])
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
 
@@ -366,7 +405,10 @@ test('merges concurrent cumulative excess return and metrics force refreshes', a
   const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
   performance.open('161725')
   metrics.open('161725')
-  await Promise.all([performance.selectView('cumulative-excess-return'), metrics.activate()])
+  await Promise.all([
+    performance.dispatch({ type: 'select-view', view: 'cumulative-excess-return' }),
+    metrics.activate(),
+  ])
 
   assert.equal(benchmarkCalls, 1)
   assert.deepEqual(netValueCalls, ['ln'])
@@ -496,4 +538,13 @@ function basicInfo(
     trackingIndexCode,
     trackingIndexName,
   }
+}
+
+function panel<TId extends FundPerformancePanelId>(
+  model: FundPerformanceSectionModel,
+  id: TId,
+): Extract<FundPerformancePanelModel, { readonly id: TId }> {
+  const value = model.panels.find((item) => item.id === id)
+  assert.ok(value)
+  return value as Extract<FundPerformancePanelModel, { readonly id: TId }>
 }
