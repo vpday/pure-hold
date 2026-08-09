@@ -4,7 +4,7 @@ import test from 'node:test'
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
 import { useFundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
 
-test('shares in-flight loads and caches one successful request per Shanghai calendar day', async () => {
+test('shares in-flight loads, caches normal loads and replaces the cache on force refresh', async () => {
   const requests: Array<Deferred<IndexPerformanceHistory>> = []
   const endDates: string[] = []
   let now = new Date('2026-07-31T16:00:00Z')
@@ -26,17 +26,37 @@ test('shares in-flight loads and caches one successful request per Shanghai cale
 
   now = new Date('2026-08-01T15:59:59Z')
   assert.equal((await source.load()).endDate, '20260801')
-  assert.equal((await source.load({ force: true })).endDate, '20260801')
-  assert.equal(requests.length, 1)
+  const forced = source.load({ force: true })
+  const joinedForced = source.load()
+  assert.equal(requests.length, 2)
+  requests[1]!.resolve(history('20260801', 1005))
+  assert.equal(await forced, await joinedForced)
+  assert.equal((await source.load()).points[0]?.value, 1005)
 
   now = new Date('2026-08-01T16:00:00Z')
   const refresh = source.load()
   const joinedRefresh = source.load({ force: true })
-  assert.equal(requests.length, 2)
-  assert.deepEqual(endDates, ['20260801', '20260802'])
-  requests[1]!.resolve(history('20260802', 1010))
+  assert.equal(requests.length, 3)
+  assert.deepEqual(endDates, ['20260801', '20260801', '20260802'])
+  requests[2]!.resolve(history('20260802', 1010))
   assert.equal(await refresh, await joinedRefresh)
   assert.equal((await source.load()).endDate, '20260802')
+})
+
+test('keeps the previous successful cache when a force refresh fails', async () => {
+  let attempt = 0
+  const source = useFundBenchmarkDataSource({
+    load: async (endDate) => {
+      attempt += 1
+      if (attempt === 2) throw new Error('forced failure')
+      return history(endDate, attempt)
+    },
+  })
+
+  const cached = await source.load()
+  await assert.rejects(source.load({ force: true }), /forced failure/)
+  assert.equal(await source.load(), cached)
+  assert.equal(attempt, 2)
 })
 
 test('does not cache a failed refresh after the previous day expires', async () => {

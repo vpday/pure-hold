@@ -64,7 +64,7 @@ test('keeps old data and existing error behavior when a fund refresh fails', asy
   assert.equal(session.error.value, '基金数据指标加载失败，请稍后重试')
 })
 
-test('refreshes fund histories while reusing the same-day benchmark cache', async () => {
+test('force refreshes fund and same-day benchmark histories', async () => {
   let benchmarkAttempt = 0
   const benchmark = useFundBenchmarkDataSource({
     load: async (endDate) => {
@@ -81,7 +81,7 @@ test('refreshes fund histories while reusing the same-day benchmark cache', asyn
 
   assert.notEqual(session.data.value, original)
   assert.equal(result, 'updated')
-  assert.equal(benchmarkAttempt, 1)
+  assert.equal(benchmarkAttempt, 2)
   assert.equal(session.error.value, '')
   assert.deepEqual(session.model.value?.alerts, [])
 })
@@ -188,7 +188,7 @@ test('applies session risk assumptions without network requests and rejects inva
   assert.deepEqual(session.riskData.value, appliedRisk)
   const switchedRisk = session.riskData.value
   await session.refresh()
-  assert.equal(calls.length, 7)
+  assert.equal(calls.length, 8)
   assert.deepEqual(session.riskData.value, switchedRisk)
 })
 

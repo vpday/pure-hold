@@ -105,6 +105,49 @@ test('routes ranges and retries through the active performance session', async (
   )
 })
 
+test('activates, filters, retries and resets the relative benchmark session', async () => {
+  const benchmarkCalls: string[] = []
+  const distributionCalls: string[] = []
+  const netValueCalls: FundHistoryRange[] = []
+  const performance = useFundPerformance(ref(true), {
+    loadBenchmarkHistory: async (endDate) => {
+      benchmarkCalls.push(endDate)
+      return benchmarkResult(endDate)
+    },
+    loadDistribution: async (fundCode) => {
+      distributionCalls.push(fundCode)
+      return distributionResult(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      netValueCalls.push(range)
+      return netValueResult(fundCode, range)
+    },
+  })
+
+  performance.open('161725')
+  assert.deepEqual(benchmarkCalls, [])
+  await performance.selectView('relative-benchmark')
+  assert.equal(performance.model.value.activeView, 'relative-benchmark')
+  assert.equal(performance.model.value.relativeBenchmark.chart?.series.name, '累计超额收益')
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.deepEqual(distributionCalls, ['161725'])
+  assert.equal(benchmarkCalls.length, 1)
+
+  await performance.selectRange('relative-benchmark', 'ln')
+  assert.equal(performance.model.value.relativeBenchmark.selectedRange, 'ln')
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.equal(benchmarkCalls.length, 1)
+
+  await performance.retry('relative-benchmark')
+  assert.deepEqual(netValueCalls, ['ln', 'ln'])
+  assert.equal(benchmarkCalls.length, 2)
+
+  performance.open('000001')
+  assert.equal(performance.model.value.activeView, 'cumulative-returns')
+  assert.equal(performance.model.value.relativeBenchmark.selectedRange, '6y')
+  assert.equal(performance.model.value.relativeBenchmark.chart, undefined)
+})
+
 test('refreshes only the visible active view and resets on reopen', async () => {
   const isVisible = ref(false)
   const distributionCalls: unknown[][] = []
@@ -198,6 +241,45 @@ test('shares history requests with the metrics session in both directions', asyn
   assert.deepEqual(netValueCalls, ['ln', 'ln'])
 })
 
+test('merges concurrent relative benchmark and metrics force refreshes', async () => {
+  let benchmarkCalls = 0
+  const distributionCalls: string[] = []
+  const netValueCalls: FundHistoryRange[] = []
+  const historyDataSource = useFundHistoryDataSource({
+    loadDistribution: async (fundCode) => {
+      distributionCalls.push(fundCode)
+      return distributionResult(fundCode)
+    },
+    loadNetValueHistory: async (fundCode, range) => {
+      netValueCalls.push(range)
+      return netValueResult(fundCode, range)
+    },
+  })
+  const benchmarkDataSource = useFundBenchmarkDataSource({
+    load: async (endDate) => {
+      benchmarkCalls += 1
+      return benchmarkResult(endDate)
+    },
+  })
+  const performance = useFundPerformance(ref(true), {
+    benchmarkDataSource,
+    historyDataSource,
+  })
+  const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
+  performance.open('161725')
+  metrics.open('161725')
+  await Promise.all([performance.selectView('relative-benchmark'), metrics.activate()])
+
+  assert.equal(benchmarkCalls, 1)
+  assert.deepEqual(netValueCalls, ['ln'])
+  assert.deepEqual(distributionCalls, ['161725'])
+
+  await Promise.all([performance.refresh(), metrics.refresh()])
+  assert.equal(benchmarkCalls, 2)
+  assert.deepEqual(netValueCalls, ['ln', 'ln'])
+  assert.deepEqual(distributionCalls, ['161725', '161725'])
+})
+
 function cumulativeResult(
   fundCode: string,
   referenceIndexCode: string,
@@ -225,13 +307,34 @@ function netValueResult(fundCode: string, range: FundHistoryRange): FundNetValue
     fundCode,
     points: [
       {
-        cumulativeNetValue: 2,
+        cumulativeNetValue: 1,
+        dailyGrowthPercent: 0,
+        date: '2026-01-29',
+        unitNetValue: 1,
+      },
+      {
+        cumulativeNetValue: 1.1,
         dailyGrowthPercent: 1,
         date: '2026-07-29',
-        unitNetValue: 1,
+        unitNetValue: 1.1,
       },
     ],
     range,
+  }
+}
+
+function benchmarkResult(endDate: string) {
+  return {
+    endDate,
+    indexCode: 'H00300' as const,
+    indexName: '沪深300全收益指数' as const,
+    issues: [],
+    points: [
+      { date: '2004-12-31', value: 1000 },
+      { date: '2026-01-29', value: 2000 },
+      { date: '2026-07-29', value: 2100 },
+    ],
+    startDate: '20041231' as const,
   }
 }
 

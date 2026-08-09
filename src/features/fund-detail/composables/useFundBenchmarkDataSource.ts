@@ -47,7 +47,7 @@ export function useFundBenchmarkDataSource(
       pending = undefined
     }
     if (pending) return subscribe(pending, loadOptions.signal)
-    if (cache?.endDate === endDate) return Promise.resolve(cache)
+    if (!loadOptions.force && cache?.endDate === endDate) return Promise.resolve(cache)
 
     const controller = new AbortController()
     const next: PendingRequest = {

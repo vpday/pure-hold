@@ -7,6 +7,7 @@ import type {
 import type { FundDistributionTableModel } from './fundDistributionTableModel'
 import type { FundNetValueChartModel } from './fundNetValueChart'
 import type { FundPerformanceView } from './fundPerformanceView'
+import type { FundRelativeBenchmarkChartModel } from './fundRelativeBenchmarkChart'
 
 interface FundChartState<T> {
   readonly chart?: T
@@ -28,6 +29,11 @@ interface FundReinvestedNavPanelModel extends FundNetValuePanelModel {
   readonly warning: string
 }
 
+interface FundRelativeBenchmarkPanelModel extends FundChartState<FundRelativeBenchmarkChartModel> {
+  readonly selectedRange: FundHistoryRange
+  readonly warning: string
+}
+
 interface FundDistributionPanelModel extends FundDistributionTableModel {
   readonly error: string
   readonly hasLoaded: boolean
@@ -41,4 +47,5 @@ export interface FundPerformanceSectionModel {
   readonly isVisible: boolean
   readonly netValue: FundNetValuePanelModel
   readonly reinvestedNetValue: FundReinvestedNavPanelModel
+  readonly relativeBenchmark: FundRelativeBenchmarkPanelModel
 }

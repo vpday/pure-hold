@@ -1,24 +1,18 @@
 <script setup lang="ts">
 import { LineChart } from 'echarts/charts'
-import {
-  GridComponent,
-  LegendComponent,
-  MarkPointComponent,
-  TooltipComponent,
-} from 'echarts/components'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
-import type { FundCumulativeReturnsChartModel } from '../models/fundCumulativeReturnsChart'
-import { buildFundCumulativeReturnsChartOption } from '../presenters/buildFundCumulativeReturnsChartOption'
+import type { FundRelativeBenchmarkChartModel } from '../models/fundRelativeBenchmarkChart'
+import { buildFundRelativeBenchmarkChartOption } from '../presenters/buildFundRelativeBenchmarkChartOption'
 
 echarts.use([
   LineChart,
   TooltipComponent,
-  MarkPointComponent,
   GridComponent,
   LegendComponent,
   UniversalTransition,
@@ -28,27 +22,25 @@ echarts.use([
 const props = defineProps<{
   error: string
   isLoading: boolean
-  model?: FundCumulativeReturnsChartModel
+  model?: FundRelativeBenchmarkChartModel
   visible: boolean
+  warning: string
 }>()
 const emit = defineEmits<{ retry: [] }>()
 const container = ref<HTMLDivElement>()
 const { isLgUp } = useBreakpoints()
+const hasChart = computed(() => Boolean(props.model?.dates.length))
 
 let chart: echarts.ECharts | undefined
 let resizeObserver: ResizeObserver | undefined
 
 function render(): void {
-  if (!chart || !props.model) return
+  if (!chart || !props.model || !hasChart.value) return
   chart.setOption(
-    buildFundCumulativeReturnsChartOption(props.model, {
+    buildFundRelativeBenchmarkChartOption(props.model, {
       showLegend: isLgUp.value,
       theme: {
-        annotation: themeColor('--td-font-gray-3'),
-        drawdownLine: themeColor('--td-success-color-5'),
-        fundLine: themeColor('--td-error-color-6'),
-        peerLine: themeColor('--td-gray-color-5'),
-        referenceLine: themeColor('--td-brand-color-4'),
+        line: themeColor('--td-brand-color-6'),
       },
     }),
     true,
@@ -56,7 +48,7 @@ function render(): void {
 }
 
 async function syncChart(): Promise<void> {
-  if (!props.model) return
+  if (!hasChart.value) return
   await nextTick()
   const element = container.value
   if (!element || element.clientWidth === 0 || element.clientHeight === 0) return
@@ -70,17 +62,17 @@ function themeColor(name: string): string | undefined {
   return value || undefined
 }
 
-function summaryColor(color: FundCumulativeReturnsChartModel['summary'][number]['color']): string {
+function summaryColor(color: FundRelativeBenchmarkChartModel['summary'][number]['color']): string {
   if (color === 'fund') return 'var(--td-error-color-6)'
-  if (color === 'peer') return 'var(--td-gray-color-5)'
-  if (color === 'reference') return 'var(--td-brand-color-4)'
-  return 'var(--td-success-color)'
+  if (color === 'benchmark') return 'var(--td-brand-color-4)'
+  return 'var(--td-brand-color-6)'
 }
 
-function summaryValueColor(valueText: string): string | undefined {
-  const value = Number.parseFloat(valueText)
-  if (value < 0) return 'var(--td-success-color)'
-  if (value > 0) return 'var(--td-error-color)'
+function summaryValueColor(
+  trend: FundRelativeBenchmarkChartModel['summary'][number]['trend'],
+): string | undefined {
+  if (trend === 'up') return 'var(--td-error-color)'
+  if (trend === 'down') return 'var(--td-success-color)'
   return undefined
 }
 
@@ -107,32 +99,38 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="relative min-h-80 w-full overflow-hidden">
-    <div v-if="model" class="summary-grid">
+  <div class="relative min-h-80 w-full">
+    <t-alert v-if="warning" close-btn theme="warning" :message="warning" />
+
+    <div
+      v-if="model && hasChart"
+      class="summary-grid"
+      :class="{ 'lg:absolute lg:top-0 lg:left-0 lg:z-10': !warning }"
+    >
       <div v-for="item in model.summary" :key="item.label" class="summary-item">
         <span class="summary-dot" :style="{ backgroundColor: summaryColor(item.color) }" />
         <span class="truncate">
-          {{ item.label }}：<span :style="{ color: summaryValueColor(item.valueText) }">
+          {{ item.label }}：<span :style="{ color: summaryValueColor(item.trend) }">
             {{ item.valueText }}
           </span>
         </span>
       </div>
     </div>
-    <div v-show="model" ref="container" class="h-90 w-full" />
+    <div v-show="hasChart" ref="container" class="h-90 w-full" />
 
     <div v-if="isLoading" class="loading-overlay">
-      <t-loading text="累计收益加载中" />
+      <t-loading text="相对基准加载中" />
     </div>
 
-    <div v-if="error && model" class="error-overlay">
+    <div v-if="error && model && hasChart" class="error-overlay">
       <span>{{ error }}</span>
       <t-button size="small" theme="danger" variant="outline" @click="emit('retry')">
         重试
       </t-button>
     </div>
 
-    <div v-if="!model && !isLoading" class="flex min-h-80 items-center justify-center py-8">
-      <t-empty :description="error || '暂无累计收益数据'">
+    <div v-if="!hasChart && !isLoading" class="flex min-h-80 items-center justify-center py-8">
+      <t-empty :description="error || model?.emptyText || '暂无相对基准数据'">
         <template #action>
           <t-button size="small" variant="outline" @click="emit('retry')">重试</t-button>
         </template>
@@ -153,8 +151,7 @@ onBeforeUnmount(() => {
 }
 
 .summary-grid {
-  @apply grid grid-cols-2 text-xs text-(--td-text-color-primary) lg:absolute lg:top-0 lg:left-0 lg:z-10 lg:flex
-  lg:flex-nowrap lg:gap-3;
+  @apply grid grid-cols-2 text-xs text-(--td-text-color-primary) lg:flex lg:flex-nowrap lg:gap-3;
 }
 
 .summary-item {

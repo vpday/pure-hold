@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
-import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
 import FundHoldingsSection from './components/FundHoldingsSection.vue'
@@ -20,14 +19,13 @@ import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
 
 const emit = defineEmits<{ edit: [code: string] }>()
 const store = useFundsStore()
-const { isSmUp } = useBreakpoints()
 const detail = useFundDetail()
 const activeSection = ref('overview')
 const historyDataSource = useFundHistoryDataSource()
 const benchmarkDataSource = useFundBenchmarkDataSource()
 const performance = useFundPerformance(
   () => detail.visible.value && activeSection.value === 'performance',
-  { historyDataSource },
+  { benchmarkDataSource, historyDataSource },
 )
 const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
 const holdings = useFundHoldings(() => detail.visible.value && activeSection.value === 'holdings')
@@ -41,7 +39,6 @@ const viewModel = computed(() => {
     ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value)
     : undefined
 })
-const drawerSize = computed(() => (isSmUp.value ? '90dvh' : '100dvh'))
 
 watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, basicInfo]) => {
   if (visible && code && basicInfo) {
@@ -127,7 +124,7 @@ defineExpose({ open })
     :active-section="activeSection"
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
-    :size="drawerSize"
+    :size="'100dvh'"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"

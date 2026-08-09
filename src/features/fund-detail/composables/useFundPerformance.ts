@@ -19,15 +19,24 @@ import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
 import { toFundCumulativeReturnsChartModel } from '../presenters/toFundCumulativeReturnsChartModel'
 import { toFundDistributionTableModel } from '../presenters/toFundDistributionTableModel'
 import { toFundNetValueChartModel } from '../presenters/toFundNetValueChartModel'
+import { toFundRelativeBenchmarkChartModel } from '../presenters/toFundRelativeBenchmarkChartModel'
 import { toFundReinvestedNavChartModel } from '../presenters/toFundReinvestedNavChartModel'
+import {
+  type FundBenchmarkDataSource,
+  type LoadFundBenchmarkHistory,
+  useFundBenchmarkDataSource,
+} from './useFundBenchmarkDataSource'
 import { useFundCumulativeReturns } from './useFundCumulativeReturns'
 import { useFundDistribution } from './useFundDistribution'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
 import { useFundNetValueHistory } from './useFundNetValueHistory'
+import { useFundRelativeBenchmark } from './useFundRelativeBenchmark'
 import { useFundReinvestedNavHistory } from './useFundReinvestedNavHistory'
 
 interface UseFundPerformanceOptions {
+  readonly benchmarkDataSource?: FundBenchmarkDataSource
   readonly historyDataSource?: FundHistoryDataSource
+  readonly loadBenchmarkHistory?: LoadFundBenchmarkHistory
   readonly loadCumulativeReturns?: LoadFundCumulativeReturns
   readonly loadDistribution?: LoadFundDistribution
   readonly loadNetValueHistory?: LoadFundNetValueHistory
@@ -37,7 +46,11 @@ export function useFundPerformance(
   isVisible: MaybeRefOrGetter<boolean>,
   options: UseFundPerformanceOptions = {},
 ) {
+  const ownsBenchmarkDataSource = !options.benchmarkDataSource
   const ownsHistoryDataSource = !options.historyDataSource
+  const benchmarkDataSource =
+    options.benchmarkDataSource ??
+    useFundBenchmarkDataSource({ load: options.loadBenchmarkHistory })
   const historyDataSource =
     options.historyDataSource ??
     useFundHistoryDataSource({
@@ -47,6 +60,7 @@ export function useFundPerformance(
   const cumulativeReturns = useFundCumulativeReturns(options.loadCumulativeReturns)
   const distribution = useFundDistribution(historyDataSource)
   const netValueHistory = useFundNetValueHistory(historyDataSource)
+  const relativeBenchmark = useFundRelativeBenchmark(historyDataSource, benchmarkDataSource)
   const reinvestedNavHistory = useFundReinvestedNavHistory(historyDataSource)
   const activeView = ref<FundPerformanceView>('cumulative-returns')
   const currentFundCode = ref<string>()
@@ -60,6 +74,9 @@ export function useFundPerformance(
   const selectedRangeOption = computed(() =>
     fundHistoryRangeOptions.find(({ value }) => value === cumulativeReturns.selectedRange.value),
   )
+  const selectedRelativeRangeOption = computed(() =>
+    fundHistoryRangeOptions.find(({ value }) => value === relativeBenchmark.selectedRange.value),
+  )
   const cumulativeReturnsChart = computed(() => {
     const returns = cumulativeReturns.data.value
     const referenceIndex = selectedReferenceIndex.value
@@ -71,6 +88,13 @@ export function useFundPerformance(
   const netValueChart = computed(() => {
     const history = netValueHistory.data.value
     return history ? toFundNetValueChartModel(history) : undefined
+  })
+  const relativeBenchmarkChart = computed(() => {
+    const result = relativeBenchmark.data.value
+    const rangeOption = selectedRelativeRangeOption.value
+    return result && rangeOption
+      ? toFundRelativeBenchmarkChartModel(result, rangeOption.label)
+      : undefined
   })
   const reinvestedNetValueChart = computed(() => {
     const history = reinvestedNavHistory.selectedData.value
@@ -112,6 +136,13 @@ export function useFundPerformance(
         ? '部分净值、分红或份额折算数据异常，已忽略异常记录'
         : '',
     },
+    relativeBenchmark: {
+      chart: relativeBenchmarkChart.value,
+      error: relativeBenchmark.error.value,
+      isLoading: relativeBenchmark.isLoading.value,
+      selectedRange: relativeBenchmark.selectedRange.value,
+      warning: relativeBenchmark.warning.value,
+    },
   }))
 
   function open(code: string): void {
@@ -125,6 +156,8 @@ export function useFundPerformance(
     netValueHistory.initialize(code)
     reinvestedNavHistory.close()
     reinvestedNavHistory.initialize(code)
+    relativeBenchmark.close()
+    relativeBenchmark.initialize(code)
   }
 
   function close(): void {
@@ -134,6 +167,7 @@ export function useFundPerformance(
     distribution.close()
     netValueHistory.close()
     reinvestedNavHistory.close()
+    relativeBenchmark.close()
   }
 
   async function updateBasicInfo(code: string, value: FundBasicInfo): Promise<void> {
@@ -152,12 +186,14 @@ export function useFundPerformance(
       if (code && info) await cumulativeReturns.initialize(code, info)
       return
     }
-    await (view === 'net-value' ? netValueHistory.activate() : reinvestedNavHistory.activate())
+    if (view === 'relative-benchmark') await relativeBenchmark.activate()
+    else await (view === 'net-value' ? netValueHistory.activate() : reinvestedNavHistory.activate())
   }
 
   async function selectRange(view: FundPerformanceView, range: FundHistoryRange): Promise<void> {
     if (view === 'cumulative-returns') await cumulativeReturns.selectRange(range)
     else if (view === 'net-value') await netValueHistory.selectRange(range)
+    else if (view === 'relative-benchmark') relativeBenchmark.selectRange(range)
     else reinvestedNavHistory.selectRange(range)
   }
 
@@ -168,6 +204,7 @@ export function useFundPerformance(
   async function retry(view: FundPerformanceView): Promise<void> {
     if (view === 'cumulative-returns') await cumulativeReturns.retry()
     else if (view === 'net-value') await netValueHistory.retry()
+    else if (view === 'relative-benchmark') await relativeBenchmark.retry()
     else await reinvestedNavHistory.retry()
   }
 
@@ -187,12 +224,17 @@ export function useFundPerformance(
         ? cumulativeReturns.refresh()
         : view === 'net-value'
           ? netValueHistory.refresh()
-          : reinvestedNavHistory.refresh()
+          : view === 'relative-benchmark'
+            ? relativeBenchmark.refresh()
+            : reinvestedNavHistory.refresh()
     await Promise.all([chartRefresh, distribution.refresh()])
   }
 
-  if (getCurrentScope() && ownsHistoryDataSource) {
-    onScopeDispose(() => historyDataSource.dispose())
+  if (getCurrentScope() && (ownsHistoryDataSource || ownsBenchmarkDataSource)) {
+    onScopeDispose(() => {
+      if (ownsBenchmarkDataSource) benchmarkDataSource.dispose()
+      if (ownsHistoryDataSource) historyDataSource.dispose()
+    })
   }
 
   return {

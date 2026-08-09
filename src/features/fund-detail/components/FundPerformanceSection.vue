@@ -12,6 +12,7 @@ import type { FundPerformanceSectionModel } from '../models/fundPerformanceSecti
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import FundCumulativeReturnsChart from './FundCumulativeReturnsChart.vue'
 import FundNetValueChart from './FundNetValueChart.vue'
+import FundRelativeBenchmarkChart from './FundRelativeBenchmarkChart.vue'
 
 const props = defineProps<{ model: FundPerformanceSectionModel }>()
 const emit = defineEmits<{
@@ -25,6 +26,7 @@ const emit = defineEmits<{
 
 const performanceTabs = [
   { label: '累计收益', value: 'cumulative-returns' },
+  { label: '相对基准', value: 'relative-benchmark' },
   { label: '净值走势', value: 'net-value' },
   { label: '复权净值', value: 'reinvested-net-value' },
 ] as const
@@ -110,6 +112,26 @@ onBeforeUnmount(() => {
             :model="model.cumulativeReturns.chart"
             :visible="model.isVisible && activeTab === 'cumulative-returns'"
             @retry="emit('retry', 'cumulative-returns')"
+          />
+        </div>
+        <div v-else-if="performanceTab.value === 'relative-benchmark'" class="pt-4">
+          <div class="performance-filters">
+            <t-select
+              label="日期范围："
+              :options="fundHistoryRangeOptions"
+              :value="model.relativeBenchmark.selectedRange"
+              @update:value="
+                emit('selectRange', 'relative-benchmark', String($event) as FundHistoryRange)
+              "
+            />
+          </div>
+          <FundRelativeBenchmarkChart
+            :error="model.relativeBenchmark.error"
+            :is-loading="model.relativeBenchmark.isLoading"
+            :model="model.relativeBenchmark.chart"
+            :visible="model.isVisible && activeTab === 'relative-benchmark'"
+            :warning="model.relativeBenchmark.warning"
+            @retry="emit('retry', 'relative-benchmark')"
           />
         </div>
         <div v-else-if="performanceTab.value === 'net-value'" class="pt-4">
