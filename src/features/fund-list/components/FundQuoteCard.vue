@@ -37,7 +37,6 @@ function trendClass(trend: FundTrend): string {
             size="small"
             :theme="fundTagTheme(tag)"
             variant="light"
-            color="var(--td-gray-color-8)"
           >
             {{ tag }}
           </t-tag>
@@ -56,11 +55,11 @@ function trendClass(trend: FundTrend): string {
     <div class="mt-4 grid grid-cols-2 gap-3">
       <div>
         <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
-        <p v-if="isEstimatedQuoteEmpty(row)" class="font-mono text-lg font-medium tabular-nums">
+        <p v-if="isEstimatedQuoteEmpty(row)" class="font-mono text-base font-medium tabular-nums">
           --
         </p>
         <template v-else>
-          <p class="font-mono text-lg font-medium tabular-nums">{{ row.estimatedNavText }}</p>
+          <p class="font-mono text-base font-medium tabular-nums">{{ row.estimatedNavText }}</p>
           <p
             class="font-mono tabular-nums"
             :class="trendClass(row.trendByField.estimatedChangePercent)"
@@ -77,7 +76,7 @@ function trendClass(trend: FundTrend): string {
       </div>
       <div>
         <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
-        <p class="font-mono text-lg font-medium tabular-nums">{{ row.navText }}</p>
+        <p class="font-mono text-base font-medium tabular-nums">{{ row.navText }}</p>
         <p class="font-mono tabular-nums" :class="trendClass(row.trendByField.dailyChangePercent)">
           {{ row.dailyChangePercentText }}
         </p>
@@ -90,29 +89,31 @@ function trendClass(trend: FundTrend): string {
       </div>
     </div>
 
-    <div class="fund-returns-grid">
-      <div
-        v-for="item in [
-          ['oneWeek', '近1周'],
-          ['oneMonth', '近1月'],
-          ['threeMonths', '近3月'],
-          ['sixMonths', '近6月'],
-          ['yearToDate', '今年以来'],
-          ['oneYear', '近1年'],
-          ['twoYears', '近2年'],
-          ['threeYears', '近3年'],
-          ['fiveYears', '近5年'],
-          ['sinceInception', '成立以来'],
-        ]"
-        :key="item[0]"
-      >
-        <p class="text-xs text-(--td-text-color-secondary)">{{ item[1] }}</p>
-        <p
-          class="font-mono tabular-nums"
-          :class="trendClass(row.trendByField[item[0] as keyof typeof row.trendByField])"
+    <div class="fund-returns-scroll">
+      <div class="fund-returns-grid">
+        <div
+          v-for="item in [
+            ['oneWeek', '近1周'],
+            ['oneMonth', '近1月'],
+            ['threeMonths', '近3月'],
+            ['sixMonths', '近6月'],
+            ['yearToDate', '今年以来'],
+            ['oneYear', '近1年'],
+            ['twoYears', '近2年'],
+            ['threeYears', '近3年'],
+            ['fiveYears', '近5年'],
+            ['sinceInception', '成立以来'],
+          ]"
+          :key="item[0]"
         >
-          {{ row.returns[item[0] as keyof typeof row.returns] }}
-        </p>
+          <p class="text-xs text-(--td-text-color-secondary)">{{ item[1] }}</p>
+          <p
+            class="font-mono tabular-nums"
+            :class="trendClass(row.trendByField[item[0] as keyof typeof row.trendByField])"
+          >
+            {{ row.returns[item[0] as keyof typeof row.returns] }}
+          </p>
+        </div>
       </div>
     </div>
     <div v-if="actionsVisible" class="mt-4 border-t border-(--td-component-border) pt-3">
@@ -130,7 +131,11 @@ function trendClass(trend: FundTrend): string {
 <style scoped>
 @reference '@/style.css';
 
+.fund-returns-scroll {
+  @apply mt-4 overflow-x-auto overscroll-contain scrollbar-thin;
+}
+
 .fund-returns-grid {
-  @apply mt-4 grid grid-cols-4 gap-x-3 gap-y-3 text-left;
+  @apply grid grid-cols-5 gap-x-1 gap-y-2 text-left min-w-sm;
 }
 </style>

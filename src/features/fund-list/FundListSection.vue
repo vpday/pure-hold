@@ -25,6 +25,7 @@ const { fundOrder, groups, holdingOrder, isRefreshing, lastRefreshIssues, snapsh
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
+const mobileList = ref<{ openSortDrawer: () => void }>()
 const fundEdit = ref<{ open: (code: string) => void }>()
 const fundDetail = ref<{ open: (code: string) => void }>()
 const categories = computed(() =>
@@ -125,10 +126,47 @@ function latestText(values: readonly string[]): string {
       class="mb-4 min-w-0"
     >
       <template #action>
-        <t-button variant="text" size="medium" @click="groupSettings?.open()">
-          <template #icon><t-icon name="folder-setting" /></template>
-          分组管理
-        </t-button>
+        <div class="flex items-center">
+          <span v-if="rows.length" class="flex sm:hidden">
+            <t-button
+              :aria-label="activeSort ? '调整基金排序' : '设置基金排序'"
+              shape="square"
+              size="medium"
+              :theme="activeSort ? 'primary' : 'default'"
+              variant="text"
+              @click="mobileList?.openSortDrawer()"
+            >
+              <template #icon>
+                <t-icon
+                  :name="
+                    activeSort
+                      ? activeSort.descending
+                        ? 'order-descending'
+                        : 'order-ascending'
+                      : 'filter-sort'
+                  "
+                />
+              </template>
+            </t-button>
+          </span>
+          <span class="flex sm:hidden">
+            <t-button
+              aria-label="分组管理"
+              shape="square"
+              size="medium"
+              variant="text"
+              @click="groupSettings?.open()"
+            >
+              <template #icon><t-icon name="folder-setting" /></template>
+            </t-button>
+          </span>
+          <span class="hidden sm:flex">
+            <t-button variant="text" size="medium" @click="groupSettings?.open()">
+              <template #icon><t-icon name="folder-setting" /></template>
+              分组管理
+            </t-button>
+          </span>
+        </div>
       </template>
     </t-tabs>
 
@@ -155,11 +193,14 @@ function latestText(values: readonly string[]): string {
       </div>
       <div class="sm:hidden">
         <FundMobileList
+          ref="mobileList"
           :rows="rows"
+          :sort="activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
           @detail="fundDetail?.open($event)"
           @edit="fundEdit?.open($event)"
+          @sort-change="setSort"
         />
       </div>
     </template>
