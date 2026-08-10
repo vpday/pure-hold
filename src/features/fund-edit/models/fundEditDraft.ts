@@ -77,10 +77,10 @@ export function submitFundEditDraft(
 
 function isFundHoldingDraftEmpty(draft: FundHoldingDraft): boolean {
   return (
-    draft.units.trim() === '' &&
-    draft.costPrice.trim() === '' &&
+    String(draft.units).trim() === '' &&
+    String(draft.costPrice).trim() === '' &&
     draft.dividendMode === '' &&
-    draft.purchaseDate.trim() === '' &&
-    draft.holdingDays.trim() === ''
+    String(draft.purchaseDate).trim() === '' &&
+    String(draft.holdingDays).trim() === ''
   )
 }

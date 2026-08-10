@@ -113,6 +113,23 @@ test('successful submit preserves holding then group call order', () => {
   assert.deepEqual(calls, ['holding', 'groups:'])
 })
 
+test('submits numeric values emitted by the holding number inputs', () => {
+  const draft = createFundEditDraft('000001', '测试基金', undefined, [])
+  Object.assign(draft.holding, {
+    costPrice: 0.8984,
+    dividendMode: 'cash',
+    holdingDays: 1000,
+    timeMode: 'days',
+    units: 6817.77,
+  })
+  const calls: string[] = []
+
+  const result = submitFundEditDraft(draft, createSubmitters(calls), new Date(2026, 6, 27))
+
+  assert.deepEqual(result, { fieldErrors: {}, success: true })
+  assert.deepEqual(calls, ['holding', 'groups:'])
+})
+
 function fillValidHolding(draft: ReturnType<typeof createFundEditDraft>): void {
   Object.assign(draft.holding, {
     costPrice: '1',
