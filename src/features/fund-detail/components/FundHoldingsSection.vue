@@ -131,10 +131,16 @@ function trendClass(trend: FundHoldingsTrend): string {
                             v-if="row.market === 'hk' || row.market === 'us'"
                             size="small"
                             variant="light"
+                            color="var(--td-gray-color-8)"
                           >
                             {{ row.market === 'hk' ? 'HK' : 'US' }}
                           </t-tag>
-                          <t-tag v-if="row.industryName" size="small" variant="light">
+                          <t-tag
+                            v-if="row.industryName"
+                            size="small"
+                            variant="light"
+                            color="var(--td-gray-color-8)"
+                          >
                             {{ row.industryName }}
                           </t-tag>
                         </div>
@@ -152,12 +158,15 @@ function trendClass(trend: FundHoldingsTrend): string {
                     <template #change="{ row }">
                       <div :class="trendClass(row.changeTrend)">
                         <p class="holding-number">{{ row.changeText }}</p>
-                        <p
-                          v-if="row.heavyQuarterText"
-                          class="mt-1 text-xs text-(--td-text-color-secondary)"
+                        <t-tag
+                          v-if="row.changeText !== '新增' && row.heavyQuarterText"
+                          class="mt-1"
+                          size="small"
+                          variant="light"
+                          color="var(--td-gray-color-8)"
                         >
                           {{ row.heavyQuarterText }}
-                        </p>
+                        </t-tag>
                       </div>
                     </template>
                   </t-table>

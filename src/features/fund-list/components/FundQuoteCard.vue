@@ -37,6 +37,7 @@ function trendClass(trend: FundTrend): string {
             size="small"
             :theme="fundTagTheme(tag)"
             variant="light"
+            color="var(--td-gray-color-8)"
           >
             {{ tag }}
           </t-tag>

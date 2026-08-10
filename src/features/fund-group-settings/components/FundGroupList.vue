@@ -124,7 +124,9 @@ function handleDragEnd(event: {
       </div>
       <template #action>
         <span class="mr-2 text-xs text-(--td-text-color-secondary)">{{ allCount }} 只基金</span>
-        <t-tag size="small" theme="default" variant="light">默认</t-tag>
+        <t-tag size="small" theme="default" variant="light" color="var(--td-gray-color-8)"
+          >默认</t-tag
+        >
       </template>
     </t-list-item>
     <t-list-item
@@ -148,7 +150,9 @@ function handleDragEnd(event: {
         <span class="mr-2 text-xs text-(--td-text-color-secondary)">
           {{ holdingCount }} 只基金
         </span>
-        <t-tag size="small" theme="default" variant="light">默认</t-tag>
+        <t-tag size="small" theme="default" variant="light" color="var(--td-gray-color-8)"
+          >默认</t-tag
+        >
       </template>
     </t-list-item>
     <VueDraggable
