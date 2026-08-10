@@ -3,23 +3,32 @@ import test from 'node:test'
 
 import {
   createTiantianFundSnapshotCacheKey,
-  handleTiantianFundSnapshotRequest,
-  isCacheableApiRequest,
-  isTiantianFundSnapshotRequest,
-  snapshotCacheFallbackHeader,
-  snapshotCachedAtHeader,
-  snapshotDataSourceHeader,
+  handleTiantianFundSnapshotPostRequest,
+  matchesTiantianFundSnapshotPostRequest,
   tiantianFundSnapshotEndpoint,
-} from './sw.ts'
+} from './pwa/cache/tiantianFundSnapshotPostCacheAdapter.ts'
+import {
+  handleTiantianMmGetRequest,
+  matchesTiantianMmGetRequest,
+} from './pwa/cache/tiantianMmGetCacheAdapter.ts'
+import {
+  cacheResponseCachedAtHeader,
+  cacheResponseFallbackHeader,
+  cacheResponseSourceHeader,
+  readCacheResponseMetadata,
+} from './shared/transport/cacheResponseMetadata.ts'
 
 test('matches only the intended Tiantian GET and snapshot POST requests', () => {
-  assert.equal(isCacheableApiRequest(new Request('https://fundcomapi.tiantianfunds.com/mm')), true)
   assert.equal(
-    isCacheableApiRequest(new Request('https://fundcomapi.tiantianfunds.com/mm/FundMNewApi')),
+    matchesTiantianMmGetRequest(new Request('https://fundcomapi.tiantianfunds.com/mm')),
     true,
   )
   assert.equal(
-    isCacheableApiRequest(
+    matchesTiantianMmGetRequest(new Request('https://fundcomapi.tiantianfunds.com/mm/FundMNewApi')),
+    true,
+  )
+  assert.equal(
+    matchesTiantianMmGetRequest(
       new Request('https://fundcomapi.tiantianfunds.com/mm/FundFavor/FundFavorInfo', {
         method: 'POST',
       }),
@@ -27,7 +36,7 @@ test('matches only the intended Tiantian GET and snapshot POST requests', () => 
     false,
   )
   assert.equal(
-    isTiantianFundSnapshotRequest(
+    matchesTiantianFundSnapshotPostRequest(
       new Request(tiantianFundSnapshotEndpoint, {
         body: 'CODES=000001&deviceid=device',
         headers: { 'Content-Type': 'Application/X-WWW-Form-Urlencoded; charset=UTF-8' },
@@ -37,7 +46,7 @@ test('matches only the intended Tiantian GET and snapshot POST requests', () => 
     true,
   )
   assert.equal(
-    isTiantianFundSnapshotRequest(
+    matchesTiantianFundSnapshotPostRequest(
       new Request('https://fundcomapi.tiantianfunds.com/mm/FundMNewApi/FundBaseInfos', {
         body: 'CODES=000001&deviceid=device',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -46,6 +55,61 @@ test('matches only the intended Tiantian GET and snapshot POST requests', () => 
     ),
     false,
   )
+})
+
+test('applies the shared cache policy to Tiantian GET responses without snapshot metadata', async () => {
+  const cacheStorage = installCaches()
+  const requestUrl = 'https://fundcomapi.tiantianfunds.com/mm/FundMNewApi/FundBaseInfos'
+  let fetchCalls = 0
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => {
+    fetchCalls += 1
+    return new Response(fetchCalls === 1 ? 'first' : 'forced', { status: 200 })
+  }
+  try {
+    const first = await handleTiantianMmGetRequest(new Request(requestUrl))
+    assert.equal(await first.text(), 'first')
+    assert.equal(first.headers.get(cacheResponseSourceHeader), null)
+
+    const cached = await handleTiantianMmGetRequest(new Request(requestUrl))
+    assert.equal(await cached.text(), 'first')
+    assert.equal(fetchCalls, 1)
+
+    const forced = await handleTiantianMmGetRequest(new Request(requestUrl, { cache: 'no-store' }))
+    assert.equal(await forced.text(), 'forced')
+    assert.equal(fetchCalls, 2)
+
+    globalThis.fetch = async () => {
+      throw new Error('offline')
+    }
+    const fallback = await handleTiantianMmGetRequest(
+      new Request(requestUrl, { cache: 'no-store' }),
+    )
+    assert.equal(await fallback.text(), 'forced')
+    assert.equal(fallback.headers.get(cacheResponseFallbackHeader), null)
+    assert.equal(cacheStorage.caches.size, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+    restoreCaches()
+  }
+})
+
+test('reads transport metadata and falls back to network time when headers are absent', () => {
+  const before = Date.now()
+  const network = readCacheResponseMetadata(new Response())
+  const after = Date.now()
+  assert.equal(network.source, 'network')
+  assert.ok(network.fetchedAt >= before && network.fetchedAt <= after)
+
+  const fallback = readCacheResponseMetadata(
+    new Response(null, {
+      headers: {
+        [cacheResponseCachedAtHeader]: '456',
+        [cacheResponseFallbackHeader]: 'true',
+      },
+    }),
+  )
+  assert.deepEqual(fallback, { fetchedAt: 456, source: 'cache-fallback' })
 })
 
 test('normalizes snapshot form bodies and keeps endpoint, device and batch in the key', async () => {
@@ -78,36 +142,36 @@ test('serves fresh cache, bypasses it for no-store, and returns a cache fallback
     return new Response(fetchCalls === 1 ? 'first' : 'forced', { status: 200 })
   }
   try {
-    const first = await handleTiantianFundSnapshotRequest(request)
+    const first = await handleTiantianFundSnapshotPostRequest(request)
     assert.equal(await first.text(), 'first')
-    assert.equal(first.headers.get(snapshotDataSourceHeader), 'network')
-    const cachedAt = first.headers.get(snapshotCachedAtHeader)
+    assert.equal(first.headers.get(cacheResponseSourceHeader), 'network')
+    const cachedAt = first.headers.get(cacheResponseCachedAtHeader)
     assert.match(cachedAt ?? '', /^\d+$/)
 
-    const cached = await handleTiantianFundSnapshotRequest(request)
+    const cached = await handleTiantianFundSnapshotPostRequest(request)
     assert.equal(await cached.text(), 'first')
-    assert.equal(cached.headers.get(snapshotDataSourceHeader), 'cache')
-    assert.equal(cached.headers.get(snapshotCachedAtHeader), cachedAt)
+    assert.equal(cached.headers.get(cacheResponseSourceHeader), 'cache')
+    assert.equal(cached.headers.get(cacheResponseCachedAtHeader), cachedAt)
     assert.equal(fetchCalls, 1)
 
-    const forced = await handleTiantianFundSnapshotRequest(
+    const forced = await handleTiantianFundSnapshotPostRequest(
       createSnapshotRequest('device', '000001', 'FIELDS', 'no-store'),
     )
     assert.equal(await forced.text(), 'forced')
-    assert.equal(forced.headers.get(snapshotDataSourceHeader), 'network')
-    const forcedCachedAt = forced.headers.get(snapshotCachedAtHeader)
+    assert.equal(forced.headers.get(cacheResponseSourceHeader), 'network')
+    const forcedCachedAt = forced.headers.get(cacheResponseCachedAtHeader)
     assert.equal(fetchCalls, 2)
 
     globalThis.fetch = async () => {
       throw new Error('offline')
     }
-    const fallback = await handleTiantianFundSnapshotRequest(
+    const fallback = await handleTiantianFundSnapshotPostRequest(
       createSnapshotRequest('device', '000001', 'FIELDS', 'no-store'),
     )
     assert.equal(await fallback.text(), 'forced')
-    assert.equal(fallback.headers.get(snapshotDataSourceHeader), 'cache-fallback')
-    assert.equal(fallback.headers.get(snapshotCacheFallbackHeader), 'true')
-    assert.equal(fallback.headers.get(snapshotCachedAtHeader), forcedCachedAt)
+    assert.equal(fallback.headers.get(cacheResponseSourceHeader), 'cache-fallback')
+    assert.equal(fallback.headers.get(cacheResponseFallbackHeader), 'true')
+    assert.equal(fallback.headers.get(cacheResponseCachedAtHeader), forcedCachedAt)
     assert.equal(cacheStorage.caches.size, 2)
   } finally {
     globalThis.fetch = originalFetch
@@ -121,13 +185,13 @@ test('does not cache non-200 responses and removes expired entries after an offl
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response('error', { status: 503 })
   try {
-    const nonOk = await handleTiantianFundSnapshotRequest(request)
+    const nonOk = await handleTiantianFundSnapshotPostRequest(request)
     assert.equal(nonOk.status, 503)
     const snapshotCache = await cacheStorage.open('pure-hold-fund-snapshot-v1')
     assert.equal((await snapshotCache.keys()).length, 0)
 
     globalThis.fetch = async () => new Response('network', { status: 200 })
-    await handleTiantianFundSnapshotRequest(request)
+    await handleTiantianFundSnapshotPostRequest(request)
     const key = await createTiantianFundSnapshotCacheKey(request)
     const metadataCache = cacheStorage.caches.get('pure-hold-fund-snapshot-metadata-v1')!
     await metadataCache.put(key, new Response(String(Date.now() - 25 * 60 * 60 * 1000)))
@@ -135,7 +199,7 @@ test('does not cache non-200 responses and removes expired entries after an offl
     globalThis.fetch = async () => {
       throw new Error('offline')
     }
-    await assert.rejects(handleTiantianFundSnapshotRequest(request), /offline/)
+    await assert.rejects(handleTiantianFundSnapshotPostRequest(request), /offline/)
     assert.equal((await snapshotCache.keys()).length, 0)
   } finally {
     globalThis.fetch = originalFetch
@@ -150,7 +214,7 @@ test('returns the network response when cache writes fail and prunes snapshot ba
     const snapshotCache = await cacheStorage.open('pure-hold-fund-snapshot-v1')
     snapshotCache.failPuts = true
     globalThis.fetch = async () => new Response('network', { status: 200 })
-    const response = await handleTiantianFundSnapshotRequest(
+    const response = await handleTiantianFundSnapshotPostRequest(
       createSnapshotRequest('device', '000001', 'FIELDS', 'default'),
     )
     assert.equal(await response.text(), 'network')
@@ -159,7 +223,7 @@ test('returns the network response when cache writes fail and prunes snapshot ba
     snapshotCache.failPuts = false
     for (let index = 0; index < 101; index += 1) {
       globalThis.fetch = async () => new Response(String(index), { status: 200 })
-      await handleTiantianFundSnapshotRequest(
+      await handleTiantianFundSnapshotPostRequest(
         createSnapshotRequest('device', String(index).padStart(6, '0'), 'FIELDS', 'default'),
       )
     }

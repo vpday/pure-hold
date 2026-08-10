@@ -1,3 +1,4 @@
+import { readCacheResponseMetadata } from '@/shared/transport/cacheResponseMetadata.ts'
 import type { FundSnapshot } from '../../models/fundSnapshot.ts'
 import { createTiantianFundRequestBody } from './createTiantianFundRequestBody.ts'
 import type { FundRefreshIssue } from './fundRefreshIssue.ts'
@@ -5,9 +6,6 @@ import { parseTiantianFundResponse } from './parseTiantianFundResponse.ts'
 
 const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/FundFavor/FundFavorInfo'
 const batchSize = 50
-const dataSourceHeader = 'X-Pure-Hold-Data-Source'
-const cachedAtHeader = 'X-Pure-Hold-Cached-At'
-const cacheFallbackHeader = 'X-Pure-Hold-Cache-Fallback'
 
 export type FundRefreshSource = 'network' | 'cache' | 'cache-fallback' | 'mixed'
 
@@ -41,7 +39,7 @@ export async function fetchTiantianFundSnapshots(
       if (!response.ok) {
         throw new Error(`Tiantian request failed with HTTP ${response.status}`)
       }
-      const metadata = readResponseMetadata(response)
+      const metadata = readCacheResponseMetadata(response)
       successfulTimes.push(metadata.fetchedAt)
       sources.push(metadata.source)
       if (metadata.source === 'cache-fallback') {
@@ -64,22 +62,6 @@ export async function fetchTiantianFundSnapshots(
     source: combineSources(sources),
     snapshots,
   }
-}
-
-function readResponseMetadata(response: Response): {
-  readonly fetchedAt: number
-  readonly source: Exclude<FundRefreshSource, 'mixed'>
-} {
-  const source = response.headers.get(dataSourceHeader)
-  const cachedAt = Number(response.headers.get(cachedAtHeader))
-  const fetchedAt = Number.isFinite(cachedAt) ? cachedAt : Date.now()
-  if (source === 'cache' || source === 'cache-fallback') {
-    return { fetchedAt, source }
-  }
-  if (response.headers.get(cacheFallbackHeader) === 'true') {
-    return { fetchedAt, source: 'cache-fallback' }
-  }
-  return { fetchedAt, source: 'network' }
 }
 
 function combineSources(

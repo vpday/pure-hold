@@ -34,7 +34,8 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 天天基金标识 | `initializeTiantianDeviceId` / `getTiantianDeviceId`   | 页面会话内稳定的天天基金专用 deviceid                         |
 | 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态                             |
 | PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本                            |
-| PWA 缓存     | `src/sw.ts`                                            | 预缓存、更新消息和允许缓存的网络请求                          |
+| PWA 运行时   | `src/sw.ts`                                            | 预缓存、更新消息和查询缓存路由                                |
+| PWA 缓存     | `src/pwa/cache/`                                       | 查询缓存共同策略与两个天天基金 adapter                        |
 | 构建配置     | `vite.config.ts`                                       | Vite 插件、PWA、自动导入和分包                                |
 
 ## 架构选择
@@ -47,7 +48,9 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/features` 保存面向用户的功能组合。Feature 可以读取一个或多个领域，生成页面模型并管理局部交互，但不拥有第三方协议知识。
 
-`src/shared` 只保存没有业务语义、能够跨功能复用的能力。代码不会因为“以后可能复用”而提前移入 shared。
+`src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage，并由独立 adapter 描述具体请求的匹配、key、缓存名称和响应装饰。
+
+`src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
 
 这样组织的目的，是让业务变化集中在对应领域，让页面变化集中在对应 feature，并让跨领域复用保持审慎。
 
@@ -83,7 +86,7 @@ Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker �
 src/
 ├─ main.ts                      # 客户端启动
 ├─ App.vue                      # 应用壳
-├─ sw.ts                        # Service Worker
+├─ sw.ts                        # Service Worker 运行时入口与查询缓存路由
 ├─ app/
 │  └─ components/               # 应用级基础设施 UI
 ├─ domains/
@@ -112,8 +115,11 @@ src/
 │  ├─ fund-holding-form/        # 新增与编辑共用的持仓字段和校验
 │  ├─ fund-edit/                # 单基金持仓与分组编辑
 │  └─ fund-search/              # 搜索会话、累计选择和批量新增
+├─ pwa/
+│  └─ cache/                    # 查询缓存共同策略与天天基金 GET/快照 POST adapter
 └─ shared/
-   └─ composables/              # 无业务语义的共享 Vue 能力
+   ├─ composables/              # 无业务语义的共享 Vue 能力
+   └─ transport/                # PWA 与 Domain 共用的中性响应 metadata contract
 ```
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
@@ -170,7 +176,8 @@ pure-hold:fund-settings:v1
 main.ts 初始化天天基金 deviceid
   -> fetchTiantianFundSnapshots
   -> 天天基金快照 POST
-  -> Service Worker 原始响应缓存与来源/时间响应头
+  -> 快照 POST cache adapter + 共同 cache policy
+  -> 中性 transport contract 定义的来源/时间响应头
   -> parseTiantianFundResponse
   -> FundSnapshot
   -> Pinia snapshotsByCode
@@ -237,7 +244,7 @@ FundDetailEntry 当前基金代码
   -> FundAssetAllocationChart 三柱一线双轴图
 ```
 
-资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 匹配 `src/sw.ts` 现有的 `fundcomapi.tiantianfunds.com/mm/**` GET 通用规则；稳定的页面会话 deviceid 允许相同请求复用 Service Worker 缓存，但 Feature 仍负责当前详情会话的成功数据和取消逻辑。
+资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 匹配 `src/pwa/cache/tiantianMmGetCacheAdapter.ts` 的 `fundcomapi.tiantianfunds.com/mm/**` GET 通用规则；稳定的页面会话 deviceid 允许相同请求复用 Service Worker 缓存，但 Feature 仍负责当前详情会话的成功数据和取消逻辑。
 
 基金详情净值历史与数据指标的数据流是：
 
@@ -316,6 +323,8 @@ FundDetailEntry 当前基金代码
 - `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据和行情名称观察。
 - `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组和组织排序不向 Feature 暴露内部 module。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
+- `createCachePolicyHandler` 隐藏查询缓存的新鲜判断、网络访问、200 响应写入、过期清理、24 小时回退和容量淘汰；具体 HTTP 请求差异由两个 PWA adapter 提供。
+- `readCacheResponseMetadata` 隐藏三个 transport header 的解析与缺失 metadata 时的网络时间 fallback，使 Funds Domain 不依赖 PWA 实现。
 - `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
 
 天天基金适配器通过 `createTiantianRequestParams` 统一注入页面会话内稳定的 `deviceid`，以及 `plat`、`product` 和 `version` 固定参数。deviceid 从独立 key 读取，缺失或格式非法时重新生成；storage 读写失败时只保留本次页面会话内存值。该 deviceid 只用于天天基金，不进入基金设置或导入导出数据。`isSuccessfulTiantianResponse` 只校验共享响应外壳；`data` 的数组或对象形状、空数据语义、附加字段和失败策略仍由各接口 parser 负责。
@@ -351,11 +360,11 @@ FundDetailEntry 当前基金代码
 
 ### PWA 与缓存
 
-`vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。Service Worker 预缓存构建产物、处理用户确认后的版本切换，并只缓存 `isCacheableApiRequest` 明确允许的请求。缓存时效、容量和降级策略以 `src/sw.ts` 为权威来源，修改该配置时必须同步检查本节描述是否仍成立。
+`vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。该入口只负责预缓存、用户确认后的版本切换、生命周期和查询缓存路由；请求匹配与 Cache Storage 实现在 `src/pwa/cache/`。两个查询 adapter 共用 `cachePolicy.ts` 的同一套新鲜判断、网络访问、过期回退和容量淘汰流程，HTTP 方法只决定匹配与 cache key，不决定缓存策略。
 
-实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。天天基金 GET `/mm`、`/mm/**` 请求按现有通用规则缓存；首页快照 POST 只有在来源、路径、方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时，才进入独立的快照缓存。固定的页面会话 deviceid 使相同天天基金请求可以复用精确 URL 缓存。
+实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。`tiantianMmGetCacheAdapter.ts` 只匹配天天基金 GET `/mm`、`/mm/**`；`tiantianFundSnapshotPostCacheAdapter.ts` 只在来源、精确路径、POST 方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时处理首页快照。固定的页面会话 deviceid 使相同天天基金请求可以复用缓存。
 
-天天基金快照 POST 缓存使用内部 GET `Request` 作为 key，key 包含 endpoint、规范化 form body 和 deviceid；不按单只基金拆分。GET 与快照 POST 各自拥有响应缓存、时间元数据缓存和最多 100 条记录。缓存新鲜期为 10 分钟，最多保留 24 小时；手动刷新通过 `cache: 'no-store'` 绕过新鲜缓存，网络失败时仅回退到 24 小时内的缓存。网络成功、正常缓存和回退缓存通过 `X-Pure-Hold-Data-Source`、`X-Pure-Hold-Cached-At` 和 `X-Pure-Hold-Cache-Fallback` 传给页面，缓存中保存的仍是原始接口响应。
+GET 使用原始 `Request` 作为 key；快照 POST 使用内部 GET `Request` 作为 key，key 包含 endpoint、规范化 form body 和 deviceid，不按单只基金拆分。两个 adapter 各自拥有响应缓存、时间元数据缓存和最多 100 条记录。共同 cache policy 规定缓存新鲜期为 10 分钟、最多保留 24 小时；手动刷新通过 `cache: 'no-store'` 绕过新鲜缓存，网络失败时仅回退到 24 小时内的缓存。只有快照 POST adapter 根据 `src/shared/transport/cacheResponseMetadata.ts` 的 contract，通过 `X-Pure-Hold-Data-Source`、`X-Pure-Hold-Cached-At` 和 `X-Pure-Hold-Cache-Fallback` 向页面传递来源和实际缓存时间；GET 继续返回原始响应。Service Worker 不解析基金 DTO，两个缓存保存的也仍是原始接口响应。
 
 详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、滚动超额计算输入、风险参数和风险计算输入的 Feature 会话缓存不持久化。滚动超额不增加独立网络缓存，也不写 Store、localStorage 或 Service Worker。基金设置和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存；行情快照不从 localStorage 恢复，页面首次启动时可先显示空快照，再由受控 Service Worker 请求更新。
 
@@ -388,24 +397,27 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以下列文件为准：
 
-| 事实                         | 权威来源                                  |
-| ---------------------------- | ----------------------------------------- |
-| 依赖版本和命令               | `package.json`                            |
-| Vite 插件、PWA 构建和分包    | `vite.config.ts`                          |
-| Service Worker 缓存规则      | `src/sw.ts`                               |
-| TypeScript 范围和约束        | `tsconfig*.json`                          |
-| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`         |
-| 离线指数目录                 | `indexDefinitions.json`                   |
-| 指数目录更新规则             | `scripts/update-index-definitions.mjs`    |
-| 默认指数组                   | `defaultIndexGroups.ts`                   |
-| 指数刷新行为                 | `useIndexQuotesStore.ts`                  |
-| 基金运行时状态形状           | `createFundMarketRuntime.ts`              |
-| 基金设置形状                 | `fundSettings.ts`                         |
-| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`            |
-| 基金搜索协议                 | `services/eastmoney/`                     |
-| 基金实时行情、资料与历史协议 | `services/tiantian/`                      |
-| 基金状态与刷新行为           | `useFundsStore.ts`                        |
-| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                     |
-| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量 |
+| 事实                         | 权威来源                                        |
+| ---------------------------- | ----------------------------------------------- |
+| 依赖版本和命令               | `package.json`                                  |
+| Vite 插件、PWA 构建和分包    | `vite.config.ts`                                |
+| Service Worker 运行时与路由  | `src/sw.ts`                                     |
+| 查询缓存共同策略             | `src/pwa/cache/cachePolicy.ts`                  |
+| 查询匹配、key 与缓存名称     | `src/pwa/cache/*CacheAdapter.ts`                |
+| 缓存响应 metadata contract   | `src/shared/transport/cacheResponseMetadata.ts` |
+| TypeScript 范围和约束        | `tsconfig*.json`                                |
+| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`               |
+| 离线指数目录                 | `indexDefinitions.json`                         |
+| 指数目录更新规则             | `scripts/update-index-definitions.mjs`          |
+| 默认指数组                   | `defaultIndexGroups.ts`                         |
+| 指数刷新行为                 | `useIndexQuotesStore.ts`                        |
+| 基金运行时状态形状           | `createFundMarketRuntime.ts`                    |
+| 基金设置形状                 | `fundSettings.ts`                               |
+| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`                  |
+| 基金搜索协议                 | `services/eastmoney/`                           |
+| 基金实时行情、资料与历史协议 | `services/tiantian/`                            |
+| 基金状态与刷新行为           | `useFundsStore.ts`                              |
+| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                           |
+| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量       |
 
 只有系统职责、模块关系、依赖方向或关键 seam 发生变化时才更新本文。具体命令和执行规则放在 `AGENTS.md`，单次实施过程放在 ExecPlan，不在本文记录变更历史。
