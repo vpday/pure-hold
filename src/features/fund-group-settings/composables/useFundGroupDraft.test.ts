@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { fundSettingsStorageKey } from '@/domains/funds/services/persistence/fundSettingsSchemaVersion.ts'
 import { saveFundSettings } from '@/domains/funds/services/persistence/saveFundSettings.ts'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
+import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import { useFundGroupDraft } from './useFundGroupDraft.ts'
 
 test('fund group draft adds, renames, removes, reorders and commits an empty list', () => {
@@ -98,36 +99,12 @@ test('fund group draft independently reorders categories and reports changed ord
 })
 
 function withStorage(callback: () => void): void {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
   const storage = new MemoryStorage()
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+  const restore = installLocalStorage(storage)
   try {
     callback()
     assert.notEqual(storage.getItem(fundSettingsStorageKey), null)
   } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
-    else Reflect.deleteProperty(globalThis, 'localStorage')
-  }
-}
-
-class MemoryStorage implements Storage {
-  readonly values = new Map<string, string>()
-  get length(): number {
-    return this.values.size
-  }
-  clear(): void {
-    this.values.clear()
-  }
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-  key(index: number): string | null {
-    return [...this.values.keys()][index] ?? null
-  }
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
+    restore()
   }
 }

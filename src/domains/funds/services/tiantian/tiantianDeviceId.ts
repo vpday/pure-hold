@@ -1,3 +1,5 @@
+import { browserStorageAdapter } from '@/shared/persistence/browserStorageAdapter.ts'
+
 export const tiantianDeviceIdStorageKey = 'pure-hold:tiantian-device-id'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -9,14 +11,8 @@ export function initializeTiantianDeviceId(): string {
     return currentDeviceId
   }
 
-  let storedDeviceId: string | null = null
-  try {
-    if (typeof localStorage !== 'undefined') {
-      storedDeviceId = localStorage.getItem(tiantianDeviceIdStorageKey)
-    }
-  } catch {
-    storedDeviceId = null
-  }
+  const result = browserStorageAdapter.read(tiantianDeviceIdStorageKey)
+  const storedDeviceId = result.status === 'found' ? result.value : undefined
 
   if (storedDeviceId && uuidPattern.test(storedDeviceId)) {
     currentDeviceId = storedDeviceId
@@ -24,13 +20,7 @@ export function initializeTiantianDeviceId(): string {
   }
 
   currentDeviceId = crypto.randomUUID()
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(tiantianDeviceIdStorageKey, currentDeviceId)
-    }
-  } catch {
-    // Keep the generated id in memory for the remainder of this page session.
-  }
+  browserStorageAdapter.write(tiantianDeviceIdStorageKey, currentDeviceId)
   return currentDeviceId
 }
 

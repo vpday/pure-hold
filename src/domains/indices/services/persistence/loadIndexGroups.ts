@@ -1,6 +1,7 @@
 import { defaultIndexDefinitions } from '../../config/defaultIndexDefinitions.ts'
 import { defaultIndexGroups } from '../../config/defaultIndexGroups.ts'
 import type { IndexGroupDefinition } from '../../models/indexGroupDefinition'
+import { browserStorageAdapter } from '@/shared/persistence/browserStorageAdapter.ts'
 import {
   INDEX_SETTINGS_SCHEMA_VERSION,
   corruptIndexGroupsStorageKeyPrefix,
@@ -15,24 +16,16 @@ interface PersistedIndexGroups {
 
 export function loadIndexGroups(): readonly IndexGroupDefinition[] {
   const fallbackGroups = cloneGroups(defaultIndexGroups)
-  const storage = getLocalStorage()
-  if (!storage) {
+  browserStorageAdapter.requestPersistence()
+  const result = browserStorageAdapter.read(indexGroupsStorageKey)
+  if (result.status === 'failed') {
     return fallbackGroups
   }
-
-  requestPersistentStorage()
-
-  let raw: string | null
-  try {
-    raw = storage.getItem(indexGroupsStorageKey)
-  } catch {
-    return fallbackGroups
-  }
-
-  if (raw === null) {
+  if (result.status === 'missing') {
     persistRecovery(fallbackGroups)
     return fallbackGroups
   }
+  const raw = result.value
 
   try {
     const persisted = parsePersistedIndexGroups(raw)
@@ -42,7 +35,7 @@ export function loadIndexGroups(): readonly IndexGroupDefinition[] {
     }
     return groups
   } catch (error) {
-    backupCorruptedData(storage, raw)
+    backupCorruptedData(raw)
     persistRecovery(fallbackGroups)
     console.warn('Index group settings were invalid and have been reset.', error)
     return fallbackGroups
@@ -128,24 +121,8 @@ function persistRecovery(groups: readonly IndexGroupDefinition[]): void {
   }
 }
 
-function backupCorruptedData(storage: Storage, raw: string): void {
-  try {
-    storage.setItem(`${corruptIndexGroupsStorageKeyPrefix}${Date.now()}`, raw)
-  } catch {
-    // Recovery must still continue if the backup cannot be written.
-  }
-}
-
-function requestPersistentStorage(): void {
-  if (typeof navigator === 'undefined') {
-    return
-  }
-
-  void navigator.storage?.persist().catch(() => {})
-}
-
-function getLocalStorage(): Storage | undefined {
-  return typeof localStorage === 'undefined' ? undefined : localStorage
+function backupCorruptedData(raw: string): void {
+  browserStorageAdapter.write(`${corruptIndexGroupsStorageKeyPrefix}${Date.now()}`, raw)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

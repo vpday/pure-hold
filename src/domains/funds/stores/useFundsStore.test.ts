@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
+import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import type { FundSettings } from '../models/fundSettings.ts'
-import { fundSettingsStorageKey } from '../services/persistence/fundSettingsSchemaVersion.ts'
 import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
 import { useFundsStore } from './useFundsStore.ts'
 
@@ -51,7 +51,7 @@ test('fund store deduplicates refreshes, merges partial success and reports save
         true,
       )
 
-      storage.failWrites = true
+      storage.writeError = new Error('quota exceeded')
       await store.refreshAll()
       assert.equal(
         store.lastRefreshIssues.some((issue) => issue.code === 'persistence-failed'),
@@ -87,7 +87,7 @@ test('fund deletion persists first and removes every group relation', async () =
     )
 
     const before = [...store.fundOrder]
-    storage.failWrites = true
+    storage.writeError = new Error('quota exceeded')
     assert.match(store.deleteFund('161725').error ?? '', /删除失败/)
     assert.deepEqual(store.fundOrder, before)
     store.$dispose()
@@ -176,7 +176,7 @@ test('fund addition persists atomically and refreshes only the new funds', async
       assert.match(store.addFunds([{ code: '000001', name: '重复' }]).error ?? '', /重复/)
       assert.deepEqual(store.fundOrder, before)
 
-      storage.failWrites = true
+      storage.writeError = new Error('quota exceeded')
       assert.match(store.addFunds([{ code: '000003', name: '保存失败' }]).error ?? '', /添加失败/)
       assert.equal(store.fundOrder.includes('000003'), false)
     } finally {
@@ -209,7 +209,7 @@ test('single holding update covers replacement, first creation and failures', as
     assert.match(store.updateFundHolding({ ...created, code: '999999' }).error ?? '', /基金不存在/)
 
     const before = store.holdingsByCode
-    storage.failWrites = true
+    storage.writeError = new Error('quota exceeded')
     assert.match(
       store.updateFundHolding({ ...replacement, units: 300 }).error ?? '',
       /持仓保存失败/,
@@ -244,7 +244,7 @@ test('fund organization replacement persists all orders atomically', async () =>
       groups: store.groups,
       holdingOrder: store.holdingOrder,
     }
-    storage.failWrites = true
+    storage.writeError = new Error('quota exceeded')
     assert.match(
       store.replaceFundOrganization({ ...input, fundOrder: ['161726', '161725'] }).error ?? '',
       /保存失败/,
@@ -287,7 +287,7 @@ test('single fund group membership preserves ordering and rejects invalid update
     )
 
     const before = store.groups
-    storage.failWrites = true
+    storage.writeError = new Error('quota exceeded')
     assert.match(
       store.updateFundGroupMembership('161726', new Set(['one'])).error ?? '',
       /分组保存失败/,
@@ -324,40 +324,12 @@ async function delayUntil(predicate: () => boolean): Promise<void> {
   assert.equal(predicate(), true)
 }
 
-async function withEnvironment(callback: (storage: ToggleStorage) => Promise<void>): Promise<void> {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-  const storage = new ToggleStorage()
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+async function withEnvironment(callback: (storage: MemoryStorage) => Promise<void>): Promise<void> {
+  const storage = new MemoryStorage()
+  const restore = installLocalStorage(storage)
   try {
     await callback(storage)
   } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
-    else Reflect.deleteProperty(globalThis, 'localStorage')
-  }
-}
-
-class ToggleStorage implements Storage {
-  readonly values = new Map<string, string>()
-  failWrites = false
-  get length(): number {
-    return this.values.size
-  }
-  clear(): void {
-    this.values.clear()
-  }
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-  key(index: number): string | null {
-    return [...this.values.keys()][index] ?? null
-  }
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-  setItem(key: string, value: string): void {
-    if (this.failWrites && key === fundSettingsStorageKey) {
-      throw new Error('quota exceeded')
-    }
-    this.values.set(key, value)
+    restore()
   }
 }

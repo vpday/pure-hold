@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createPinia, setActivePinia } from 'pinia'
 
+import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import type { FundSettings } from '../models/fundSettings.ts'
 import { fundSettingsStorageKey } from '../services/persistence/fundSettingsSchemaVersion.ts'
 import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
@@ -10,7 +11,7 @@ import { useFundsStore } from './useFundsStore.ts'
 test('retries same-name persistence after a previous refresh failure', async () => {
   await withEnvironment(async (storage) => {
     saveFundSettings(createTestFundSettings())
-    storage.failWrites = true
+    storage.writeError = new Error('quota exceeded')
     setActivePinia(createPinia())
     const store = useFundsStore()
     const originalFetch = globalThis.fetch
@@ -23,7 +24,7 @@ test('retries same-name persistence after a previous refresh failure', async () 
         true,
       )
 
-      storage.failWrites = false
+      storage.writeError = undefined
       await store.refreshAll()
       assert.equal(readStoredSettings(storage).funds[0]?.name, '新名称')
       assert.equal(
@@ -45,9 +46,9 @@ test('later settings changes persist the latest observed name', async () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = async () => createSnapshotResponse('行情名称', '1.5')
     try {
-      storage.failWrites = true
+      storage.writeError = new Error('quota exceeded')
       await store.refreshAll()
-      storage.failWrites = false
+      storage.writeError = undefined
       assert.deepEqual(store.replaceGroups([]), {})
       assert.equal(readStoredSettings(storage).funds[0]?.name, '行情名称')
     } finally {
@@ -154,7 +155,7 @@ function createTestFundSettings(): FundSettings {
   }
 }
 
-function readStoredSettings(storage: ToggleStorage): FundSettings {
+function readStoredSettings(storage: MemoryStorage): FundSettings {
   const raw = storage.getItem(fundSettingsStorageKey)
   if (raw === null) throw new Error('Expected fund settings to be stored')
   const parsed = JSON.parse(raw) as FundSettings & { version: number }
@@ -168,40 +169,12 @@ async function delayUntil(predicate: () => boolean): Promise<void> {
   assert.equal(predicate(), true)
 }
 
-async function withEnvironment(callback: (storage: ToggleStorage) => Promise<void>): Promise<void> {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-  const storage = new ToggleStorage()
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+async function withEnvironment(callback: (storage: MemoryStorage) => Promise<void>): Promise<void> {
+  const storage = new MemoryStorage()
+  const restore = installLocalStorage(storage)
   try {
     await callback(storage)
   } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
-    else Reflect.deleteProperty(globalThis, 'localStorage')
-  }
-}
-
-class ToggleStorage implements Storage {
-  readonly values = new Map<string, string>()
-  failWrites = false
-  get length(): number {
-    return this.values.size
-  }
-  clear(): void {
-    this.values.clear()
-  }
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-  key(index: number): string | null {
-    return [...this.values.keys()][index] ?? null
-  }
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-  setItem(key: string, value: string): void {
-    if (this.failWrites && key === fundSettingsStorageKey) {
-      throw new Error('quota exceeded')
-    }
-    this.values.set(key, value)
+    restore()
   }
 }

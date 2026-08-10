@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import {
+  installLocalStorage,
+  installLocalStorageGetter,
+  MemoryStorage,
+} from '@/shared/testing/browserStorageTestSupport.ts'
 import { defaultIndexGroups } from '../../config/defaultIndexGroups.ts'
 import type { IndexGroupDefinition } from '../../models/indexGroupDefinition.ts'
 import {
@@ -16,6 +21,21 @@ test('loadIndexGroups persists and returns the default groups on first use', () 
     assert.deepEqual(loadIndexGroups(), defaultIndexGroups)
     assert.deepEqual(readStoredGroups(storage), defaultIndexGroups)
   })
+})
+
+test('loadIndexGroups returns defaults when storage access or reads fail', () => {
+  const restoreGetter = installLocalStorageGetter(() => {
+    throw new Error('storage unavailable')
+  })
+  try {
+    assert.deepEqual(loadIndexGroups(), defaultIndexGroups)
+  } finally {
+    restoreGetter()
+  }
+
+  const storage = new MemoryStorage()
+  storage.readError = new Error('read failed')
+  withStorage(() => assert.deepEqual(loadIndexGroups(), defaultIndexGroups), storage)
 })
 
 test('loadIndexGroups restores defaults and backs up malformed data', () => {
@@ -79,9 +99,11 @@ test('saveIndexGroups validates data and surfaces storage failures', () => {
     )
   })
 
+  const storage = new MemoryStorage()
+  storage.writeError = new Error('quota exceeded')
   withStorage(() => {
     assert.throws(() => saveIndexGroups(defaultIndexGroups), /quota exceeded/)
-  }, new ThrowingStorage())
+  }, storage)
 })
 
 function readStoredGroups(storage: MemoryStorage): readonly IndexGroupDefinition[] {
@@ -100,54 +122,11 @@ function withStorage(
   callback: (storage: MemoryStorage) => void,
   storage: MemoryStorage = new MemoryStorage(),
 ): void {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+  const restore = installLocalStorage(storage)
 
   try {
     callback(storage)
   } finally {
-    if (descriptor) {
-      Object.defineProperty(globalThis, 'localStorage', descriptor)
-    } else {
-      Reflect.deleteProperty(globalThis, 'localStorage')
-    }
-  }
-}
-
-class MemoryStorage implements Storage {
-  readonly values = new Map<string, string>()
-
-  get length(): number {
-    return this.values.size
-  }
-
-  clear(): void {
-    this.values.clear()
-  }
-
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-
-  key(index: number): string | null {
-    return this.keys()[index] ?? null
-  }
-
-  keys(): string[] {
-    return [...this.values.keys()]
-  }
-
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
-  }
-}
-
-class ThrowingStorage extends MemoryStorage {
-  override setItem(): void {
-    throw new Error('quota exceeded')
+    restore()
   }
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import type { FundSettings } from '../../models/fundSettings.ts'
 import {
   corruptFundSettingsStorageKeyPrefix,
@@ -25,6 +26,19 @@ test('loadFundSettings stays empty without local storage data and preserves a va
     saveFundSettings(emptyFundSettings)
     assert.deepEqual(loadFundSettings(), emptyFundSettings)
   })
+})
+
+test('loadFundSettings stays empty when local storage is unavailable or cannot be read', () => {
+  const restore = installLocalStorage(undefined)
+  try {
+    assert.deepEqual(loadFundSettings(), emptyFundSettings)
+  } finally {
+    restore()
+  }
+
+  const storage = new MemoryStorage()
+  storage.readError = new Error('storage unavailable')
+  withStorage(() => assert.deepEqual(loadFundSettings(), emptyFundSettings), storage)
 })
 
 test('loadFundSettings backs up malformed data and incompatible versions', () => {
@@ -228,9 +242,11 @@ test('invalid duplicates recover on load and save failures surface', () => {
     )
   })
 
+  const storage = new MemoryStorage()
+  storage.writeError = new Error('quota exceeded')
   withStorage(() => {
     assert.throws(() => saveFundSettings(emptyFundSettings), /quota exceeded/)
-  }, new ThrowingStorage())
+  }, storage)
 })
 
 function withoutWarnings(callback: () => void): void {
@@ -247,46 +263,10 @@ function withStorage(
   callback: (storage: MemoryStorage) => void,
   storage: MemoryStorage = new MemoryStorage(),
 ): void {
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+  const restore = installLocalStorage(storage)
   try {
     callback(storage)
   } finally {
-    if (descriptor) {
-      Object.defineProperty(globalThis, 'localStorage', descriptor)
-    } else {
-      Reflect.deleteProperty(globalThis, 'localStorage')
-    }
-  }
-}
-
-class MemoryStorage implements Storage {
-  readonly values = new Map<string, string>()
-  get length(): number {
-    return this.values.size
-  }
-  clear(): void {
-    this.values.clear()
-  }
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-  key(index: number): string | null {
-    return this.keys()[index] ?? null
-  }
-  keys(): string[] {
-    return [...this.values.keys()]
-  }
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
-  }
-}
-
-class ThrowingStorage extends MemoryStorage {
-  override setItem(): void {
-    throw new Error('quota exceeded')
+    restore()
   }
 }

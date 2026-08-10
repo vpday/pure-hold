@@ -50,7 +50,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage，并由独立 adapter 描述具体请求的匹配、key、缓存名称和响应装饰。
 
-`src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
+`src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/persistence` 集中浏览器字符串存储的能力检测、原始读写结果和异常捕获；基金设置、指数分组和天天基金 deviceid 仍分别拥有自己的 key、schema、校验、恢复与会话语义。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
 
 这样组织的目的，是让业务变化集中在对应领域，让页面变化集中在对应 feature，并让跨领域复用保持审慎。
 
@@ -119,6 +119,8 @@ src/
 │  └─ cache/                    # 查询缓存共同策略与天天基金 GET/快照 POST adapter
 └─ shared/
    ├─ composables/              # 无业务语义的共享 Vue 能力
+   ├─ persistence/              # 浏览器字符串存储的机械 Adapter
+   ├─ testing/                  # 共享机械能力的测试替身
    └─ transport/                # PWA 与 Domain 共用的中性响应 metadata contract
 ```
 
@@ -323,6 +325,7 @@ FundDetailEntry 当前基金代码
 - `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据和行情名称观察。
 - `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组和组织排序不向 Feature 暴露内部 module。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
+- `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
 - `createCachePolicyHandler` 隐藏查询缓存的新鲜判断、网络访问、200 响应写入、过期清理、24 小时回退和容量淘汰；具体 HTTP 请求差异由两个 PWA adapter 提供。
 - `readCacheResponseMetadata` 隐藏三个 transport header 的解析与缺失 metadata 时的网络时间 fallback，使 Funds Domain 不依赖 PWA 实现。
 - `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
@@ -397,27 +400,28 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以下列文件为准：
 
-| 事实                         | 权威来源                                        |
-| ---------------------------- | ----------------------------------------------- |
-| 依赖版本和命令               | `package.json`                                  |
-| Vite 插件、PWA 构建和分包    | `vite.config.ts`                                |
-| Service Worker 运行时与路由  | `src/sw.ts`                                     |
-| 查询缓存共同策略             | `src/pwa/cache/cachePolicy.ts`                  |
-| 查询匹配、key 与缓存名称     | `src/pwa/cache/*CacheAdapter.ts`                |
-| 缓存响应 metadata contract   | `src/shared/transport/cacheResponseMetadata.ts` |
-| TypeScript 范围和约束        | `tsconfig*.json`                                |
-| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`               |
-| 离线指数目录                 | `indexDefinitions.json`                         |
-| 指数目录更新规则             | `scripts/update-index-definitions.mjs`          |
-| 默认指数组                   | `defaultIndexGroups.ts`                         |
-| 指数刷新行为                 | `useIndexQuotesStore.ts`                        |
-| 基金运行时状态形状           | `createFundMarketRuntime.ts`                    |
-| 基金设置形状                 | `fundSettings.ts`                               |
-| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`                  |
-| 基金搜索协议                 | `services/eastmoney/`                           |
-| 基金实时行情、资料与历史协议 | `services/tiantian/`                            |
-| 基金状态与刷新行为           | `useFundsStore.ts`                              |
-| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                           |
-| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量       |
+| 事实                         | 权威来源                                          |
+| ---------------------------- | ------------------------------------------------- |
+| 依赖版本和命令               | `package.json`                                    |
+| Vite 插件、PWA 构建和分包    | `vite.config.ts`                                  |
+| Service Worker 运行时与路由  | `src/sw.ts`                                       |
+| 查询缓存共同策略             | `src/pwa/cache/cachePolicy.ts`                    |
+| 查询匹配、key 与缓存名称     | `src/pwa/cache/*CacheAdapter.ts`                  |
+| 缓存响应 metadata contract   | `src/shared/transport/cacheResponseMetadata.ts`   |
+| 浏览器字符串存储 Adapter     | `src/shared/persistence/browserStorageAdapter.ts` |
+| TypeScript 范围和约束        | `tsconfig*.json`                                  |
+| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`                 |
+| 离线指数目录                 | `indexDefinitions.json`                           |
+| 指数目录更新规则             | `scripts/update-index-definitions.mjs`            |
+| 默认指数组                   | `defaultIndexGroups.ts`                           |
+| 指数刷新行为                 | `useIndexQuotesStore.ts`                          |
+| 基金运行时状态形状           | `createFundMarketRuntime.ts`                      |
+| 基金设置形状                 | `fundSettings.ts`                                 |
+| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`                    |
+| 基金搜索协议                 | `services/eastmoney/`                             |
+| 基金实时行情、资料与历史协议 | `services/tiantian/`                              |
+| 基金状态与刷新行为           | `useFundsStore.ts`                                |
+| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                             |
+| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量         |
 
 只有系统职责、模块关系、依赖方向或关键 seam 发生变化时才更新本文。具体命令和执行规则放在 `AGENTS.md`，单次实施过程放在 ExecPlan，不在本文记录变更历史。

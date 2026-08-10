@@ -1,4 +1,5 @@
 import type { IndexGroupDefinition } from '../../models/indexGroupDefinition'
+import { browserStorageAdapter } from '@/shared/persistence/browserStorageAdapter.ts'
 import {
   INDEX_SETTINGS_SCHEMA_VERSION,
   indexGroupsStorageKey,
@@ -9,18 +10,16 @@ export function saveIndexGroups(groups: readonly IndexGroupDefinition[]): void {
     throw new TypeError('Index groups have an invalid shape')
   }
 
-  const storage = getLocalStorage()
-  if (!storage) {
-    throw new Error('localStorage is unavailable')
-  }
-
-  storage.setItem(
+  const result = browserStorageAdapter.write(
     indexGroupsStorageKey,
     JSON.stringify({
       groups,
       version: INDEX_SETTINGS_SCHEMA_VERSION,
     }),
   )
+  if (!result.ok) {
+    throw result.error
+  }
 }
 
 function isIndexGroups(value: unknown): value is readonly IndexGroupDefinition[] {
@@ -38,10 +37,6 @@ function isIndexGroupDefinition(value: unknown): value is IndexGroupDefinition {
     Array.isArray(value.quoteCodes) &&
     value.quoteCodes.every((quoteCode) => typeof quoteCode === 'string')
   )
-}
-
-function getLocalStorage(): Storage | undefined {
-  return typeof localStorage === 'undefined' ? undefined : localStorage
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
