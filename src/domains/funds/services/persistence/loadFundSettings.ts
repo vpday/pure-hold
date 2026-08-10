@@ -39,12 +39,12 @@ export function loadFundSettings(): FundSettings {
       JSON.stringify(settings.holdingOrder) !== JSON.stringify(parsed.holdingOrder) ||
       JSON.stringify(settings.holdingsByCode) !== JSON.stringify(parsed.holdingsByCode)
     ) {
-      saveFundSettings(settings)
+      saveFundSettings(settings, storage)
     }
     return settings
   } catch (error) {
     backupCorruptedData(storage, raw)
-    persistRecovery(fallback)
+    persistRecovery(fallback, storage)
     console.warn('Fund settings were invalid and have been reset.', error)
     return fallback
   }
@@ -54,9 +54,9 @@ function createEmptyFundSettings(): FundSettings {
   return { funds: [], groups: [], holdingOrder: [], holdingsByCode: {} }
 }
 
-function persistRecovery(settings: FundSettings): void {
+function persistRecovery(settings: FundSettings, storage: Storage): void {
   try {
-    saveFundSettings(settings)
+    saveFundSettings(settings, storage)
   } catch {
     // Keep the in-memory fallback when storage is unavailable or full.
   }

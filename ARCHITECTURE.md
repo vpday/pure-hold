@@ -22,7 +22,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口                    |
 | 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                                |
 | 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件                      |
-| 基金状态     | `useFundsStore`                                        | 基金顺序、快照、分组、汇总持仓和持久化                        |
+| 基金状态     | `useFundsStore`                                        | 公共 Store facade、设置投影和行情 runtime 协调                |
 | 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                              |
 | 累计收益 API | `fetchTiantianFundCumulativeReturns`                   | 天天基金历史累计收益适配器的领域入口                          |
 | 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口                    |
@@ -71,7 +71,7 @@ EastmoneyIndexQuoteDto
 
 Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存 `FundSettings`，Service Worker 不替代 Vue 状态管理或领域持久化。
 
-`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode`。Store 启动时从设置生成运行时 `FundState`，为每只基金创建空 `FundSnapshot`；行情刷新只更新 Pinia，接口返回的新名称变化时才回写设置。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情。
+`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode`。Store 启动时由设置命令 module 提供设置投影，由行情 runtime 为每只基金创建空 `FundSnapshot`；行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情。
 
 基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
 
@@ -98,7 +98,7 @@ src/
 │     ├─ services/eastmoney/    # 东方财富基金搜索适配器
 │     ├─ services/tiantian/     # 天天基金实时行情、资料、历史和请求会话适配器
 │     ├─ services/persistence/  # 版本化基金设置持久化与恢复
-│     └─ stores/                # 基金共享领域状态与刷新事务
+│     └─ stores/                # Store facade、设置命令与行情 runtime
 ├─ features/
 │  ├─ index-overview/
 │  │  ├─ IndexOverviewSection.vue
@@ -163,8 +163,9 @@ indexDefinitions.json
 pure-hold:fund-settings:v1
   -> loadFundSettings
   -> FundSettings（代码、名称、分组、持仓）
-  -> useFundsStore
-  -> 运行时 FundState（包含空的 snapshotsByCode）
+  -> createFundSettingsCommandModule
+  -> useFundsStore 设置投影
+  -> createFundMarketRuntime（包含空的 snapshotsByCode）
 
 main.ts 初始化天天基金 deviceid
   -> fetchTiantianFundSnapshots
@@ -173,7 +174,8 @@ main.ts 初始化天天基金 deviceid
   -> parseTiantianFundResponse
   -> FundSnapshot
   -> Pinia snapshotsByCode
-  -> 仅名称变化时 saveFundSettings
+  -> useFundsStore 名称观察协调
+  -> createFundSettingsCommandModule（名称 best-effort 持久化）
 ```
 
 快照缓存保存原始 HTTP 响应，不保存领域 DTO；DTO 校验与转换仍由 `services/tiantian/` 完成。行情数值、标签和时间戳更新不会触发 localStorage 写入。
@@ -310,8 +312,9 @@ FundDetailEntry 当前基金代码
 - `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、风险参数会话、内存重算、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
-- `useFundsStore.addFunds` 隐藏批量校验、空快照构造、先保存设置后应用的原子事务和新增代码定向刷新。
-- `useFundsStore.updateFundHolding` / `updateFundGroupMembership` 隐藏单基金持仓和分组关系的先保存后应用更新。
+- `createFundSettingsCommandModule` 隐藏六类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
+- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据和行情名称观察。
+- `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组和组织排序不向 Feature 暴露内部 module。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
 - `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
 
@@ -335,7 +338,7 @@ FundDetailEntry 当前基金代码
 - **自定义基金分组只能引用 `fundOrder` 中的代码；“全部”和“持仓”是运行时派生分类，不进入持久化分组。**
 - **删除基金必须同时清理快照、汇总持仓、`holdingOrder` 和全部自定义分组引用。**
 - **基金批量变更必须先持久化候选 `FundSettings`，再替换内存状态；后续行情刷新失败不得回滚已保存设置。**
-- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 只属于运行时 `FundState`，行情字段更新不得触发设置持久化。**
+- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 只属于 `createFundMarketRuntime` 的运行时状态，行情字段更新不得触发设置持久化。**
 - **天天基金 deviceid 只在该领域内复用，必须独立于基金设置和导入导出数据。**
 
 ## 横切关注点
@@ -344,7 +347,7 @@ FundDetailEntry 当前基金代码
 
 `useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
-`useFundsStore` 是基金共享领域状态的所有者。它保存全部基金顺序、独立持仓顺序、行情快照、自定义分组和可选汇总持仓；其中 `snapshotsByCode` 只存在于当前运行时。批量新增、单基金持仓更新、单基金分组关系更新和基金组织排序都先把代码、名称、分组和持仓组成的 `FundSettings` 持久化，再替换相关内存引用；基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 Store，名称变化才回写设置，持久化或网络失败通过稳定问题状态暴露，不把第三方错误泄漏给组件。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts` 和 `useFundsStore.ts` 为权威来源。
+`useFundsStore` 是基金共享领域的公共 facade 和投影协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再替换设置投影；行情 runtime 独立持有 `snapshotsByCode`、刷新请求和元数据。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
 
 ### PWA 与缓存
 
@@ -396,7 +399,7 @@ ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以�
 | 指数目录更新规则             | `scripts/update-index-definitions.mjs`    |
 | 默认指数组                   | `defaultIndexGroups.ts`                   |
 | 指数刷新行为                 | `useIndexQuotesStore.ts`                  |
-| 基金运行时状态形状           | `fundState.ts`                            |
+| 基金运行时状态形状           | `createFundMarketRuntime.ts`              |
 | 基金设置形状                 | `fundSettings.ts`                         |
 | 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`            |
 | 基金搜索协议                 | `services/eastmoney/`                     |
