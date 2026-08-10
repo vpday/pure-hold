@@ -16,11 +16,7 @@ import type { FundSort } from './models/fundListViewModel'
 import { buildFundCategories } from './presenters/buildFundCategories'
 import { clearFundCategorySorts } from './presenters/clearFundCategorySorts'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from './presenters/formatFundDates'
-import {
-  isFundHoldingSortField,
-  sortFundRows,
-  sortFundSnapshots,
-} from './presenters/sortFundSnapshots'
+import { sortFundRows } from './presenters/sortFundSnapshots'
 import { toFundListViewModel } from './presenters/toFundListViewModel'
 
 const emit = defineEmits<{ searchFunds: [] }>()
@@ -63,13 +59,8 @@ const orderedSnapshots = computed(() =>
     return snapshot ? [snapshot] : []
   }),
 )
-const rows = computed(() => {
-  const sort = activeSort.value
-  const snapshots =
-    sort && isFundHoldingSortField(sort.sortBy)
-      ? orderedSnapshots.value
-      : sortFundSnapshots(orderedSnapshots.value, sort)
-  const nextRows = snapshots.map((snapshot) => {
+const baseRows = computed(() =>
+  orderedSnapshots.value.map((snapshot) => {
     const holding = holdingMode.value ? holdingsByCode.value[snapshot.code] : undefined
     return toFundListViewModel(
       snapshot,
@@ -82,14 +73,14 @@ const rows = computed(() => {
           })
         : undefined,
     )
-  })
-  return sort && isFundHoldingSortField(sort.sortBy) ? sortFundRows(nextRows, sort) : nextRows
-})
+  }),
+)
+const rows = computed(() => sortFundRows(baseRows.value, activeSort.value))
 const latestEstimatedAt = computed(() =>
-  formatEstimatedDisplayDate(latestText(rows.value.map((row) => row.estimatedAtText))),
+  formatEstimatedDisplayDate(latestText(baseRows.value.map((row) => row.estimatedAtText))),
 )
 const latestNavDate = computed(() =>
-  formatNavDisplayDate(latestText(rows.value.map((row) => row.navDateText))),
+  formatNavDisplayDate(latestText(baseRows.value.map((row) => row.navDateText))),
 )
 
 const refreshObserver = () => store.refreshAll({ force: true })
@@ -227,7 +218,7 @@ function shanghaiDate(now = new Date()): string {
           :holding-mode="holdingMode"
           :loading="isRefreshing"
           :nav-date="latestNavDate"
-          :rows="rows"
+          :rows="baseRows"
           :sort="activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"

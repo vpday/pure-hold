@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
-import type { DropdownProps, PrimaryTableProps } from 'tdesign-vue-next'
+import { computed, h, ref, watch } from 'vue'
+import type { DropdownProps, PrimaryTableProps, SortOptions } from 'tdesign-vue-next'
 
 import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
@@ -11,6 +11,11 @@ import type {
   FundTrend,
 } from '../models/fundListViewModel'
 import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRules'
+import {
+  createFundRowComparator,
+  moveMissingFundRowsLast,
+  sortFundRows,
+} from '../presenters/sortFundSnapshots'
 
 const props = defineProps<{
   estimatedAt: string
@@ -28,6 +33,21 @@ const emit = defineEmits<{
   sortChange: [sort: FundSort | null]
 }>()
 const pendingDeleteCode = ref<string>()
+const tableRows = ref<FundRowViewModel[]>([...props.rows])
+
+watch(
+  () => props.rows,
+  (rows) => {
+    tableRows.value = sortFundRows(rows, props.sort)
+  },
+)
+
+watch(
+  () => props.sort,
+  (sort) => {
+    if (!sort) tableRows.value = [...props.rows]
+  },
+)
 
 const returnColumns: readonly { cell: string; colKey: FundReturnField; title: string }[] = [
   { cell: 'one-week-cell', colKey: 'oneWeek', title: '近1周' },
@@ -55,13 +75,13 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
     {
       cell: 'estimated-nav-cell',
       colKey: 'estimatedChangePercent',
-      sorter: true,
+      sorter: createFundRowComparator('estimatedChangePercent'),
       title: () => renderQuoteTitle('净值估算', estimatedAt),
     },
     {
       cell: 'nav-cell',
       colKey: 'dailyChangePercent',
-      sorter: true,
+      sorter: createFundRowComparator('dailyChangePercent'),
       title: () => renderQuoteTitle('单位净值', navDate),
     },
   ]
@@ -78,31 +98,44 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
       {
         cell: 'estimated-income-cell',
         colKey: 'estimatedIncomePercent',
-        sorter: true,
+        sorter: createFundRowComparator('estimatedIncomePercent'),
         title: () => renderQuoteTitle('估算收益', estimatedAt),
       },
       {
         cell: 'today-income-cell',
         colKey: 'todayIncomePercent',
-        sorter: true,
+        sorter: createFundRowComparator('todayIncomePercent'),
         title: () => renderQuoteTitle('今日收益', navDate),
       },
       {
         cell: 'yesterday-income-cell',
         colKey: 'yesterdayIncomePercent',
-        sorter: true,
+        sorter: createFundRowComparator('yesterdayIncomePercent'),
         title: () => renderQuoteTitle('昨日收益', navDate),
       },
       ...quoteColumns,
       {
         cell: 'holding-income-cell',
         colKey: 'holdingIncomePercent',
-        sorter: true,
+        sorter: createFundRowComparator('holdingIncomePercent'),
         title: '持仓收益',
       },
-      { cell: 'holding-amount-cell', colKey: 'holdingAmount', sorter: true, title: '持仓金额' },
-      { cell: 'holding-days-cell', colKey: 'holdingDays', sorter: true, title: '持有天数' },
-      ...returnColumns.map((column) => ({ ...column, sorter: true })),
+      {
+        cell: 'holding-amount-cell',
+        colKey: 'holdingAmount',
+        sorter: createFundRowComparator('holdingAmount'),
+        title: '持仓金额',
+      },
+      {
+        cell: 'holding-days-cell',
+        colKey: 'holdingDays',
+        sorter: createFundRowComparator('holdingDays'),
+        title: '持有天数',
+      },
+      ...returnColumns.map((column) => ({
+        ...column,
+        sorter: createFundRowComparator(column.colKey),
+      })),
       actionColumn,
     ]
   }
@@ -110,7 +143,10 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
   return [
     nameColumn,
     ...quoteColumns,
-    ...returnColumns.map((column) => ({ ...column, sorter: true })),
+    ...returnColumns.map((column) => ({
+      ...column,
+      sorter: createFundRowComparator(column.colKey),
+    })),
     actionColumn,
   ]
 })
@@ -122,15 +158,25 @@ const moreActionOptions = [
   { content: '记录卖出', value: 'sell' },
 ] satisfies NonNullable<DropdownProps['options']>
 
-function handleSortChange(value: unknown): void {
+function handleDataChange(rows: FundRowViewModel[]): void {
+  tableRows.value = props.sort ? moveMissingFundRowsLast(rows, props.sort.sortBy) : rows
+}
+
+function handleSortChange(value: unknown, options: SortOptions<FundRowViewModel>): void {
   if (!isTableSort(value)) {
+    tableRows.value = options.currentDataSource ?? tableRows.value
     emit('sortChange', null)
     return
   }
-  emit('sortChange', {
+  const sort: FundSort = {
     descending: value.descending,
     sortBy: value.sortBy as FundSortField,
-  })
+  }
+  tableRows.value = moveMissingFundRowsLast(
+    options.currentDataSource ?? tableRows.value,
+    sort.sortBy,
+  )
+  emit('sortChange', sort)
 }
 
 function isTableSort(
@@ -192,9 +238,8 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 
 <template>
   <t-primary-table
-    :key="`${holdingMode}:${estimatedAt}:${navDate}:${sort?.sortBy}:${sort?.descending}`"
     :columns="columns"
-    :data="rows"
+    :data="tableRows"
     :loading="loading"
     :sort="sort ?? undefined"
     size="small"
@@ -203,6 +248,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     row-key="code"
     table-layout="auto"
     :table-content-width="holdingMode ? '1900px' : '1380px'"
+    @data-change="handleDataChange"
     @sort-change="handleSortChange"
   >
     <template #name-cell="{ row }">

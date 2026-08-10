@@ -4,8 +4,36 @@ import test from 'node:test'
 import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
 import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
-import { sortFundRows, sortFundSnapshots } from './sortFundSnapshots.ts'
+import type { FundRowViewModel, FundSortField } from '../models/fundListViewModel.ts'
+import {
+  createFundRowComparator,
+  moveMissingFundRowsLast,
+  sortFundRows,
+} from './sortFundSnapshots.ts'
 import { toFundListViewModel } from './toFundListViewModel.ts'
+
+const sortFields = [
+  'dailyChangePercent',
+  'estimatedChangePercent',
+  'estimatedIncomePercent',
+  'estimatedNav',
+  'fiveYears',
+  'holdingAmount',
+  'holdingDays',
+  'holdingIncomePercent',
+  'nav',
+  'oneMonth',
+  'oneWeek',
+  'oneYear',
+  'sinceInception',
+  'sixMonths',
+  'threeMonths',
+  'threeYears',
+  'todayIncomePercent',
+  'twoYears',
+  'yearToDate',
+  'yesterdayIncomePercent',
+] as const satisfies readonly FundSortField[]
 
 test('fund presenter keeps signs, missing placeholders, all return fields and trends', () => {
   const source: FundSnapshot = {
@@ -13,6 +41,7 @@ test('fund presenter keeps signs, missing placeholders, all return fields and tr
     dailyChangePercent: -1,
     estimatedChangePercent: 2,
     estimatedNav: 1.23456,
+    nav: 1.1,
     returns: {
       fiveYears: null,
       oneMonth: 0,
@@ -36,6 +65,28 @@ test('fund presenter keeps signs, missing placeholders, all return fields and tr
   assert.equal(Object.keys(row.returns).length, 10)
   assert.equal(row.trendByField.estimatedChangePercent, 'up')
   assert.equal(row.trendByField.dailyChangePercent, 'down')
+  assert.deepEqual(row.sortValues, {
+    dailyChangePercent: -1,
+    estimatedChangePercent: 2,
+    estimatedIncomePercent: null,
+    estimatedNav: 1.23456,
+    fiveYears: null,
+    holdingAmount: null,
+    holdingDays: null,
+    holdingIncomePercent: null,
+    nav: 1.1,
+    oneMonth: 0,
+    oneWeek: 1,
+    oneYear: null,
+    sinceInception: -3,
+    sixMonths: null,
+    threeMonths: null,
+    threeYears: null,
+    todayIncomePercent: null,
+    twoYears: null,
+    yearToDate: null,
+    yesterdayIncomePercent: null,
+  })
 })
 
 test('fund presenter formats holding income without losing raw percentage sort values', () => {
@@ -69,96 +120,69 @@ test('fund presenter formats holding income without losing raw percentage sort v
   assert.equal(row.holding?.sortValues.holdingDays, 9)
   assert.equal(row.holding?.sortValues.todayIncomePercent, 2.5)
   assert.equal(row.holding?.sortValues.estimatedIncomePercent, null)
+  assert.equal(row.sortValues.holdingAmount, 1234.5)
+  assert.equal(row.sortValues.holdingDays, 9)
+  assert.equal(row.sortValues.holdingIncomePercent, -1.25)
+  assert.equal(row.sortValues.todayIncomePercent, 2.5)
+  assert.equal(row.sortValues.yesterdayIncomePercent, 0)
+  assert.equal(row.sortValues.estimatedIncomePercent, null)
 })
 
-test('fund sorting is stable, keeps missing values last and null restores default order', () => {
-  const base = createTestFundSnapshot('161726')
-  const snapshots = [
-    { ...base, code: 'a', dailyChangePercent: 1, estimatedChangePercent: 2 },
-    { ...base, code: 'b', dailyChangePercent: 3, estimatedChangePercent: null },
-    { ...base, code: 'c', dailyChangePercent: null, estimatedChangePercent: 1 },
-    { ...base, code: 'd', dailyChangePercent: 2, estimatedChangePercent: 2 },
-  ]
-  assert.deepEqual(
-    sortFundSnapshots(snapshots, { descending: false, sortBy: 'estimatedChangePercent' }).map(
-      (item) => item.code,
-    ),
-    ['c', 'a', 'd', 'b'],
-  )
-  assert.deepEqual(
-    sortFundSnapshots(snapshots, { descending: true, sortBy: 'estimatedChangePercent' }).map(
-      (item) => item.code,
-    ),
-    ['a', 'd', 'c', 'b'],
-  )
-  assert.deepEqual(
-    sortFundSnapshots(snapshots, { descending: false, sortBy: 'dailyChangePercent' }).map(
-      (item) => item.code,
-    ),
-    ['a', 'd', 'b', 'c'],
-  )
-  assert.deepEqual(
-    sortFundSnapshots(snapshots, null).map((item) => item.code),
-    ['a', 'b', 'c', 'd'],
-  )
-})
+test('fund row sorting covers every field, stays stable and keeps missing values last', () => {
+  for (const field of sortFields) {
+    const rows = [
+      rowWithSortValue('a', field, 2),
+      rowWithSortValue('b', field, null),
+      rowWithSortValue('c', field, 1),
+      rowWithSortValue('d', field, 2),
+    ]
 
-test('holding row sorting uses raw percentages and stably keeps missing values last', () => {
-  const rows = [
-    toFundListViewModel(createTestFundSnapshot('a'), holdingMetrics(2)),
-    toFundListViewModel(createTestFundSnapshot('b'), holdingMetrics(null)),
-    toFundListViewModel(createTestFundSnapshot('c'), holdingMetrics(1)),
-    toFundListViewModel(createTestFundSnapshot('d'), holdingMetrics(2)),
-  ]
-
-  assert.deepEqual(
-    sortFundRows(rows, { descending: false, sortBy: 'holdingIncomePercent' }).map(
-      (row) => row.code,
-    ),
-    ['c', 'a', 'd', 'b'],
-  )
-  assert.deepEqual(
-    sortFundRows(rows, { descending: true, sortBy: 'holdingIncomePercent' }).map((row) => row.code),
-    ['a', 'd', 'c', 'b'],
-  )
-})
-
-test('holding row sorting supports amount and days', () => {
-  const rows = [
-    toFundListViewModel(createTestFundSnapshot('a'), holdingMetrics(null, 200, 5)),
-    toFundListViewModel(createTestFundSnapshot('b'), holdingMetrics(null, null, 7)),
-    toFundListViewModel(createTestFundSnapshot('c'), holdingMetrics(null, 100, 2)),
-    toFundListViewModel(createTestFundSnapshot('d'), holdingMetrics(null, 200, 1)),
-  ]
-
-  assert.deepEqual(
-    sortFundRows(rows, { descending: false, sortBy: 'holdingAmount' }).map((row) => row.code),
-    ['c', 'a', 'd', 'b'],
-  )
-  assert.deepEqual(
-    sortFundRows(rows, { descending: true, sortBy: 'holdingDays' }).map((row) => row.code),
-    ['b', 'a', 'c', 'd'],
-  )
-})
-
-function holdingMetrics(
-  holdingIncomePercent: number | null,
-  holdingAmount: number | null = null,
-  holdingDays: number | null = null,
-): FundHoldingMetrics {
-  return {
-    confirmedNavDate: null,
-    currentIncomeSource: 'none',
-    estimatedIncome: null,
-    estimatedIncomePercent: null,
-    holdingAmount,
-    holdingDays,
-    holdingIncome: holdingIncomePercent,
-    holdingIncomePercent,
-    todayIncome: null,
-    todayIncomePercent: null,
-    yesterdayIncome: null,
-    yesterdayIncomeDate: null,
-    yesterdayIncomePercent: null,
+    assert.deepEqual(
+      sortFundRows(rows, { descending: false, sortBy: field }).map((row) => row.code),
+      ['c', 'a', 'd', 'b'],
+      `${field} ascending`,
+    )
+    assert.deepEqual(
+      sortFundRows(rows, { descending: true, sortBy: field }).map((row) => row.code),
+      ['a', 'd', 'c', 'b'],
+      `${field} descending`,
+    )
   }
+})
+
+test('desktop adapter restores null-last after TDesign reverses comparator arguments', () => {
+  const field = 'estimatedChangePercent'
+  const rows = [
+    rowWithSortValue('a', field, 2),
+    rowWithSortValue('b', field, null),
+    rowWithSortValue('c', field, 1),
+    rowWithSortValue('d', field, 2),
+  ]
+  const compare = createFundRowComparator(field)
+  const tdesignDescendingRows = [...rows].sort((left, right) => compare(right, left))
+
+  assert.deepEqual(
+    moveMissingFundRowsLast(tdesignDescendingRows, field).map((row) => row.code),
+    ['a', 'd', 'c', 'b'],
+  )
+})
+
+test('null sort restores the input order', () => {
+  const rows = [
+    rowWithSortValue('a', 'dailyChangePercent', 2),
+    rowWithSortValue('b', 'dailyChangePercent', 1),
+  ]
+  assert.deepEqual(
+    sortFundRows(rows, null).map((row) => row.code),
+    ['a', 'b'],
+  )
+})
+
+function rowWithSortValue(
+  code: string,
+  field: FundSortField,
+  value: number | null,
+): FundRowViewModel {
+  const row = toFundListViewModel(createTestFundSnapshot(code))
+  return { ...row, sortValues: { ...row.sortValues, [field]: value } }
 }

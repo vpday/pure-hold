@@ -1,84 +1,47 @@
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
-import type {
-  FundHoldingSortField,
-  FundRowViewModel,
-  FundSort,
-  FundSortField,
-} from '../models/fundListViewModel'
-
-const holdingSortFields = new Set<FundSortField>([
-  'estimatedIncomePercent',
-  'holdingAmount',
-  'holdingDays',
-  'holdingIncomePercent',
-  'todayIncomePercent',
-  'yesterdayIncomePercent',
-])
-
-export function sortFundSnapshots(
-  snapshots: readonly FundSnapshot[],
-  sort: FundSort | null,
-): FundSnapshot[] {
-  if (!sort) {
-    return [...snapshots]
-  }
-
-  return stableSortByValue(snapshots, sort.descending, (snapshot) =>
-    sortableValue(snapshot, sort.sortBy),
-  )
-}
+import type { FundRowViewModel, FundSort, FundSortField } from '../models/fundListViewModel'
 
 export function sortFundRows(
   rows: readonly FundRowViewModel[],
   sort: FundSort | null,
 ): FundRowViewModel[] {
-  if (!sort || !isFundHoldingSortField(sort.sortBy)) return [...rows]
-  return stableSortByValue(
-    rows,
-    sort.descending,
-    (row) => row.holding?.sortValues[sort.sortBy as FundHoldingSortField] ?? null,
-  )
-}
+  if (!sort) return [...rows]
 
-export function isFundHoldingSortField(field: FundSortField): field is FundHoldingSortField {
-  return holdingSortFields.has(field)
-}
-
-function stableSortByValue<T>(
-  values: readonly T[],
-  descending: boolean,
-  valueOf: (value: T) => number | null,
-): T[] {
-  return values
-    .map((value, index) => ({ index, value, sortValue: valueOf(value) }))
+  const compare = createFundRowComparator(sort.sortBy)
+  const sortedRows = rows
+    .map((row, index) => ({ index, row }))
     .sort((left, right) => {
-      if (left.sortValue === null && right.sortValue === null) {
-        return left.index - right.index
-      }
-      if (left.sortValue === null) {
-        return 1
-      }
-      if (right.sortValue === null) {
-        return -1
-      }
-      const comparison = left.sortValue - right.sortValue
-      return comparison === 0 ? left.index - right.index : descending ? -comparison : comparison
+      const comparison = sort.descending
+        ? compare(right.row, left.row)
+        : compare(left.row, right.row)
+      return comparison === 0 ? left.index - right.index : comparison
     })
-    .map(({ value }) => value)
+    .map(({ row }) => row)
+
+  return moveMissingFundRowsLast(sortedRows, sort.sortBy)
 }
 
-function sortableValue(snapshot: FundSnapshot, field: FundSortField): number | null {
-  if (isFundHoldingSortField(field)) return null
-  switch (field) {
-    case 'dailyChangePercent':
-      return snapshot.dailyChangePercent
-    case 'estimatedChangePercent':
-      return snapshot.estimatedChangePercent
-    case 'estimatedNav':
-      return snapshot.estimatedNav
-    case 'nav':
-      return snapshot.nav
-    default:
-      return snapshot.returns[field]
+export function createFundRowComparator(
+  field: FundSortField,
+): (left: FundRowViewModel, right: FundRowViewModel) => number {
+  return (left, right) => compareFundSortValues(left.sortValues[field], right.sortValues[field])
+}
+
+export function moveMissingFundRowsLast(
+  rows: readonly FundRowViewModel[],
+  field: FundSortField,
+): FundRowViewModel[] {
+  const available: FundRowViewModel[] = []
+  const missing: FundRowViewModel[] = []
+  for (const row of rows) {
+    if (row.sortValues[field] === null) missing.push(row)
+    else available.push(row)
   }
+  return [...available, ...missing]
+}
+
+function compareFundSortValues(left: number | null, right: number | null): number {
+  if (left === null && right === null) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  return left - right
 }

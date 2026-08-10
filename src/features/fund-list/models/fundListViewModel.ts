@@ -45,6 +45,7 @@ export interface FundRowViewModel {
   readonly navText: string
   readonly returns: Readonly<Record<FundReturnField, string>>
   readonly returnsDateText: string
+  readonly sortValues: Readonly<Record<FundSortField, number | null>>
   readonly tags: readonly string[]
   readonly trendByField: Readonly<
     Record<FundReturnField | 'dailyChangePercent' | 'estimatedChangePercent', FundTrend>
