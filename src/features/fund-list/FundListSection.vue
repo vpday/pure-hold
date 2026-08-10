@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { MessagePlugin } from 'tdesign-vue-next'
 
+import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
 import FundDetailEntry from '@/features/fund-detail/FundDetailEntry.vue'
@@ -15,13 +16,25 @@ import type { FundSort } from './models/fundListViewModel'
 import { buildFundCategories } from './presenters/buildFundCategories'
 import { clearFundCategorySorts } from './presenters/clearFundCategorySorts'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from './presenters/formatFundDates'
-import { sortFundSnapshots } from './presenters/sortFundSnapshots'
+import {
+  isFundHoldingSortField,
+  sortFundRows,
+  sortFundSnapshots,
+} from './presenters/sortFundSnapshots'
 import { toFundListViewModel } from './presenters/toFundListViewModel'
 
 const emit = defineEmits<{ searchFunds: [] }>()
 const store = useFundsStore()
-const { fundOrder, groups, holdingOrder, isRefreshing, lastRefreshIssues, snapshotsByCode } =
-  storeToRefs(store)
+const {
+  fundOrder,
+  groups,
+  holdingOrder,
+  holdingsByCode,
+  isRefreshing,
+  lastRefreshIssues,
+  previousSnapshotsByCode,
+  snapshotsByCode,
+} = storeToRefs(store)
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
@@ -43,15 +56,35 @@ const activeCategory = computed(
     categories.value[0]!,
 )
 const activeSort = computed(() => sortByCategory.value[activeCategory.value.id] ?? null)
+const holdingMode = computed(() => activeCategory.value.id === 'holdings')
 const orderedSnapshots = computed(() =>
   activeCategory.value.fundCodes.flatMap((code) => {
     const snapshot = snapshotsByCode.value[code]
     return snapshot ? [snapshot] : []
   }),
 )
-const rows = computed(() =>
-  sortFundSnapshots(orderedSnapshots.value, activeSort.value).map(toFundListViewModel),
-)
+const rows = computed(() => {
+  const sort = activeSort.value
+  const snapshots =
+    sort && isFundHoldingSortField(sort.sortBy)
+      ? orderedSnapshots.value
+      : sortFundSnapshots(orderedSnapshots.value, sort)
+  const nextRows = snapshots.map((snapshot) => {
+    const holding = holdingMode.value ? holdingsByCode.value[snapshot.code] : undefined
+    return toFundListViewModel(
+      snapshot,
+      holding
+        ? calculateFundHoldingMetrics({
+            currentSnapshot: snapshot,
+            holding,
+            previousConfirmedSnapshot: previousSnapshotsByCode.value[snapshot.code],
+            today: shanghaiDate(),
+          })
+        : undefined,
+    )
+  })
+  return sort && isFundHoldingSortField(sort.sortBy) ? sortFundRows(nextRows, sort) : nextRows
+})
 const latestEstimatedAt = computed(() =>
   formatEstimatedDisplayDate(latestText(rows.value.map((row) => row.estimatedAtText))),
 )
@@ -114,6 +147,17 @@ function deleteFund(code: string): void {
 function latestText(values: readonly string[]): string {
   const available = values.filter((value) => value !== '--')
   return available.sort().at(-1) ?? '--'
+}
+
+function shanghaiDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 </script>
 
@@ -180,6 +224,7 @@ function latestText(values: readonly string[]): string {
       <div class="hidden sm:block">
         <FundDesktopTable
           :estimated-at="latestEstimatedAt"
+          :holding-mode="holdingMode"
           :loading="isRefreshing"
           :nav-date="latestNavDate"
           :rows="rows"
@@ -194,6 +239,7 @@ function latestText(values: readonly string[]): string {
       <div class="sm:hidden">
         <FundMobileList
           ref="mobileList"
+          :holding-mode="holdingMode"
           :rows="rows"
           :sort="activeSort"
           @coming-soon="showComingSoon"

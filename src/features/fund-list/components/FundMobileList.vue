@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { FundRowViewModel, FundSort, FundSortField } from '../models/fundListViewModel'
 import FundQuoteCard from './FundQuoteCard.vue'
@@ -10,6 +10,7 @@ interface SortOption {
 }
 
 const props = defineProps<{
+  holdingMode: boolean
   rows: readonly FundRowViewModel[]
   sort: FundSort | null
 }>()
@@ -24,7 +25,7 @@ const sortDrawerVisible = ref(false)
 const draftSortField = ref<FundSortField>()
 const draftDescending = ref(true)
 
-const sortFieldGroups: readonly {
+const baseSortFieldGroups: readonly {
   readonly label: string
   readonly options: readonly SortOption[]
 }[] = [
@@ -51,6 +52,29 @@ const sortFieldGroups: readonly {
     ],
   },
 ]
+const sortFieldGroups = computed(() => [
+  ...(props.holdingMode
+    ? [
+        {
+          label: '持仓收益',
+          options: [
+            { label: '估算收益', value: 'estimatedIncomePercent' as const },
+            { label: '今日收益', value: 'todayIncomePercent' as const },
+            { label: '昨日收益', value: 'yesterdayIncomePercent' as const },
+            { label: '持仓收益', value: 'holdingIncomePercent' as const },
+          ],
+        },
+        {
+          label: '持仓数据',
+          options: [
+            { label: '持仓金额', value: 'holdingAmount' as const },
+            { label: '持有天数', value: 'holdingDays' as const },
+          ],
+        },
+      ]
+    : []),
+  ...baseSortFieldGroups,
+])
 const directionOptions = [
   { label: '从高到低', value: true },
   { label: '从低到高', value: false },
@@ -83,7 +107,8 @@ defineExpose({ openSortDrawer })
   <div class="mt-3 flex flex-col gap-3">
     <FundQuoteCard
       v-for="row in rows"
-      :key="row.code"
+      :key="`${row.code}:${row.holding?.currentIncome.source ?? 'quote'}`"
+      :holding-mode="holdingMode"
       :row="row"
       @coming-soon="emit('comingSoon')"
       @delete="emit('delete', $event)"

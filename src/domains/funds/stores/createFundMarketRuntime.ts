@@ -19,6 +19,7 @@ export interface FundMarketRuntimeOptions {
 
 export interface FundMarketRuntime {
   readonly snapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
+  readonly previousSnapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
   readonly isRefreshing: Ref<boolean>
   readonly lastRefreshIssues: ShallowRef<readonly FundRefreshIssue[]>
   readonly lastSuccessfulRefreshAt: Ref<number | undefined>
@@ -34,6 +35,7 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
       options.initialFunds.map(({ code, name }) => [code, createEmptyFundSnapshot(code, name)]),
     ),
   )
+  const previousSnapshotsByCode = shallowRef<Readonly<Record<string, FundSnapshot>>>({})
   const isRefreshing = ref(false)
   const lastRefreshIssues = shallowRef<readonly FundRefreshIssue[]>([])
   const lastSuccessfulRefreshAt = ref<number | undefined>()
@@ -80,6 +82,11 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
         lastRefreshIssues.value = merged.issues
         if (merged.updatedCount === 0) return
 
+        previousSnapshotsByCode.value = advancePreviousSnapshots(
+          previousSnapshotsByCode.value,
+          snapshotsByCode.value,
+          merged.snapshotsByCode,
+        )
         snapshotsByCode.value = merged.snapshotsByCode
         lastSuccessfulRefreshAt.value = batch.fetchedAt
         lastRefreshSource.value = batch.source
@@ -123,6 +130,9 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     const nextSnapshots = { ...snapshotsByCode.value }
     delete nextSnapshots[effect.code]
     snapshotsByCode.value = nextSnapshots
+    const nextPreviousSnapshots = { ...previousSnapshotsByCode.value }
+    delete nextPreviousSnapshots[effect.code]
+    previousSnapshotsByCode.value = nextPreviousSnapshots
   }
 
   function dispose(): void {
@@ -172,9 +182,35 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     lastRefreshIssues,
     lastRefreshSource,
     lastSuccessfulRefreshAt,
+    previousSnapshotsByCode,
     refreshAll,
     snapshotsByCode,
   }
+}
+
+function advancePreviousSnapshots(
+  previousSnapshots: Readonly<Record<string, FundSnapshot>>,
+  currentSnapshots: Readonly<Record<string, FundSnapshot>>,
+  nextSnapshots: Readonly<Record<string, FundSnapshot>>,
+): Readonly<Record<string, FundSnapshot>> {
+  let result: Record<string, FundSnapshot> | undefined
+  for (const [code, nextSnapshot] of Object.entries(nextSnapshots)) {
+    const currentSnapshot = currentSnapshots[code]
+    if (!currentSnapshot || !isConfirmedDateAdvance(currentSnapshot, nextSnapshot)) continue
+    result ??= { ...previousSnapshots }
+    result[code] = currentSnapshot
+  }
+  return result ?? previousSnapshots
+}
+
+function isConfirmedDateAdvance(current: FundSnapshot, next: FundSnapshot): boolean {
+  return (
+    current.nav !== null &&
+    current.navDate !== null &&
+    next.nav !== null &&
+    next.navDate !== null &&
+    next.navDate > current.navDate
+  )
 }
 
 function isAbortError(error: unknown): boolean {

@@ -14,6 +14,7 @@ import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRu
 
 const props = defineProps<{
   estimatedAt: string
+  holdingMode: boolean
   loading: boolean
   navDate: string
   rows: readonly FundRowViewModel[]
@@ -43,9 +44,14 @@ const returnColumns: readonly { cell: string; colKey: FundReturnField; title: st
 const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
   const estimatedAt = props.estimatedAt
   const navDate = props.navDate
-
-  return [
-    { cell: 'name-cell', colKey: 'name', title: '基金名称', fixed: 'left', width: 180 },
+  const nameColumn = {
+    cell: 'name-cell',
+    colKey: 'name',
+    title: '基金名称',
+    fixed: 'left' as const,
+    width: 180,
+  }
+  const quoteColumns = [
     {
       cell: 'estimated-nav-cell',
       colKey: 'estimatedChangePercent',
@@ -58,8 +64,54 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
       sorter: true,
       title: () => renderQuoteTitle('单位净值', navDate),
     },
+  ]
+  const actionColumn = {
+    cell: 'actions-cell',
+    colKey: 'actions',
+    fixed: 'right' as const,
+    title: '操作',
+  }
+
+  if (props.holdingMode) {
+    return [
+      nameColumn,
+      {
+        cell: 'estimated-income-cell',
+        colKey: 'estimatedIncomePercent',
+        sorter: true,
+        title: () => renderQuoteTitle('估算收益', estimatedAt),
+      },
+      {
+        cell: 'today-income-cell',
+        colKey: 'todayIncomePercent',
+        sorter: true,
+        title: () => renderQuoteTitle('今日收益', navDate),
+      },
+      {
+        cell: 'yesterday-income-cell',
+        colKey: 'yesterdayIncomePercent',
+        sorter: true,
+        title: () => renderQuoteTitle('昨日收益', navDate),
+      },
+      ...quoteColumns,
+      {
+        cell: 'holding-income-cell',
+        colKey: 'holdingIncomePercent',
+        sorter: true,
+        title: '持仓收益',
+      },
+      { cell: 'holding-amount-cell', colKey: 'holdingAmount', sorter: true, title: '持仓金额' },
+      { cell: 'holding-days-cell', colKey: 'holdingDays', sorter: true, title: '持有天数' },
+      ...returnColumns.map((column) => ({ ...column, sorter: true })),
+      actionColumn,
+    ]
+  }
+
+  return [
+    nameColumn,
+    ...quoteColumns,
     ...returnColumns.map((column) => ({ ...column, sorter: true })),
-    { cell: 'actions-cell', colKey: 'actions', title: '操作', fixed: 'right', width: 98 },
+    actionColumn,
   ]
 })
 const moreActionOptions = [
@@ -140,7 +192,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 
 <template>
   <t-primary-table
-    :key="`${estimatedAt}:${navDate}:${sort?.sortBy}:${sort?.descending}`"
+    :key="`${holdingMode}:${estimatedAt}:${navDate}:${sort?.sortBy}:${sort?.descending}`"
     :columns="columns"
     :data="rows"
     :loading="loading"
@@ -150,7 +202,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     :horizontal-scroll-affixed-bottom="true"
     row-key="code"
     table-layout="auto"
-    :table-content-width="'1380px'"
+    :table-content-width="holdingMode ? '1900px' : '1380px'"
     @sort-change="handleSortChange"
   >
     <template #name-cell="{ row }">
@@ -205,6 +257,100 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
           {{ formatRowDate(row.navDateText, navDate) }}
         </p>
       </div>
+    </template>
+    <template #estimated-income-cell="{ row }">
+      <div v-if="row.holding" class="font-mono tabular-nums">
+        <p
+          v-if="
+            row.holding.estimatedIncome.amountText === '--' &&
+            row.holding.estimatedIncome.percentText === '--'
+          "
+        >
+          --
+        </p>
+        <template v-else>
+          <p :class="trendClass(row.holding.estimatedIncome.trend)">
+            {{ row.holding.estimatedIncome.amountText }}
+          </p>
+          <p :class="trendClass(row.holding.estimatedIncome.trend)">
+            {{ row.holding.estimatedIncome.percentText }}
+          </p>
+        </template>
+        <p
+          v-if="shouldShowRowDate(row.estimatedAtText, estimatedAt)"
+          class="text-xs text-(--td-text-color-placeholder)"
+        >
+          {{ formatRowDate(row.estimatedAtText, estimatedAt) }}
+        </p>
+      </div>
+    </template>
+    <template #today-income-cell="{ row }">
+      <div v-if="row.holding" class="font-mono tabular-nums">
+        <p
+          v-if="
+            row.holding.todayIncome.amountText === '--' &&
+            row.holding.todayIncome.percentText === '--'
+          "
+        >
+          --
+        </p>
+        <template v-else>
+          <p :class="trendClass(row.holding.todayIncome.trend)">
+            {{ row.holding.todayIncome.amountText }}
+          </p>
+          <p :class="trendClass(row.holding.todayIncome.trend)">
+            {{ row.holding.todayIncome.percentText }}
+          </p>
+        </template>
+        <p
+          v-if="shouldShowRowDate(row.navDateText, navDate)"
+          class="text-xs text-(--td-text-color-placeholder)"
+        >
+          {{ formatRowDate(row.navDateText, navDate) }}
+        </p>
+      </div>
+    </template>
+    <template #yesterday-income-cell="{ row }">
+      <div v-if="row.holding" class="font-mono tabular-nums">
+        <p
+          v-if="
+            row.holding.yesterdayIncome.amountText === '--' &&
+            row.holding.yesterdayIncome.percentText === '--'
+          "
+        >
+          --
+        </p>
+        <template v-else>
+          <p :class="trendClass(row.holding.yesterdayIncome.trend)">
+            {{ row.holding.yesterdayIncome.amountText }}
+          </p>
+          <p :class="trendClass(row.holding.yesterdayIncome.trend)">
+            {{ row.holding.yesterdayIncome.percentText }}
+          </p>
+        </template>
+        <p
+          v-if="shouldShowRowDate(row.holding.yesterdayIncomeDateText, navDate)"
+          class="text-xs text-(--td-text-color-placeholder)"
+        >
+          {{ formatRowDate(row.holding.yesterdayIncomeDateText, navDate) }}
+        </p>
+      </div>
+    </template>
+    <template #holding-income-cell="{ row }">
+      <div v-if="row.holding" class="font-mono tabular-nums">
+        <p :class="trendClass(row.holding.holdingIncome.trend)">
+          {{ row.holding.holdingIncome.amountText }}
+        </p>
+        <p :class="trendClass(row.holding.holdingIncome.trend)">
+          {{ row.holding.holdingIncome.percentText }}
+        </p>
+      </div>
+    </template>
+    <template #holding-amount-cell="{ row }">
+      <span class="font-mono tabular-nums">{{ row.holding?.holdingAmountText ?? '--' }}</span>
+    </template>
+    <template #holding-days-cell="{ row }">
+      <span class="font-mono tabular-nums">{{ row.holding?.holdingDaysText ?? '--' }}</span>
     </template>
     <template v-for="column in returnColumns" :key="column.colKey" #[column.cell]="{ row }">
       <span class="font-mono tabular-nums" :class="trendClass(row.trendByField[column.colKey])">

@@ -40,3 +40,24 @@ test('refresh merge ignores a fund deleted while the request was active', () => 
   assert.equal(result.updatedCount, 0)
   assert.deepEqual(result.snapshotsByCode, {})
 })
+
+test('refresh merge does not replace confirmed data with an older or unconfirmed snapshot', () => {
+  const current = {
+    ...createTestFundSnapshot('161726'),
+    nav: 1.7,
+    navDate: '2026-08-10',
+  }
+  const older = { ...current, nav: 1.4, navDate: '2026-08-07' }
+  const unconfirmed = { ...current, estimatedNav: 1.8, nav: null, navDate: null }
+
+  for (const incoming of [older, unconfirmed]) {
+    const result = mergeFundRefreshResult({ '161726': current }, ['161726'], ['161726'], {
+      fetchedAt: 100,
+      issues: [],
+      source: 'cache',
+      snapshots: [incoming],
+    })
+    assert.equal(result.updatedCount, 0)
+    assert.equal(result.snapshotsByCode['161726'], current)
+  }
+})

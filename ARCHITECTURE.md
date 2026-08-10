@@ -44,7 +44,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/domains` 保存稳定业务概念、外部系统适配和领域状态。每个领域内部可以按 `config`、`models`、`services`、`stores` 分类。基金标识、行情、分组和当前汇总持仓进入 `domains/funds`；未来跨资产组合能力进入 `domains/portfolio`，而不是进入一个通用业务 Store。
 
-当前 `FundHolding` 表示“一只基金一份汇总持仓”，保存份额、成本价、购买日期和分红方式，用于表达基金是否持有、派生持仓分类和保存简单录入结果。分红方式当前只记录和回显，不驱动份额或收益计算。它与基金成员关系共享生命周期，因此属于 `domains/funds`。未来的交易流水、买入批次、成本核算、收益归因、组合估值和跨资产持仓属于 `domains/portfolio`；Portfolio 可以引用基金标识，但不直接修改 Funds Store。
+当前 `FundHolding` 表示“一只基金一份汇总持仓”，保存份额、全包单位成本、购买日期和分红方式，用于表达基金是否持有、派生持仓分类和保存简单录入结果。全包单位成本包含申购费影响；持仓金额、持仓收益和每日收益基于已扣除持续运作费用的基金净值计算，不再次扣除管理费、托管费或销售服务费。分红方式当前只记录和回显，不驱动份额或收益计算。它与基金成员关系共享生命周期，因此属于 `domains/funds`。未来的交易流水、买入批次、成本核算、收益归因、组合估值和跨资产持仓属于 `domains/portfolio`；Portfolio 可以引用基金标识，但不直接修改 Funds Store。
 
 `src/features` 保存面向用户的功能组合。Feature 可以读取一个或多个领域，生成页面模型并管理局部交互，但不拥有第三方协议知识。
 
@@ -74,7 +74,7 @@ EastmoneyIndexQuoteDto
 
 Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存 `FundSettings`，Service Worker 不替代 Vue 状态管理或领域持久化。
 
-`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode`。Store 启动时由设置命令 module 提供设置投影，由行情 runtime 为每只基金创建空 `FundSnapshot`；行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情。
+`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode` 或 `previousSnapshotsByCode`。Store 启动时由设置命令 module 提供设置投影，由行情 runtime 为每只基金创建空 `FundSnapshot`；确认净值日期推进时，runtime 仅在内存中保留上一份确认快照，同日刷新和旧数据不推进或回滚它。行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情或上一份确认快照。
 
 基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
 
@@ -126,7 +126,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类，并把桌面与移动操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类；仅在“持仓”分类中组合当前快照、上一份确认快照和汇总持仓，通过纯领域计算生成持仓指标，再由 presenter 统一格式化金额、百分比、日期和排序原始值。桌面表格和移动卡片只消费行模型，并把操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -183,6 +183,7 @@ main.ts 初始化天天基金 deviceid
   -> parseTiantianFundResponse
   -> FundSnapshot
   -> Pinia snapshotsByCode
+  -> 确认日期推进时更新内存 previousSnapshotsByCode
   -> useFundsStore 名称观察协调
   -> createFundSettingsCommandModule（名称 best-effort 持久化）
 ```
@@ -322,7 +323,7 @@ FundDetailEntry 当前基金代码
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `createFundSettingsCommandModule` 隐藏六类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
-- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据和行情名称观察。
+- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据、上一份确认快照和行情名称观察。
 - `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组和组织排序不向 Feature 暴露内部 module。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
 - `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
@@ -346,11 +347,11 @@ FundDetailEntry 当前基金代码
 - **新增网络缓存必须显式声明匹配范围、时效、容量和失败策略；禁止默认缓存所有 GET 请求。**
 - **生成文件 `auto-imports.d.ts` 和 `components.d.ts` 不手工维护。**
 - **`fundOrder` 是基金存在性和“全部”分类顺序的权威来源；代码不得重复。**
-- **`snapshotsByCode` 的键必须与 `fundOrder` 完全一致，`holdingsByCode` 只能是 `fundOrder` 的子集；`holdingOrder` 必须与 `holdingsByCode` 的键集合完全一致并保存“持仓”分类的独立顺序；快照或持仓记录内的代码必须等于对应键。**
+- **`snapshotsByCode` 的键必须与 `fundOrder` 完全一致，`previousSnapshotsByCode` 只能是 `fundOrder` 的子集且只保存确认日期推进前的快照；`holdingsByCode` 只能是 `fundOrder` 的子集；`holdingOrder` 必须与 `holdingsByCode` 的键集合完全一致并保存“持仓”分类的独立顺序；快照或持仓记录内的代码必须等于对应键。**
 - **自定义基金分组只能引用 `fundOrder` 中的代码；“全部”和“持仓”是运行时派生分类，不进入持久化分组。**
 - **删除基金必须同时清理快照、汇总持仓、`holdingOrder` 和全部自定义分组引用。**
 - **基金批量变更必须先持久化候选 `FundSettings`，再替换内存状态；后续行情刷新失败不得回滚已保存设置。**
-- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 只属于 `createFundMarketRuntime` 的运行时状态，行情字段更新不得触发设置持久化。**
+- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 和 `previousSnapshotsByCode` 只属于 `createFundMarketRuntime` 的运行时状态，行情字段更新不得触发设置持久化。**
 - **天天基金 deviceid 只在该领域内复用，必须独立于基金设置和导入导出数据。**
 
 ## 横切关注点
@@ -359,7 +360,7 @@ FundDetailEntry 当前基金代码
 
 `useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
-`useFundsStore` 是基金共享领域的公共 facade 和投影协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再替换设置投影；行情 runtime 独立持有 `snapshotsByCode`、刷新请求和元数据。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
+`useFundsStore` 是基金共享领域的公共 facade 和投影协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再替换设置投影；行情 runtime 独立持有 `snapshotsByCode`、`previousSnapshotsByCode`、刷新请求和元数据。确认日期严格推进时，当前确认快照成为上一份快照；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
 
 ### PWA 与缓存
 
@@ -381,7 +382,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 ### 时间和行情语义
 
-东方财富行情时间戳以 Unix 秒提供，适配器转换为毫秒；presenter 按上海时区展示。领域层保存数字和时间戳，presenter 负责两位小数、正负号、百分号和状态文案。涨跌使用中国证券市场习惯的涨红跌绿，同时保留正负号，颜色不是唯一信息来源；实际颜色引用 TDesign 主题语义变量。
+东方财富行情时间戳以 Unix 秒提供，适配器转换为毫秒；presenter 按上海时区展示。基金持仓指标以显式传入的上海日期判断当日确认净值和有效估算时间，持有天数按自然日差值计算。领域层保存数字和时间戳，presenter 负责两位小数、正负号、百分号和状态文案。涨跌使用中国证券市场习惯的涨红跌绿，同时保留正负号，颜色不是唯一信息来源；实际颜色引用 TDesign 主题语义变量。
 
 ## 扩展规则
 

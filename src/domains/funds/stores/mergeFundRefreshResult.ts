@@ -25,6 +25,10 @@ export function mergeFundRefreshResult(
       issues.push({ code: 'unexpected-record', fundCode: snapshot.code })
       continue
     }
+    const currentSnapshot = snapshotsByCode[snapshot.code]
+    if (currentSnapshot && isConfirmedSnapshotRegression(currentSnapshot, snapshot)) {
+      continue
+    }
     snapshotsByCode[snapshot.code] = snapshot
     updatedCount += 1
   }
@@ -36,4 +40,10 @@ export function mergeFundRefreshResult(
   }
 
   return { issues, snapshotsByCode, updatedCount }
+}
+
+function isConfirmedSnapshotRegression(current: FundSnapshot, incoming: FundSnapshot): boolean {
+  if (!current.navDate || current.nav === null) return false
+  if (!incoming.navDate || incoming.nav === null) return true
+  return incoming.navDate < current.navDate
 }

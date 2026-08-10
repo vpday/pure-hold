@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import type { FundSettings } from '../models/fundSettings.ts'
+import type { FundSnapshot } from '../models/fundSnapshot.ts'
 import { fundSettingsStorageKey } from '../services/persistence/fundSettingsSchemaVersion.ts'
 import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
 import { useFundsStore } from './useFundsStore.ts'
@@ -134,10 +135,75 @@ test('deleting a fund invalidates a late refresh result', async () => {
   })
 })
 
+test('retains only the previous confirmed snapshot when the NAV date advances', async () => {
+  await withEnvironment(async () => {
+    saveFundSettings(createTestFundSettings())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const responses = [
+      createConfirmedSnapshotResponse('2026-08-07', '1.5'),
+      createConfirmedSnapshotResponse('2026-08-07', '1.6'),
+      createConfirmedSnapshotResponse('2026-08-10', '1.7'),
+      createConfirmedSnapshotResponse('2026-08-07', '1.4'),
+    ]
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () => responses.shift()!
+    try {
+      await store.refreshAll()
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+
+      await store.refreshAll()
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+
+      await store.refreshAll()
+      assert.equal(store.snapshotsByCode['161726']?.nav, 1.7)
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.nav, 1.6)
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.navDate, '2026-08-07')
+
+      await store.refreshAll()
+      assert.equal(store.snapshotsByCode['161726']?.nav, 1.7)
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.nav, 1.6)
+
+      assert.deepEqual(store.deleteFund('161726'), {})
+      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+    } finally {
+      globalThis.fetch = originalFetch
+      store.$dispose()
+    }
+  })
+})
+
 function createSnapshotResponse(name: string, estimatedNav: string): Response {
   return new Response(
     JSON.stringify({
       data: [{ FCODE: '161726', GSZ: estimatedNav, SHORTNAME: name }],
+      errorCode: 0,
+      success: true,
+      totalCount: 1,
+    }),
+    { status: 200 },
+  )
+}
+
+function snapshotAt(
+  snapshots: Readonly<Record<string, FundSnapshot>>,
+  code: string,
+): FundSnapshot | undefined {
+  return snapshots[code]
+}
+
+function createConfirmedSnapshotResponse(navDate: string, nav: string): Response {
+  return new Response(
+    JSON.stringify({
+      data: [
+        {
+          FCODE: '161726',
+          NAV: nav,
+          NAVCHGRT: '1',
+          PDATE: navDate,
+          SHORTNAME: '基金 161726',
+        },
+      ],
       errorCode: 0,
       success: true,
       totalCount: 1,

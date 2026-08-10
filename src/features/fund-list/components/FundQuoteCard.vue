@@ -6,7 +6,7 @@ import { formatEstimatedDisplayDate, formatNavDisplayDate } from '../presenters/
 import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRules'
 import FundActions from './FundActions.vue'
 
-defineProps<{ row: FundRowViewModel }>()
+defineProps<{ holdingMode: boolean; row: FundRowViewModel }>()
 const emit = defineEmits<{
   comingSoon: []
   delete: [code: string]
@@ -19,6 +19,10 @@ function trendClass(trend: FundTrend): string {
   if (trend === 'up') return 'text-(--td-error-color)'
   if (trend === 'down') return 'text-(--td-success-color)'
   return 'text-(--td-text-color-primary)'
+}
+
+function isPlaceholderPair(first: string, second: string): boolean {
+  return first === '--' && second === '--'
 }
 </script>
 
@@ -52,14 +56,41 @@ function trendClass(trend: FundTrend): string {
       </t-button>
     </div>
 
-    <div class="mt-4 grid grid-cols-2 gap-3">
+    <div class="mt-4 grid gap-3" :class="holdingMode ? 'grid-cols-3' : 'grid-cols-2'">
+      <div v-if="holdingMode && row.holding">
+        <p class="text-xs text-(--td-text-color-secondary)">
+          {{ row.holding.currentIncome.label }}
+        </p>
+        <p
+          v-if="
+            isPlaceholderPair(
+              row.holding.currentIncome.amountText,
+              row.holding.currentIncome.percentText,
+            )
+          "
+          class="font-mono font-medium tabular-nums"
+        >
+          --
+        </p>
+        <template v-else>
+          <p
+            class="font-mono font-medium tabular-nums"
+            :class="trendClass(row.holding.currentIncome.trend)"
+          >
+            {{ row.holding.currentIncome.amountText }}
+          </p>
+          <p class="font-mono tabular-nums" :class="trendClass(row.holding.currentIncome.trend)">
+            {{ row.holding.currentIncome.percentText }}
+          </p>
+        </template>
+      </div>
       <div>
         <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
         <p v-if="isEstimatedQuoteEmpty(row)" class="font-mono text-base font-medium tabular-nums">
           --
         </p>
         <template v-else>
-          <p class="font-mono text-base font-medium tabular-nums">{{ row.estimatedNavText }}</p>
+          <p class="font-mono font-medium tabular-nums">{{ row.estimatedNavText }}</p>
           <p
             class="font-mono tabular-nums"
             :class="trendClass(row.trendByField.estimatedChangePercent)"
@@ -76,16 +107,99 @@ function trendClass(trend: FundTrend): string {
       </div>
       <div>
         <p class="text-xs text-(--td-text-color-secondary)">单位净值</p>
-        <p class="font-mono text-base font-medium tabular-nums">{{ row.navText }}</p>
-        <p class="font-mono tabular-nums" :class="trendClass(row.trendByField.dailyChangePercent)">
-          {{ row.dailyChangePercentText }}
+        <p
+          v-if="isPlaceholderPair(row.navText, row.dailyChangePercentText)"
+          class="font-mono font-medium tabular-nums"
+        >
+          --
         </p>
+        <template v-else>
+          <p class="font-mono font-medium tabular-nums">{{ row.navText }}</p>
+          <p
+            class="font-mono tabular-nums"
+            :class="trendClass(row.trendByField.dailyChangePercent)"
+          >
+            {{ row.dailyChangePercentText }}
+          </p>
+        </template>
         <p
           v-if="row.navDateText !== '--'"
           class="font-mono text-xs tabular-nums text-(--td-text-color-placeholder)"
         >
           {{ formatNavDisplayDate(row.navDateText) }}
         </p>
+      </div>
+    </div>
+
+    <div v-if="holdingMode && row.holding" class="fund-holding-scroll">
+      <div class="fund-holding-grid">
+        <div>
+          <p class="text-xs text-(--td-text-color-secondary)">昨日收益</p>
+          <p
+            v-if="
+              isPlaceholderPair(
+                row.holding.yesterdayIncome.amountText,
+                row.holding.yesterdayIncome.percentText,
+              )
+            "
+            class="font-mono tabular-nums"
+          >
+            --
+          </p>
+          <template v-else>
+            <p
+              class="font-mono tabular-nums"
+              :class="trendClass(row.holding.yesterdayIncome.trend)"
+            >
+              {{ row.holding.yesterdayIncome.amountText }}
+            </p>
+            <p
+              class="font-mono text-xs tabular-nums"
+              :class="trendClass(row.holding.yesterdayIncome.trend)"
+            >
+              {{ row.holding.yesterdayIncome.percentText }}
+            </p>
+          </template>
+          <p
+            v-if="row.holding.yesterdayIncomeDateText !== '--'"
+            class="font-mono text-xs tabular-nums text-(--td-text-color-placeholder)"
+          >
+            {{ formatNavDisplayDate(row.holding.yesterdayIncomeDateText) }}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-(--td-text-color-secondary)">持仓收益</p>
+          <p
+            v-if="
+              isPlaceholderPair(
+                row.holding.holdingIncome.amountText,
+                row.holding.holdingIncome.percentText,
+              )
+            "
+            class="font-mono tabular-nums"
+          >
+            --
+          </p>
+          <template v-else>
+            <p class="font-mono tabular-nums" :class="trendClass(row.holding.holdingIncome.trend)">
+              {{ row.holding.holdingIncome.amountText }}
+            </p>
+            <p
+              class="font-mono text-xs tabular-nums"
+              :class="trendClass(row.holding.holdingIncome.trend)"
+            >
+              {{ row.holding.holdingIncome.percentText }}
+            </p>
+          </template>
+        </div>
+        <div>
+          <p class="text-xs text-(--td-text-color-secondary)">持仓金额</p>
+          <p class="font-mono tabular-nums">{{ row.holding.holdingAmountText }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-(--td-text-color-secondary)">持有天数</p>
+          <p class="font-mono tabular-nums">{{ row.holding.holdingDaysText }}</p>
+        </div>
       </div>
     </div>
 
@@ -133,6 +247,14 @@ function trendClass(trend: FundTrend): string {
 
 .fund-returns-scroll {
   @apply mt-4 overflow-x-auto overscroll-contain scrollbar-thin;
+}
+
+.fund-holding-scroll {
+  @apply mt-4 overflow-x-auto overscroll-contain scrollbar-thin;
+}
+
+.fund-holding-grid {
+  @apply grid min-w-sm grid-cols-4 gap-x-3 text-left;
 }
 
 .fund-returns-grid {

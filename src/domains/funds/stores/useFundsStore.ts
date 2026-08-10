@@ -142,6 +142,7 @@ export const useFundsStore = defineStore('funds', () => {
     lastRefreshIssues: marketRuntime.lastRefreshIssues,
     lastRefreshSource: marketRuntime.lastRefreshSource,
     lastSuccessfulRefreshAt: marketRuntime.lastSuccessfulRefreshAt,
+    previousSnapshotsByCode: marketRuntime.previousSnapshotsByCode,
     refreshAll,
     replaceFundOrganization,
     replaceGroups,
