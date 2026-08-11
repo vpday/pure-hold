@@ -1,6 +1,6 @@
 ---
 name: fund-group-settings
-description: 'Skill for the Fund-group-settings area of pure-hold. 4 symbols across 1 files.'
+description: "Skill for the Fund-group-settings area of pure-hold. 4 symbols across 1 files."
 ---
 
 # Fund-group-settings
@@ -15,8 +15,8 @@ description: 'Skill for the Fund-group-settings area of pure-hold. 4 symbols acr
 
 ## Key Files
 
-| File                                                          | Symbols                                    |
-| ------------------------------------------------------------- | ------------------------------------------ |
+| File | Symbols |
+|------|---------|
 | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | close, confirm, handleResult, handleRename |
 
 ## Entry Points
@@ -30,12 +30,12 @@ Start here when exploring this area:
 
 ## Key Symbols
 
-| Symbol         | Type     | File                                                          | Line |
-| -------------- | -------- | ------------------------------------------------------------- | ---- |
-| `close`        | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 36   |
-| `confirm`      | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 61   |
-| `handleResult` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 42   |
-| `handleRename` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 46   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `close` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 36 |
+| `confirm` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 61 |
+| `handleResult` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 42 |
+| `handleRename` | Function | `src/features/fund-group-settings/FundGroupSettingsEntry.vue` | 46 |
 
 ## How to Explore
 

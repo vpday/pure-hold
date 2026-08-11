@@ -1,6 +1,6 @@
 ---
 name: fund-search
-description: 'Skill for the Fund-search area of pure-hold. 5 symbols across 1 files.'
+description: "Skill for the Fund-search area of pure-hold. 5 symbols across 1 files."
 ---
 
 # Fund-search
@@ -15,8 +15,8 @@ description: 'Skill for the Fund-search area of pure-hold. 5 symbols across 1 fi
 
 ## Key Files
 
-| File                                           | Symbols                                                         |
-| ---------------------------------------------- | --------------------------------------------------------------- |
+| File | Symbols |
+|------|---------|
 | `src/features/fund-search/FundSearchEntry.vue` | open, close, addWithoutHoldings, confirmHoldings, handleSuccess |
 
 ## Entry Points
@@ -31,13 +31,13 @@ Start here when exploring this area:
 
 ## Key Symbols
 
-| Symbol               | Type     | File                                           | Line |
-| -------------------- | -------- | ---------------------------------------------- | ---- |
-| `open`               | Function | `src/features/fund-search/FundSearchEntry.vue` | 15   |
-| `close`              | Function | `src/features/fund-search/FundSearchEntry.vue` | 21   |
-| `addWithoutHoldings` | Function | `src/features/fund-search/FundSearchEntry.vue` | 26   |
-| `confirmHoldings`    | Function | `src/features/fund-search/FundSearchEntry.vue` | 30   |
-| `handleSuccess`      | Function | `src/features/fund-search/FundSearchEntry.vue` | 34   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `open` | Function | `src/features/fund-search/FundSearchEntry.vue` | 15 |
+| `close` | Function | `src/features/fund-search/FundSearchEntry.vue` | 21 |
+| `addWithoutHoldings` | Function | `src/features/fund-search/FundSearchEntry.vue` | 26 |
+| `confirmHoldings` | Function | `src/features/fund-search/FundSearchEntry.vue` | 30 |
+| `handleSuccess` | Function | `src/features/fund-search/FundSearchEntry.vue` | 34 |
 
 ## How to Explore
 

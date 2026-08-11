@@ -1,6 +1,6 @@
 ---
 name: csindex
-description: 'Skill for the Csindex area of pure-hold. 8 symbols across 3 files.'
+description: "Skill for the Csindex area of pure-hold. 8 symbols across 3 files."
 ---
 
 # Csindex
@@ -15,11 +15,11 @@ description: 'Skill for the Csindex area of pure-hold. 8 symbols across 3 files.
 
 ## Key Files
 
-| File                                                                         | Symbols                                                                              |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | parseCsindexPerformanceResponse, compactToIso, toIsoDate, toPositiveNumber, isRecord |
-| `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | createCsindexPerformanceRequestUrl, isCompactDate                                    |
-| `src/domains/indices/services/csindex/fetchCsindexPerformanceHistory.ts`     | fetchCsindexPerformanceHistory                                                       |
+| File | Symbols |
+|------|---------|
+| `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | parseCsindexPerformanceResponse, compactToIso, toIsoDate, toPositiveNumber, isRecord |
+| `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | createCsindexPerformanceRequestUrl, isCompactDate |
+| `src/domains/indices/services/csindex/fetchCsindexPerformanceHistory.ts` | fetchCsindexPerformanceHistory |
 
 ## Entry Points
 
@@ -31,22 +31,22 @@ Start here when exploring this area:
 
 ## Key Symbols
 
-| Symbol                               | Type     | File                                                                         | Line |
-| ------------------------------------ | -------- | ---------------------------------------------------------------------------- | ---- |
-| `createCsindexPerformanceRequestUrl` | Function | `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | 8    |
-| `fetchCsindexPerformanceHistory`     | Function | `src/domains/indices/services/csindex/fetchCsindexPerformanceHistory.ts`     | 6    |
-| `parseCsindexPerformanceResponse`    | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | 9    |
-| `isCompactDate`                      | Function | `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | 32   |
-| `compactToIso`                       | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | 74   |
-| `toIsoDate`                          | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | 78   |
-| `toPositiveNumber`                   | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | 85   |
-| `isRecord`                           | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts`    | 91   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `createCsindexPerformanceRequestUrl` | Function | `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | 8 |
+| `fetchCsindexPerformanceHistory` | Function | `src/domains/indices/services/csindex/fetchCsindexPerformanceHistory.ts` | 6 |
+| `parseCsindexPerformanceResponse` | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | 9 |
+| `isCompactDate` | Function | `src/domains/indices/services/csindex/createCsindexPerformanceRequestUrl.ts` | 32 |
+| `compactToIso` | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | 74 |
+| `toIsoDate` | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | 78 |
+| `toPositiveNumber` | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | 85 |
+| `isRecord` | Function | `src/domains/indices/services/csindex/parseCsindexPerformanceResponse.ts` | 91 |
 
 ## Execution Flows
 
-| Flow                                            | Type            | Steps |
-| ----------------------------------------------- | --------------- | ----- |
-| `FetchCsindexPerformanceHistory → CompactToIso` | intra_community | 4     |
+| Flow | Type | Steps |
+|------|------|-------|
+| `FetchCsindexPerformanceHistory → CompactToIso` | intra_community | 4 |
 
 ## How to Explore
 

@@ -1,71 +1,85 @@
 ---
 name: components
-description: 'Skill for the Components area of pure-hold. 23 symbols across 10 files.'
+description: "Skill for the Components area of pure-hold. 44 symbols across 17 files."
 ---
 
 # Components
 
-23 symbols | 10 files | Cohesion: 100%
+44 symbols | 17 files | Cohesion: 97%
 
 ## When to Use
 
 - Working with code in `src/`
-- Understanding how cancelNameEditing, submitName, addGroup work
+- Understanding how render, syncChart, themeColor work
 - Modifying components-related functionality
 
 ## Key Files
 
-| File                                                                           | Symbols                                                                        |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `src/features/fund-list/components/FundDesktopTable.vue`                       | title, renderQuoteTitle, handleSortChange, isTableSort, shouldShowRowDate (+1) |
-| `src/features/fund-group-settings/components/FundGroupList.vue`                | cancelNameEditing, submitName                                                  |
-| `src/features/fund-group-settings/composables/useFundGroupDraft.ts`            | addGroup, renameGroup                                                          |
-| `src/features/fund-group-settings/models/fundGroupDraft.ts`                    | validateFundGroupName, isFundGroupNameDuplicate                                |
-| `src/features/fund-detail/components/FundCumulativeReturnsChart.vue`           | render, themeColor                                                             |
-| `src/features/fund-detail/presenters/buildFundCumulativeReturnsChartOption.ts` | buildFundCumulativeReturnsChartOption, buildFundDrawdownOverlay                |
-| `src/features/fund-detail/components/FundNetValueChart.vue`                    | render, themeColor                                                             |
-| `src/features/index-settings/components/GroupDetail.vue`                       | getDefinition, formatDescription                                               |
-| `src/features/index-settings/components/IndexSearchPanel.vue`                  | results, getSearchRank                                                         |
-| `src/features/fund-detail/presenters/buildFundNetValueChartOption.ts`          | buildFundNetValueChartOption                                                   |
+| File | Symbols |
+|------|---------|
+| `src/features/fund-detail/components/FundNetValueChart.vue` | render, disposeChart, observeContainer, syncChart, themeColor |
+| `src/features/fund-list/components/FundDesktopTable.vue` | handleDataChange, handleSortChange, isTableSort, title, renderQuoteTitle |
+| `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue` | render, syncChart, themeColor |
+| `src/features/fund-detail/components/FundCumulativeReturnsChart.vue` | render, syncChart, themeColor |
+| `src/features/fund-detail/components/FundDrawdownComparisonChart.vue` | render, syncChart, themeColor |
+| `src/features/fund-detail/components/FundMetricsSection.vue` | renderCalendarChart, disposeCalendarChart, syncCalendarChart |
+| `src/features/fund-detail/components/FundRollingExcessReturnChart.vue` | render, syncChart, themeColor |
+| `src/features/fund-detail/components/FundAssetAllocationChart.vue` | render, syncChart, themeColor |
+| `src/features/fund-detail/presenters/buildFundCumulativeExcessReturnChartOption.ts` | buildFundCumulativeExcessReturnChartOption, symmetricMaximum |
+| `src/features/fund-detail/presenters/buildFundCumulativeReturnsChartOption.ts` | buildFundCumulativeReturnsChartOption, buildFundDrawdownOverlay |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`cancelNameEditing`** (Function) — `src/features/fund-group-settings/components/FundGroupList.vue:63`
-- **`submitName`** (Function) — `src/features/fund-group-settings/components/FundGroupList.vue:70`
-- **`addGroup`** (Function) — `src/features/fund-group-settings/composables/useFundGroupDraft.ts:52`
-- **`renameGroup`** (Function) — `src/features/fund-group-settings/composables/useFundGroupDraft.ts:65`
-- **`validateFundGroupName`** (Function) — `src/features/fund-group-settings/models/fundGroupDraft.ts:8`
+- **`render`** (Function) — `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue:37`
+- **`syncChart`** (Function) — `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue:50`
+- **`themeColor`** (Function) — `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue:60`
+- **`buildFundCumulativeExcessReturnChartOption`** (Function) — `src/features/fund-detail/presenters/buildFundCumulativeExcessReturnChartOption.ts:21`
+- **`render`** (Function) — `src/features/fund-detail/components/FundCumulativeReturnsChart.vue:41`
 
 ## Key Symbols
 
-| Symbol                                  | Type     | File                                                                           | Line |
-| --------------------------------------- | -------- | ------------------------------------------------------------------------------ | ---- |
-| `cancelNameEditing`                     | Function | `src/features/fund-group-settings/components/FundGroupList.vue`                | 63   |
-| `submitName`                            | Function | `src/features/fund-group-settings/components/FundGroupList.vue`                | 70   |
-| `addGroup`                              | Function | `src/features/fund-group-settings/composables/useFundGroupDraft.ts`            | 52   |
-| `renameGroup`                           | Function | `src/features/fund-group-settings/composables/useFundGroupDraft.ts`            | 65   |
-| `validateFundGroupName`                 | Function | `src/features/fund-group-settings/models/fundGroupDraft.ts`                    | 8    |
-| `isFundGroupNameDuplicate`              | Function | `src/features/fund-group-settings/models/fundGroupDraft.ts`                    | 19   |
-| `render`                                | Function | `src/features/fund-detail/components/FundCumulativeReturnsChart.vue`           | 41   |
-| `themeColor`                            | Function | `src/features/fund-detail/components/FundCumulativeReturnsChart.vue`           | 58   |
-| `buildFundCumulativeReturnsChartOption` | Function | `src/features/fund-detail/presenters/buildFundCumulativeReturnsChartOption.ts` | 32   |
-| `render`                                | Function | `src/features/fund-detail/components/FundNetValueChart.vue`                    | 26   |
-| `themeColor`                            | Function | `src/features/fund-detail/components/FundNetValueChart.vue`                    | 39   |
-| `buildFundNetValueChartOption`          | Function | `src/features/fund-detail/presenters/buildFundNetValueChartOption.ts`          | 17   |
-| `title`                                 | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 52   |
-| `renderQuoteTitle`                      | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 103  |
-| `handleSortChange`                      | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 72   |
-| `isTableSort`                           | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 83   |
-| `shouldShowRowDate`                     | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 134  |
-| `formatRowDate`                         | Function | `src/features/fund-list/components/FundDesktopTable.vue`                       | 139  |
-| `getDefinition`                         | Function | `src/features/index-settings/components/GroupDetail.vue`                       | 33   |
-| `formatDescription`                     | Function | `src/features/index-settings/components/GroupDetail.vue`                       | 37   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `render` | Function | `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue` | 37 |
+| `syncChart` | Function | `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue` | 50 |
+| `themeColor` | Function | `src/features/fund-detail/components/FundCumulativeExcessReturnChart.vue` | 60 |
+| `buildFundCumulativeExcessReturnChartOption` | Function | `src/features/fund-detail/presenters/buildFundCumulativeExcessReturnChartOption.ts` | 21 |
+| `render` | Function | `src/features/fund-detail/components/FundCumulativeReturnsChart.vue` | 41 |
+| `syncChart` | Function | `src/features/fund-detail/components/FundCumulativeReturnsChart.vue` | 58 |
+| `themeColor` | Function | `src/features/fund-detail/components/FundCumulativeReturnsChart.vue` | 68 |
+| `buildFundCumulativeReturnsChartOption` | Function | `src/features/fund-detail/presenters/buildFundCumulativeReturnsChartOption.ts` | 32 |
+| `render` | Function | `src/features/fund-detail/components/FundDrawdownComparisonChart.vue` | 37 |
+| `syncChart` | Function | `src/features/fund-detail/components/FundDrawdownComparisonChart.vue` | 52 |
+| `themeColor` | Function | `src/features/fund-detail/components/FundDrawdownComparisonChart.vue` | 62 |
+| `buildFundDrawdownComparisonChartOption` | Function | `src/features/fund-detail/presenters/buildFundDrawdownComparisonChartOption.ts` | 23 |
+| `renderCalendarChart` | Function | `src/features/fund-detail/components/FundMetricsSection.vue` | 112 |
+| `disposeCalendarChart` | Function | `src/features/fund-detail/components/FundMetricsSection.vue` | 118 |
+| `syncCalendarChart` | Function | `src/features/fund-detail/components/FundMetricsSection.vue` | 129 |
+| `buildFundCalendarReturnsChartOption` | Function | `src/features/fund-detail/presenters/buildFundCalendarReturnsChartOption.ts` | 14 |
+| `render` | Function | `src/features/fund-detail/components/FundNetValueChart.vue` | 39 |
+| `disposeChart` | Function | `src/features/fund-detail/components/FundNetValueChart.vue` | 54 |
+| `observeContainer` | Function | `src/features/fund-detail/components/FundNetValueChart.vue` | 61 |
+| `syncChart` | Function | `src/features/fund-detail/components/FundNetValueChart.vue` | 67 |
+
+## Execution Flows
+
+| Flow | Type | Steps |
+|------|------|-------|
+| `SyncChart → EventName` | cross_community | 5 |
+| `SyncCalendarChart → PercentValue` | intra_community | 4 |
+| `SyncChart → EventNames` | cross_community | 4 |
+
+## Connected Areas
+
+| Area | Connections |
+|------|-------------|
+| Presenters | 1 calls |
 
 ## How to Explore
 
-1. `context({name: "cancelNameEditing"})` — see callers and callees
+1. `context({name: "render"})` — see callers and callees
 2. `query({search_query: "components"})` — find related execution flows
 3. Read key files listed above for implementation details
 4. `explain({target: "<file or symbol>"})` — persisted taint findings (source→sink data flows), when indexed with `--pdg`

@@ -1,6 +1,6 @@
 ---
 name: index-settings
-description: 'Skill for the Index-settings area of pure-hold. 5 symbols across 1 files.'
+description: "Skill for the Index-settings area of pure-hold. 5 symbols across 1 files."
 ---
 
 # Index-settings
@@ -15,8 +15,8 @@ description: 'Skill for the Index-settings area of pure-hold. 5 symbols across 1
 
 ## Key Files
 
-| File                                                 | Symbols                                                               |
-| ---------------------------------------------------- | --------------------------------------------------------------------- |
+| File | Symbols |
+|------|---------|
 | `src/features/index-settings/IndexSettingsEntry.vue` | handleAddGroup, handleRenameGroup, handleResult, close, handleConfirm |
 
 ## Entry Points
@@ -31,13 +31,13 @@ Start here when exploring this area:
 
 ## Key Symbols
 
-| Symbol              | Type     | File                                                 | Line |
-| ------------------- | -------- | ---------------------------------------------------- | ---- |
-| `handleAddGroup`    | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 29   |
-| `handleRenameGroup` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 33   |
-| `handleResult`      | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 37   |
-| `close`             | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 24   |
-| `handleConfirm`     | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 41   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `handleAddGroup` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 29 |
+| `handleRenameGroup` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 33 |
+| `handleResult` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 37 |
+| `close` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 24 |
+| `handleConfirm` | Function | `src/features/index-settings/IndexSettingsEntry.vue` | 41 |
 
 ## How to Explore
 

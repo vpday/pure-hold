@@ -1,93 +1,94 @@
 ---
 name: composables
-description: 'Skill for the Composables area of pure-hold. 195 symbols across 35 files.'
+description: "Skill for the Composables area of pure-hold. 320 symbols across 45 files."
 ---
 
 # Composables
 
-195 symbols | 35 files | Cohesion: 95%
+320 symbols | 45 files | Cohesion: 93%
 
 ## When to Use
 
 - Working with code in `src/`
-- Understanding how activate, selectRange, retry work
+- Understanding how useFundAssetAllocation, useFundHoldings, open work
 - Modifying composables-related functionality
 
 ## Key Files
 
-| File                                                                 | Symbols                                                                                                |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `src/features/fund-detail/composables/useFundNetValueHistory.ts`     | activate, selectRange, retry, refresh, request (+11)                                                   |
-| `src/features/index-settings/composables/useIndexSettingsSession.ts` | selectGroup, addGroup, renameGroup, replaceGroups, saveGroups (+9)                                     |
-| `src/features/fund-detail/composables/useFundCumulativeReturns.ts`   | useFundCumulativeReturns, selectReferenceIndex, selectRange, retry, refresh (+8)                       |
-| `src/features/fund-detail/composables/useFundMetrics.ts`             | loadBatch, isCurrent, noticesForSuccessfulBatch, isBenchmarkLoadFailure, isAbortError (+7)             |
-| `src/features/fund-detail/composables/useFundDistribution.ts`        | useFundDistribution, initialize, close, cancelActiveRequest, activate (+7)                             |
-| `src/features/fund-detail/composables/useFundHistoryDataSource.ts`   | useFundHistoryDataSource, loadDistribution, loadNetValueHistory, request, loadDistributionHistory (+6) |
-| `src/features/fund-search/composables/useFundSearch.ts`              | setKeyword, loadMore, retry, reset, requestPage (+6)                                                   |
-| `src/features/index-overview/composables/useQuoteCarousel.ts`        | useQuoteCarousel, handleTransitionEnd, resetLoop, resetCarousel, resetPosition (+4)                    |
-| `src/features/fund-detail/composables/useFundBenchmarkDataSource.ts` | load, load, subscribe, cancel, cleanup (+3)                                                            |
-| `src/features/fund-detail/composables/useFundMetrics.test.ts`        | source, benchmarkSource, load, benchmarkHistory, loadDistribution (+3)                                 |
+| File | Symbols |
+|------|---------|
+| `src/features/fund-detail/composables/useFundHoldings.ts` | useFundHoldings, open, close, activate, refreshQuotes (+15) |
+| `src/features/fund-detail/composables/useFundNetValueHistory.ts` | activate, selectRange, retry, refresh, request (+10) |
+| `src/features/fund-detail/composables/useFundRollingExcessReturn.ts` | startRequest, activate, selectRange, retry, refresh (+9) |
+| `src/features/index-settings/composables/useIndexSettingsSession.ts` | selectGroup, addGroup, renameGroup, replaceGroups, saveGroups (+9) |
+| `src/features/fund-detail/composables/useFundAssetAllocation.ts` | useFundAssetAllocation, activate, retry, refresh, request (+8) |
+| `src/features/fund-detail/composables/useFundMetrics.ts` | useFundMetrics, open, close, cancelActiveRequest, emptyQuality (+8) |
+| `src/features/fund-detail/composables/useFundCumulativeExcessReturn.ts` | startRequest, promise, activate, retry, refresh (+7) |
+| `src/features/fund-detail/composables/useFundDrawdownComparison.ts` | startRequest, promise, activate, retry, refresh (+7) |
+| `src/features/fund-detail/composables/useFundReinvestedNavHistory.ts` | startRequest, promise, activate, retry, refresh (+7) |
+| `src/features/fund-detail/composables/useFundCumulativeReturns.ts` | selectReferenceIndex, selectRange, retry, refresh, request (+7) |
 
 ## Entry Points
 
 Start here when exploring this area:
 
-- **`activate`** (Function) — `src/features/fund-detail/composables/useFundNetValueHistory.ts:50`
-- **`selectRange`** (Function) — `src/features/fund-detail/composables/useFundNetValueHistory.ts:55`
-- **`retry`** (Function) — `src/features/fund-detail/composables/useFundNetValueHistory.ts:64`
-- **`refresh`** (Function) — `src/features/fund-detail/composables/useFundNetValueHistory.ts:69`
-- **`request`** (Function) — `src/features/fund-detail/composables/useFundNetValueHistory.ts:82`
+- **`useFundAssetAllocation`** (Function) — `src/features/fund-detail/composables/useFundAssetAllocation.ts:10`
+- **`useFundHoldings`** (Function) — `src/features/fund-detail/composables/useFundHoldings.ts:37`
+- **`open`** (Function) — `src/features/fund-detail/composables/useFundHoldings.ts:108`
+- **`close`** (Function) — `src/features/fund-detail/composables/useFundHoldings.ts:114`
+- **`activate`** (Function) — `src/features/fund-detail/composables/useFundHoldings.ts:120`
 
 ## Key Symbols
 
-| Symbol                       | Type     | File                                                               | Line |
-| ---------------------------- | -------- | ------------------------------------------------------------------ | ---- |
-| `activate`                   | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 50   |
-| `selectRange`                | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 55   |
-| `retry`                      | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 64   |
-| `refresh`                    | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 69   |
-| `request`                    | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 82   |
-| `startRequest`               | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 111  |
-| `applyResult`                | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 134  |
-| `isCurrentTarget`            | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 140  |
-| `clearLoading`               | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 161  |
-| `calculateFundReinvestedNav` | Function | `src/domains/funds/models/fundReinvestedNav.ts`                    | 30   |
-| `loadBatch`                  | Function | `src/features/fund-detail/composables/useFundMetrics.ts`           | 119  |
-| `isCurrent`                  | Function | `src/features/fund-detail/composables/useFundMetrics.ts`           | 159  |
-| `useFundCumulativeReturns`   | Function | `src/features/fund-detail/composables/useFundCumulativeReturns.ts` | 13   |
-| `useFundDistribution`        | Function | `src/features/fund-detail/composables/useFundDistribution.ts`      | 6    |
-| `initialize`                 | Function | `src/features/fund-detail/composables/useFundDistribution.ts`      | 26   |
-| `close`                      | Function | `src/features/fund-detail/composables/useFundDistribution.ts`      | 52   |
-| `cancelActiveRequest`        | Function | `src/features/fund-detail/composables/useFundDistribution.ts`      | 113  |
-| `useFundHistoryDataSource`   | Function | `src/features/fund-detail/composables/useFundHistoryDataSource.ts` | 37   |
-| `useFundNetValueHistory`     | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts`   | 10   |
-| `useFundPerformance`         | Function | `src/features/fund-detail/composables/useFundPerformance.ts`       | 33   |
+| Symbol | Type | File | Line |
+|--------|------|------|------|
+| `useFundAssetAllocation` | Function | `src/features/fund-detail/composables/useFundAssetAllocation.ts` | 10 |
+| `useFundHoldings` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 37 |
+| `open` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 108 |
+| `close` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 114 |
+| `activate` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 120 |
+| `refreshQuotes` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 220 |
+| `selectView` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 269 |
+| `retryQuotes` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 302 |
+| `updatePolling` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 306 |
+| `stopPolling` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 319 |
+| `resetSession` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 324 |
+| `isCurrentQuotesRequest` | Function | `src/features/fund-detail/composables/useFundHoldings.ts` | 366 |
+| `activate` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 36 |
+| `selectRange` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 41 |
+| `retry` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 48 |
+| `refresh` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 53 |
+| `request` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 66 |
+| `startRequest` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 91 |
+| `applyResult` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 114 |
+| `isCurrentTarget` | Function | `src/features/fund-detail/composables/useFundNetValueHistory.ts` | 120 |
 
 ## Execution Flows
 
-| Flow                                       | Type            | Steps |
-| ------------------------------------------ | --------------- | ----- |
-| `ConfirmHoldings → FormatLocalDate`        | cross_community | 5     |
-| `UseQuoteCarousel → ClearLoopResetTimer`   | intra_community | 4     |
-| `LoadDistributionHistory → AbortError`     | cross_community | 4     |
-| `LoadDistributionHistory → Cleanup`        | cross_community | 4     |
-| `LoadNetValues → AbortError`               | cross_community | 4     |
-| `LoadNetValues → Cleanup`                  | cross_community | 4     |
-| `UseFundPerformance → CancelActiveRequest` | intra_community | 4     |
-| `UseFundPerformance → CancelActiveRequest` | cross_community | 4     |
-| `UseFundPerformance → ResetViewState`      | cross_community | 4     |
-| `ConfirmHoldings → ParsePositiveDecimal`   | cross_community | 4     |
+| Flow | Type | Steps |
+|------|------|-------|
+| `Activate → UniqueByDate` | cross_community | 7 |
+| `Activate → IsIsoDate` | cross_community | 7 |
+| `Activate → FormatDate` | cross_community | 7 |
+| `Activate → SourceIssues` | cross_community | 6 |
+| `SelectView → IsCurrentDisclosureRequest` | cross_community | 5 |
+| `SelectView → IsAbortError` | cross_community | 5 |
+| `RetryHoldings → QuoteRequests` | cross_community | 5 |
+| `ConfirmHoldings → FormatLocalDate` | cross_community | 5 |
+| `Refresh → QuoteRequests` | cross_community | 5 |
+| `UseFundPerformance → CancelActiveRequest` | cross_community | 5 |
 
 ## Connected Areas
 
-| Area        | Connections |
-| ----------- | ----------- |
-| Models      | 2 calls     |
-| Persistence | 1 calls     |
+| Area | Connections |
+|------|-------------|
+| Models | 6 calls |
+| Stores | 1 calls |
+| Presenters | 1 calls |
 
 ## How to Explore
 
-1. `context({name: "activate"})` — see callers and callees
+1. `context({name: "useFundAssetAllocation"})` — see callers and callees
 2. `query({search_query: "composables"})` — find related execution flows
 3. Read key files listed above for implementation details
 4. `explain({target: "<file or symbol>"})` — persisted taint findings (source→sink data flows), when indexed with `--pdg`
