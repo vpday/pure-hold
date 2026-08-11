@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
 import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
+import FundHoldingStatisticsEntry from '@/features/fund-list/FundHoldingStatisticsEntry.vue'
 import FundListSection from '@/features/fund-list/FundListSection.vue'
 import FundSearchEntry from '@/features/fund-search/FundSearchEntry.vue'
 import IndexOverviewSection from '@/features/index-overview/IndexOverviewSection.vue'
@@ -53,6 +54,7 @@ async function refreshAllData(): Promise<void> {
       <t-content class="flex-1">
         <div class="mx-auto w-full max-w-7xl pt-4">
           <IndexOverviewSection />
+          <FundHoldingStatisticsEntry />
           <FundListSection @search-funds="fundSearchEntry?.open()" />
         </div>
       </t-content>
