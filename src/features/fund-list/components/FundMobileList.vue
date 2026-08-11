@@ -58,9 +58,9 @@ const sortFieldGroups = computed(() => [
         {
           label: '持仓收益',
           options: [
-            { label: '估算收益', value: 'estimatedIncomePercent' as const },
-            { label: '今日收益', value: 'todayIncomePercent' as const },
-            { label: '昨日收益', value: 'yesterdayIncomePercent' as const },
+            { label: '估算收益', value: 'estimatedIncome' as const },
+            { label: '今日收益', value: 'todayIncome' as const },
+            { label: '昨日收益', value: 'yesterdayIncome' as const },
             { label: '持仓收益', value: 'holdingIncomePercent' as const },
           ],
         },

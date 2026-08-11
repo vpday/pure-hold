@@ -15,7 +15,7 @@ import { toFundListViewModel } from './toFundListViewModel.ts'
 const sortFields = [
   'dailyChangePercent',
   'estimatedChangePercent',
-  'estimatedIncomePercent',
+  'estimatedIncome',
   'estimatedNav',
   'fiveYears',
   'holdingAmount',
@@ -29,10 +29,10 @@ const sortFields = [
   'sixMonths',
   'threeMonths',
   'threeYears',
-  'todayIncomePercent',
+  'todayIncome',
   'twoYears',
   'yearToDate',
-  'yesterdayIncomePercent',
+  'yesterdayIncome',
 ] as const satisfies readonly FundSortField[]
 
 test('fund presenter keeps signs, missing placeholders, all return fields and trends', () => {
@@ -68,7 +68,7 @@ test('fund presenter keeps signs, missing placeholders, all return fields and tr
   assert.deepEqual(row.sortValues, {
     dailyChangePercent: -1,
     estimatedChangePercent: 2,
-    estimatedIncomePercent: null,
+    estimatedIncome: null,
     estimatedNav: 1.23456,
     fiveYears: null,
     holdingAmount: null,
@@ -82,14 +82,14 @@ test('fund presenter keeps signs, missing placeholders, all return fields and tr
     sixMonths: null,
     threeMonths: null,
     threeYears: null,
-    todayIncomePercent: null,
+    todayIncome: null,
     twoYears: null,
     yearToDate: null,
-    yesterdayIncomePercent: null,
+    yesterdayIncome: null,
   })
 })
 
-test('fund presenter formats holding income without losing raw percentage sort values', () => {
+test('fund presenter formats holding income and keeps raw amount sort values', () => {
   const metrics: FundHoldingMetrics = {
     confirmedNavDate: '2026-08-10',
     currentIncomeSource: 'actual',
@@ -118,14 +118,14 @@ test('fund presenter formats holding income without losing raw percentage sort v
   assert.equal(row.holding?.holdingDaysText, '9 天')
   assert.equal(row.holding?.sortValues.holdingAmount, 1234.5)
   assert.equal(row.holding?.sortValues.holdingDays, 9)
-  assert.equal(row.holding?.sortValues.todayIncomePercent, 2.5)
-  assert.equal(row.holding?.sortValues.estimatedIncomePercent, null)
+  assert.equal(row.holding?.sortValues.todayIncome, 25)
+  assert.equal(row.holding?.sortValues.estimatedIncome, null)
   assert.equal(row.sortValues.holdingAmount, 1234.5)
   assert.equal(row.sortValues.holdingDays, 9)
   assert.equal(row.sortValues.holdingIncomePercent, -1.25)
-  assert.equal(row.sortValues.todayIncomePercent, 2.5)
-  assert.equal(row.sortValues.yesterdayIncomePercent, 0)
-  assert.equal(row.sortValues.estimatedIncomePercent, null)
+  assert.equal(row.sortValues.todayIncome, 25)
+  assert.equal(row.sortValues.yesterdayIncome, 0)
+  assert.equal(row.sortValues.estimatedIncome, null)
 })
 
 test('fund row sorting covers every field, stays stable and keeps missing values last', () => {

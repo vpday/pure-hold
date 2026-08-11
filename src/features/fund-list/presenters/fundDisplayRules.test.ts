@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { fundTagTheme, isEstimatedQuoteEmpty } from './fundDisplayRules.ts'
+import {
+  fundTagTheme,
+  isEstimatedQuoteEmpty,
+  isIncomeEmpty,
+  shouldShowIncomeDate,
+} from './fundDisplayRules.ts'
 
 test('maps fund tags to the shared semantic themes', () => {
   assert.equal(fundTagTheme('近一年新低'), 'success')
@@ -29,4 +34,21 @@ test('treats an estimated quote as empty only when every displayed field is miss
     }),
     false,
   )
+})
+
+test('treats an income as empty only when both displayed values are missing', () => {
+  assert.equal(isIncomeEmpty({ amountText: '--', percentText: '--' }), true)
+  assert.equal(isIncomeEmpty({ amountText: '+1.00', percentText: '--' }), false)
+})
+
+test('hides the income date when both income values are missing', () => {
+  assert.equal(
+    shouldShowIncomeDate({ amountText: '--', percentText: '--' }, '2026-08-07', '08-10'),
+    false,
+  )
+  assert.equal(
+    shouldShowIncomeDate({ amountText: '+1.00', percentText: '--' }, '2026-08-07', '08-10'),
+    true,
+  )
+  assert.equal(shouldShowIncomeDate({ amountText: '+1.00', percentText: '--' }, '2026-08-07'), true)
 })

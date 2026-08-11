@@ -10,7 +10,12 @@ import type {
   FundSortField,
   FundTrend,
 } from '../models/fundListViewModel'
-import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRules'
+import {
+  fundTagTheme,
+  isEstimatedQuoteEmpty,
+  isIncomeEmpty,
+  shouldShowIncomeDate,
+} from '../presenters/fundDisplayRules'
 import {
   createFundRowComparator,
   moveMissingFundRowsLast,
@@ -90,6 +95,7 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
     colKey: 'actions',
     fixed: 'right' as const,
     title: '操作',
+    width: 90,
   }
 
   if (props.holdingMode) {
@@ -97,20 +103,20 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
       nameColumn,
       {
         cell: 'estimated-income-cell',
-        colKey: 'estimatedIncomePercent',
-        sorter: createFundRowComparator('estimatedIncomePercent'),
+        colKey: 'estimatedIncome',
+        sorter: createFundRowComparator('estimatedIncome'),
         title: () => renderQuoteTitle('估算收益', estimatedAt),
       },
       {
         cell: 'today-income-cell',
-        colKey: 'todayIncomePercent',
-        sorter: createFundRowComparator('todayIncomePercent'),
+        colKey: 'todayIncome',
+        sorter: createFundRowComparator('todayIncome'),
         title: () => renderQuoteTitle('今日收益', navDate),
       },
       {
         cell: 'yesterday-income-cell',
-        colKey: 'yesterdayIncomePercent',
-        sorter: createFundRowComparator('yesterdayIncomePercent'),
+        colKey: 'yesterdayIncome',
+        sorter: createFundRowComparator('yesterdayIncome'),
         title: () => renderQuoteTitle('昨日收益', navDate),
       },
       ...quoteColumns,
@@ -246,8 +252,8 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     :header-affixed-top="true"
     :horizontal-scroll-affixed-bottom="true"
     row-key="code"
-    table-layout="auto"
-    :table-content-width="holdingMode ? '1900px' : '1380px'"
+    table-layout="fixed"
+    table-content-width="1380px"
     @data-change="handleDataChange"
     @sort-change="handleSortChange"
   >
@@ -306,14 +312,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     </template>
     <template #estimated-income-cell="{ row }">
       <div v-if="row.holding" class="font-mono tabular-nums">
-        <p
-          v-if="
-            row.holding.estimatedIncome.amountText === '--' &&
-            row.holding.estimatedIncome.percentText === '--'
-          "
-        >
-          --
-        </p>
+        <p v-if="isIncomeEmpty(row.holding.estimatedIncome)">--</p>
         <template v-else>
           <p :class="trendClass(row.holding.estimatedIncome.trend)">
             {{ row.holding.estimatedIncome.amountText }}
@@ -323,7 +322,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
           </p>
         </template>
         <p
-          v-if="shouldShowRowDate(row.estimatedAtText, estimatedAt)"
+          v-if="shouldShowIncomeDate(row.holding.estimatedIncome, row.estimatedAtText, estimatedAt)"
           class="text-xs text-(--td-text-color-placeholder)"
         >
           {{ formatRowDate(row.estimatedAtText, estimatedAt) }}
@@ -332,14 +331,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     </template>
     <template #today-income-cell="{ row }">
       <div v-if="row.holding" class="font-mono tabular-nums">
-        <p
-          v-if="
-            row.holding.todayIncome.amountText === '--' &&
-            row.holding.todayIncome.percentText === '--'
-          "
-        >
-          --
-        </p>
+        <p v-if="isIncomeEmpty(row.holding.todayIncome)">--</p>
         <template v-else>
           <p :class="trendClass(row.holding.todayIncome.trend)">
             {{ row.holding.todayIncome.amountText }}
@@ -349,7 +341,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
           </p>
         </template>
         <p
-          v-if="shouldShowRowDate(row.navDateText, navDate)"
+          v-if="shouldShowIncomeDate(row.holding.todayIncome, row.navDateText, navDate)"
           class="text-xs text-(--td-text-color-placeholder)"
         >
           {{ formatRowDate(row.navDateText, navDate) }}
@@ -358,14 +350,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     </template>
     <template #yesterday-income-cell="{ row }">
       <div v-if="row.holding" class="font-mono tabular-nums">
-        <p
-          v-if="
-            row.holding.yesterdayIncome.amountText === '--' &&
-            row.holding.yesterdayIncome.percentText === '--'
-          "
-        >
-          --
-        </p>
+        <p v-if="isIncomeEmpty(row.holding.yesterdayIncome)">--</p>
         <template v-else>
           <p :class="trendClass(row.holding.yesterdayIncome.trend)">
             {{ row.holding.yesterdayIncome.amountText }}
@@ -375,7 +360,13 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
           </p>
         </template>
         <p
-          v-if="shouldShowRowDate(row.holding.yesterdayIncomeDateText, navDate)"
+          v-if="
+            shouldShowIncomeDate(
+              row.holding.yesterdayIncome,
+              row.holding.yesterdayIncomeDateText,
+              navDate,
+            )
+          "
           class="text-xs text-(--td-text-color-placeholder)"
         >
           {{ formatRowDate(row.holding.yesterdayIncomeDateText, navDate) }}

@@ -3,7 +3,12 @@ import { ref } from 'vue'
 
 import type { FundRowViewModel, FundTrend } from '../models/fundListViewModel'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from '../presenters/formatFundDates'
-import { fundTagTheme, isEstimatedQuoteEmpty } from '../presenters/fundDisplayRules'
+import {
+  fundTagTheme,
+  isEstimatedQuoteEmpty,
+  isIncomeEmpty,
+  shouldShowIncomeDate,
+} from '../presenters/fundDisplayRules'
 import FundActions from './FundActions.vue'
 
 defineProps<{ holdingMode: boolean; row: FundRowViewModel }>()
@@ -62,12 +67,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
           {{ row.holding.currentIncome.label }}
         </p>
         <p
-          v-if="
-            isPlaceholderPair(
-              row.holding.currentIncome.amountText,
-              row.holding.currentIncome.percentText,
-            )
-          "
+          v-if="isIncomeEmpty(row.holding.currentIncome)"
           class="font-mono font-medium tabular-nums"
         >
           --
@@ -135,17 +135,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
       <div class="fund-holding-grid">
         <div>
           <p class="text-xs text-(--td-text-color-secondary)">昨日收益</p>
-          <p
-            v-if="
-              isPlaceholderPair(
-                row.holding.yesterdayIncome.amountText,
-                row.holding.yesterdayIncome.percentText,
-              )
-            "
-            class="font-mono tabular-nums"
-          >
-            --
-          </p>
+          <p v-if="isIncomeEmpty(row.holding.yesterdayIncome)" class="font-mono tabular-nums">--</p>
           <template v-else>
             <p
               class="font-mono tabular-nums"
@@ -161,7 +151,9 @@ function isPlaceholderPair(first: string, second: string): boolean {
             </p>
           </template>
           <p
-            v-if="row.holding.yesterdayIncomeDateText !== '--'"
+            v-if="
+              shouldShowIncomeDate(row.holding.yesterdayIncome, row.holding.yesterdayIncomeDateText)
+            "
             class="font-mono text-xs tabular-nums text-(--td-text-color-placeholder)"
           >
             {{ formatNavDisplayDate(row.holding.yesterdayIncomeDateText) }}
@@ -169,17 +161,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
         </div>
         <div>
           <p class="text-xs text-(--td-text-color-secondary)">持仓收益</p>
-          <p
-            v-if="
-              isPlaceholderPair(
-                row.holding.holdingIncome.amountText,
-                row.holding.holdingIncome.percentText,
-              )
-            "
-            class="font-mono tabular-nums"
-          >
-            --
-          </p>
+          <p v-if="isIncomeEmpty(row.holding.holdingIncome)" class="font-mono tabular-nums">--</p>
           <template v-else>
             <p class="font-mono tabular-nums" :class="trendClass(row.holding.holdingIncome.trend)">
               {{ row.holding.holdingIncome.amountText }}

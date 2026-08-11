@@ -13,12 +13,12 @@ export type FundReturnField =
   | 'yearToDate'
 
 export type FundHoldingSortField =
-  | 'estimatedIncomePercent'
+  | 'estimatedIncome'
   | 'holdingAmount'
   | 'holdingDays'
   | 'holdingIncomePercent'
-  | 'todayIncomePercent'
-  | 'yesterdayIncomePercent'
+  | 'todayIncome'
+  | 'yesterdayIncome'
 
 export type FundSortField =
   | 'dailyChangePercent'

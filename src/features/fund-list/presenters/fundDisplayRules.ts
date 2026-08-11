@@ -1,4 +1,5 @@
-import type { FundRowViewModel } from '../models/fundListViewModel'
+import { formatRowDate } from '@/shared/presenters/formatRowDate'
+import type { FundIncomeViewModel, FundRowViewModel } from '../models/fundListViewModel'
 
 export function fundTagTheme(label: string): 'danger' | 'success' | undefined {
   if (label.includes('新低') || label.includes('连跌')) return 'success'
@@ -17,4 +18,20 @@ export function isEstimatedQuoteEmpty(
     row.estimatedChangePercentText === '--' &&
     row.estimatedAtText === '--'
   )
+}
+
+export function isIncomeEmpty(
+  income: Pick<FundIncomeViewModel, 'amountText' | 'percentText'>,
+): boolean {
+  return income.amountText === '--' && income.percentText === '--'
+}
+
+export function shouldShowIncomeDate(
+  income: Pick<FundIncomeViewModel, 'amountText' | 'percentText'>,
+  rowDate: string,
+  headerDate?: string,
+): boolean {
+  if (isIncomeEmpty(income)) return false
+  const formatted = formatRowDate(rowDate, headerDate)
+  return formatted !== '--' && formatted !== headerDate
 }
