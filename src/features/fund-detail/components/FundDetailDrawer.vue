@@ -125,7 +125,82 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </div>
             </div>
 
-            <div class="mt-4">
+            <div v-if="viewModel.holding" class="holding-details-grid">
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">估算收益</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.holding.estimatedIncome.trend)"
+                >
+                  {{ viewModel.holding.estimatedIncome.amountText }}
+                </p>
+                <p
+                  class="font-mono text-xs tabular-nums"
+                  :class="trendClass(viewModel.holding.estimatedIncome.trend)"
+                >
+                  {{ viewModel.holding.estimatedIncome.percentText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">今日收益</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.holding.todayIncome.trend)"
+                >
+                  {{ viewModel.holding.todayIncome.amountText }}
+                </p>
+                <p
+                  class="font-mono text-xs tabular-nums"
+                  :class="trendClass(viewModel.holding.todayIncome.trend)"
+                >
+                  {{ viewModel.holding.todayIncome.percentText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">昨日收益</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
+                >
+                  {{ viewModel.holding.yesterdayIncome.amountText }}
+                </p>
+                <p
+                  class="font-mono text-xs tabular-nums"
+                  :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
+                >
+                  {{ viewModel.holding.yesterdayIncome.percentText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">持仓收益</p>
+                <p
+                  class="mt-1 font-mono text-lg font-medium tabular-nums"
+                  :class="trendClass(viewModel.holding.holdingIncome.trend)"
+                >
+                  {{ viewModel.holding.holdingIncome.amountText }}
+                </p>
+                <p
+                  class="font-mono text-xs tabular-nums"
+                  :class="trendClass(viewModel.holding.holdingIncome.trend)"
+                >
+                  {{ viewModel.holding.holdingIncome.percentText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">持仓金额</p>
+                <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                  {{ viewModel.holding.holdingAmountText }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs text-(--td-text-color-secondary)">持有天数</p>
+                <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                  {{ viewModel.holding.holdingDaysText }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-(--td-component-border)">
               <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1]" />
               <div
                 v-else-if="error"
@@ -270,7 +345,11 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 .details-grid {
-  @apply grid gap-2 grid-cols-2 lg:grid-cols-5 lg:gap-5;
+  @apply grid gap-3 grid-cols-3 lg:grid-cols-6 lg:gap-6;
+}
+
+.holding-details-grid {
+  @apply grid gap-3 grid-cols-3 lg:grid-cols-6 lg:gap-6 mt-4 pt-4 border-t border-(--td-component-border);
 }
 
 .detail-section {

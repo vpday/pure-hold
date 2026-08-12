@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
+import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
 import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import { toFundDetailViewModel } from './toFundDetailViewModel.ts'
 
@@ -29,6 +30,7 @@ test('formats snapshot quotes and complete basic information', () => {
     estimatedAtTimeText: '15:00',
     estimatedNavText: '1.2568',
     fundType: '指数型-股票',
+    holding: null,
     morningstarRating: 5,
     name: '招商中证白酒指数(LOF)A',
     navDateText: '07-28',
@@ -57,6 +59,51 @@ test('formats snapshot quotes and complete basic information', () => {
       redemptionStatusTone: 'success',
       salesServiceFeeText: '0%（每年）',
       standardPurchaseFeeText: '1%',
+    },
+  })
+})
+
+test('formats holding metrics for the detail overview', () => {
+  const metrics: FundHoldingMetrics = {
+    confirmedNavDate: '2026-08-10',
+    currentIncomeSource: 'actual',
+    estimatedIncome: null,
+    estimatedIncomePercent: null,
+    holdingAmount: 1234.5,
+    holdingDays: 9,
+    holdingIncome: -12.5,
+    holdingIncomePercent: -1.25,
+    todayIncome: 25,
+    todayIncomePercent: 2.5,
+    yesterdayIncome: 0,
+    yesterdayIncomeDate: '2026-08-07',
+    yesterdayIncomePercent: 0,
+  }
+
+  const viewModel = toFundDetailViewModel(createTestFundSnapshot('161726'), undefined, metrics)
+
+  assert.deepEqual(viewModel.holding, {
+    estimatedIncome: {
+      amountText: '--',
+      percentText: '--',
+      trend: 'unknown',
+    },
+    holdingAmountText: '¥1,234.50',
+    holdingDaysText: '9 天',
+    holdingIncome: {
+      amountText: '-12.50',
+      percentText: '-1.25%',
+      trend: 'down',
+    },
+    todayIncome: {
+      amountText: '+25.00',
+      percentText: '+2.50%',
+      trend: 'up',
+    },
+    yesterdayIncome: {
+      amountText: '0.00',
+      percentText: '0.00%',
+      trend: 'flat',
     },
   })
 })

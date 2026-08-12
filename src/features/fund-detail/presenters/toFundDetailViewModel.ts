@@ -1,7 +1,10 @@
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
+import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
 import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
+  FundDetailHoldingViewModel,
+  FundDetailIncomeViewModel,
   FundDetailTrend,
   FundDetailViewModel,
   FundTradingRulesViewModel,
@@ -16,6 +19,7 @@ const errorStatuses = new Set(['暂停申购', '暂停赎回', '封闭期'])
 export function toFundDetailViewModel(
   snapshot: FundSnapshot,
   basicInfo?: FundBasicInfo,
+  holdingMetrics?: FundHoldingMetrics,
 ): FundDetailViewModel {
   return {
     code: snapshot.code,
@@ -26,6 +30,7 @@ export function toFundDetailViewModel(
     estimatedAtTimeText: formatRowDate(snapshot.estimatedAt ?? '--'),
     estimatedNavText: formatNumber(snapshot.estimatedNav, 4),
     fundType: basicInfo?.fundType ?? '--',
+    holding: holdingMetrics ? toHoldingViewModel(holdingMetrics) : null,
     morningstarRating: basicInfo?.morningstarRating ?? null,
     name: snapshot.name,
     navDateText: formatCompactDate(snapshot.navDate),
@@ -39,6 +44,28 @@ export function toFundDetailViewModel(
     trackingErrorText: formatNumber(basicInfo?.trackingError ?? null, 4),
     trackingIndexName: basicInfo?.trackingIndexName ?? '--',
     tradingRules: basicInfo ? toTradingRulesViewModel(basicInfo) : null,
+  }
+}
+
+function toHoldingViewModel(metrics: FundHoldingMetrics): FundDetailHoldingViewModel {
+  return {
+    estimatedIncome: toIncomeViewModel(metrics.estimatedIncome, metrics.estimatedIncomePercent),
+    holdingAmountText: formatCurrency(metrics.holdingAmount),
+    holdingDaysText: metrics.holdingDays === null ? '--' : `${metrics.holdingDays} 天`,
+    holdingIncome: toIncomeViewModel(metrics.holdingIncome, metrics.holdingIncomePercent),
+    todayIncome: toIncomeViewModel(metrics.todayIncome, metrics.todayIncomePercent),
+    yesterdayIncome: toIncomeViewModel(metrics.yesterdayIncome, metrics.yesterdayIncomePercent),
+  }
+}
+
+function toIncomeViewModel(
+  amount: number | null,
+  percent: number | null,
+): FundDetailIncomeViewModel {
+  return {
+    amountText: formatSignedNumber(amount),
+    percentText: formatPercent(percent),
+    trend: toTrend(amount),
   }
 }
 
@@ -115,6 +142,23 @@ function formatTradingStatus(value: string | null): {
 
 function formatNumber(value: number | null, digits: number): string {
   return value === null ? '--' : value.toFixed(digits)
+}
+
+function formatCurrency(value: number | null): string {
+  return value === null ? '--' : `¥${formatAbsolute(value)}`
+}
+
+function formatSignedNumber(value: number | null): string {
+  if (value === null) return '--'
+  if (value === 0) return '0.00'
+  return `${value > 0 ? '+' : '-'}${formatAbsolute(value)}`
+}
+
+function formatAbsolute(value: number): string {
+  return Math.abs(value).toLocaleString('zh-CN', {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })
 }
 
 function formatPercent(value: number | null): string {

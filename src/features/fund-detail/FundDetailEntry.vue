@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
+import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
@@ -33,10 +34,23 @@ const snapshot = computed(() => {
   const code = detail.currentCode.value
   return code ? store.snapshotsByCode[code] : undefined
 })
+const holdingMetrics = computed(() => {
+  const code = detail.currentCode.value
+  const currentSnapshot = snapshot.value
+  const holding = code ? store.holdingsByCode[code] : undefined
+  if (!code || !currentSnapshot || !holding) return undefined
+
+  return calculateFundHoldingMetrics({
+    currentSnapshot,
+    holding,
+    previousConfirmedSnapshot: store.previousSnapshotsByCode[code],
+    today: shanghaiDate(),
+  })
+})
 const viewModel = computed(() => {
   const currentSnapshot = snapshot.value
   return currentSnapshot
-    ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value)
+    ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value, holdingMetrics.value)
     : undefined
 })
 
@@ -107,6 +121,17 @@ function showMetricsRefreshWarning(result: FundMetricsRequestResult): void {
   if (result === 'showing-stale-data') {
     void MessagePlugin.warning('沪深300全收益基准刷新失败')
   }
+}
+
+function shanghaiDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
 async function edit(code: string): Promise<void> {

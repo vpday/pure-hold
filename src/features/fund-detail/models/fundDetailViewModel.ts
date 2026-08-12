@@ -19,6 +19,21 @@ export interface FundTradingRulesViewModel {
   readonly standardPurchaseFeeText: string | null
 }
 
+export interface FundDetailIncomeViewModel {
+  readonly amountText: string
+  readonly percentText: string
+  readonly trend: FundDetailTrend
+}
+
+export interface FundDetailHoldingViewModel {
+  readonly estimatedIncome: FundDetailIncomeViewModel
+  readonly holdingAmountText: string
+  readonly holdingDaysText: string
+  readonly holdingIncome: FundDetailIncomeViewModel
+  readonly todayIncome: FundDetailIncomeViewModel
+  readonly yesterdayIncome: FundDetailIncomeViewModel
+}
+
 export interface FundDetailViewModel {
   readonly code: string
   readonly companyName: string
@@ -28,6 +43,7 @@ export interface FundDetailViewModel {
   readonly estimatedAtTimeText: string
   readonly estimatedNavText: string
   readonly fundType: string
+  readonly holding: FundDetailHoldingViewModel | null
   readonly morningstarRating: number | null
   readonly name: string
   readonly navDateText: string
