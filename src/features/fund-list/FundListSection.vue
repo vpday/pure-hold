@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { MessagePlugin } from 'tdesign-vue-next'
 
+import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
 import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
@@ -21,6 +22,7 @@ import { toFundListViewModel } from './presenters/toFundListViewModel'
 
 const emit = defineEmits<{ searchFunds: [] }>()
 const store = useFundsStore()
+const appSettingsStore = useAppSettingsStore()
 const {
   fundOrder,
   groups,
@@ -31,6 +33,7 @@ const {
   previousSnapshotsByCode,
   snapshotsByCode,
 } = storeToRefs(store)
+const { preferences } = storeToRefs(appSettingsStore)
 const activeCategoryId = ref('all')
 const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
@@ -86,10 +89,29 @@ const latestNavDate = computed(() =>
 const refreshObserver = () => store.refreshAll({ force: true })
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {
+  applyPollingConfiguration()
+  store.startPolling()
   unsubscribeRefresh = subscribeGlobalRefresh(refreshObserver)
-  void store.refreshAll()
 })
-onBeforeUnmount(() => unsubscribeRefresh?.())
+onBeforeUnmount(() => {
+  store.stopPolling()
+  unsubscribeRefresh?.()
+})
+
+watch(
+  preferences,
+  () => {
+    applyPollingConfiguration()
+  },
+  { deep: true },
+)
+
+function applyPollingConfiguration(): void {
+  store.setPollingConfiguration({
+    enabled: preferences.value.funds.enabled,
+    intervalMs: preferences.value.funds.intervalMinutes * 60_000,
+  })
+}
 
 watch(categories, (nextCategories) => {
   if (!nextCategories.some((category) => category.id === activeCategoryId.value)) {

@@ -40,3 +40,27 @@ test('syncFromStorage tolerates read failures without clearing default groups', 
     restore()
   }
 })
+
+test('replaceGroupsPersisted updates memory only after the write succeeds', () => {
+  const storage = new MemoryStorage()
+  const restore = installLocalStorage(storage)
+  try {
+    setActivePinia(createPinia())
+    const store = useIndexQuotesStore()
+    const nextGroups = [{ id: 'custom', name: '自定义', quoteCodes: ['1.000001'] }]
+
+    storage.writeError = new Error('quota exceeded')
+    assert.deepEqual(store.replaceGroupsPersisted(nextGroups), {
+      ok: false,
+      reason: 'persistence-failed',
+    })
+    assert.deepEqual(store.groups, defaultIndexGroups)
+
+    storage.writeError = undefined
+    assert.deepEqual(store.replaceGroupsPersisted(nextGroups), { ok: true })
+    assert.deepEqual(store.groups, nextGroups)
+    store.$dispose()
+  } finally {
+    restore()
+  }
+})

@@ -135,6 +135,48 @@ test('deleting a fund invalidates a late refresh result', async () => {
   })
 })
 
+test('complete settings replacement reconciles runtime snapshots and refreshes imported funds', async () => {
+  await withEnvironment(async (storage) => {
+    saveFundSettings(createTestFundSettings())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            { FCODE: '161726', GSZ: '1.7', SHORTNAME: '导入后的名称' },
+            { FCODE: '000001', GSZ: '2.1', SHORTNAME: '新增名称' },
+          ],
+          errorCode: 0,
+          success: true,
+          totalCount: 2,
+        }),
+        { status: 200 },
+      )
+    try {
+      const result = store.replaceSettingsPersisted({
+        funds: [
+          { code: '161726', name: '导入配置名称' },
+          { code: '000001', name: '新增基金' },
+        ],
+        groups: [{ fundCodes: ['000001'], id: 'new', name: '新分组' }],
+        holdingOrder: [],
+        holdingsByCode: {},
+      })
+      assert.deepEqual(result, { ok: true })
+      assert.equal(store.snapshotsByCode['161726']?.name, '导入配置名称')
+      assert.equal(store.snapshotsByCode['000001']?.name, '新增基金')
+      await delayUntil(() => store.snapshotsByCode['000001']?.estimatedNav === 2.1)
+      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.7)
+      assert.equal(readStoredSettings(storage).funds[1]?.code, '000001')
+    } finally {
+      globalThis.fetch = originalFetch
+      store.$dispose()
+    }
+  })
+})
+
 test('retains only the previous confirmed snapshot when the NAV date advances', async () => {
   await withEnvironment(async () => {
     saveFundSettings(createTestFundSettings())

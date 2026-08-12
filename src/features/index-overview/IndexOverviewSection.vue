@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
+import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
 import { useIndexQuotesStore } from '@/domains/indices/stores/useIndexQuotesStore'
 import IndexSettingsEntry from '@/features/index-settings/IndexSettingsEntry.vue'
+import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import IndexQuoteList from './components/IndexQuoteList.vue'
 import IndexQuoteTicker from './components/IndexQuoteTicker.vue'
@@ -11,7 +13,9 @@ import { toIndexOverviewViewModel } from './presenters/toIndexOverviewViewModel'
 
 const panelValue = 'index-overview'
 const store = useIndexQuotesStore()
+const appSettingsStore = useAppSettingsStore()
 const { definitions, groups, health, lastSuccessfulAt, quotesByIndexId } = storeToRefs(store)
+const { preferences } = storeToRefs(appSettingsStore)
 const { isSmUp } = useBreakpoints()
 const expandedPanels = ref<(number | string)[]>([])
 const drawerVisible = ref(false)
@@ -38,8 +42,31 @@ watch(isSmUp, (desktop) => {
   }
 })
 
-onMounted(store.startPolling)
-onBeforeUnmount(store.stopPolling)
+let unsubscribeRefresh: (() => void) | undefined
+onMounted(() => {
+  applyPollingConfiguration()
+  store.startPolling()
+  unsubscribeRefresh = subscribeGlobalRefresh(store.refresh)
+})
+onBeforeUnmount(() => {
+  store.stopPolling()
+  unsubscribeRefresh?.()
+})
+
+watch(
+  preferences,
+  () => {
+    applyPollingConfiguration()
+  },
+  { deep: true },
+)
+
+function applyPollingConfiguration(): void {
+  store.setPollingConfiguration({
+    enabled: preferences.value.index.enabled,
+    intervalMs: preferences.value.index.intervalSeconds * 1_000,
+  })
+}
 
 function handlePanelChange(value: (number | string)[]): void {
   if (!isSmUp.value) {

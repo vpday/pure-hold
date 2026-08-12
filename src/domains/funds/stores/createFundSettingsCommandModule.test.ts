@@ -87,6 +87,34 @@ test('later settings commands keep an observed name after its first save fails',
   assert.equal(writes[0]?.funds[0]?.name, '行情名称')
 })
 
+test('replaces complete fund settings after persistence and returns a runtime effect', () => {
+  const writes: FundSettings[] = []
+  const module = createFundSettingsCommandModule(createSettings(), (settings) => {
+    writes.push(settings)
+  })
+  const nextSettings: FundSettings = {
+    funds: [
+      { code: '161726', name: '新名称' },
+      { code: '000001', name: '新增基金' },
+    ],
+    groups: [{ fundCodes: ['000001'], id: 'new', name: '新分组' }],
+    holdingOrder: [],
+    holdingsByCode: {},
+  }
+
+  const result = module.commit({ kind: 'replace-settings', settings: nextSettings })
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.deepEqual(result.effect, {
+      funds: nextSettings.funds,
+      kind: 'settings-replaced',
+    })
+    assert.deepEqual(result.settings, nextSettings)
+  }
+  assert.deepEqual(writes, [nextSettings])
+  assert.deepEqual(module.getSettings(), nextSettings)
+})
+
 function createSettings(): FundSettings {
   return {
     funds: [{ code: '161726', name: '旧名称' }],

@@ -17,6 +17,11 @@ export interface FundMarketRuntimeOptions {
   readonly syncObservedNames: (names: Readonly<Record<string, string>>) => boolean
 }
 
+export interface FundPollingConfiguration {
+  readonly enabled: boolean
+  readonly intervalMs: number
+}
+
 export interface FundMarketRuntime {
   readonly snapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
   readonly previousSnapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
@@ -26,6 +31,9 @@ export interface FundMarketRuntime {
   readonly lastRefreshSource: Ref<FundRefreshSource | undefined>
   readonly refreshAll: (options?: { readonly force?: boolean }) => Promise<void>
   readonly applySettingsEffect: (effect: FundSettingsEffect | undefined) => void
+  readonly setPollingConfiguration: (configuration: FundPollingConfiguration) => void
+  readonly startPolling: () => void
+  readonly stopPolling: () => void
   readonly dispose: () => void
 }
 
@@ -45,6 +53,12 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
   let activeRefresh: Promise<void> | undefined
   let lifecycle = 0
   let disposed = false
+  let polling = false
+  let refreshTimer: ReturnType<typeof setInterval> | undefined
+  let pollingConfiguration: FundPollingConfiguration = {
+    enabled: true,
+    intervalMs: 120_000,
+  }
 
   function refreshAll(requestOptions?: { readonly force?: boolean }): Promise<void> {
     if (activeRefresh) return activeRefresh
@@ -116,6 +130,27 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     if (!effect || disposed) return
 
     invalidateActiveRefresh()
+    if (effect.kind === 'settings-replaced') {
+      const fundsByCode = new Map(effect.funds.map((fund) => [fund.code, fund.name]))
+      const nextSnapshots: Record<string, FundSnapshot> = {}
+      for (const code of options.getFundCodes()) {
+        const name = fundsByCode.get(code)
+        if (name === undefined) continue
+        const existing = snapshotsByCode.value[code]
+        nextSnapshots[code] = existing ? { ...existing, name } : createEmptyFundSnapshot(code, name)
+      }
+      snapshotsByCode.value = nextSnapshots
+
+      const nextPreviousSnapshots: Record<string, FundSnapshot> = {}
+      for (const [code, snapshot] of Object.entries(previousSnapshotsByCode.value)) {
+        const name = fundsByCode.get(code)
+        if (name !== undefined) nextPreviousSnapshots[code] = { ...snapshot, name }
+      }
+      previousSnapshotsByCode.value = nextPreviousSnapshots
+      void refreshAll()
+      return
+    }
+
     if (effect.kind === 'funds-added') {
       snapshotsByCode.value = {
         ...snapshotsByCode.value,
@@ -138,7 +173,60 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
   function dispose(): void {
     if (disposed) return
     disposed = true
+    stopPolling()
     invalidateActiveRefresh()
+  }
+
+  function setPollingConfiguration(configuration: FundPollingConfiguration): void {
+    pollingConfiguration = { ...configuration }
+    if (!polling || typeof document === 'undefined') return
+
+    clearRefreshTimer()
+    if (document.hidden || !pollingConfiguration.enabled) return
+
+    void refreshAll()
+    refreshTimer = setInterval(() => void refreshAll(), pollingConfiguration.intervalMs)
+  }
+
+  function startPolling(): void {
+    if (polling || disposed || typeof document === 'undefined') return
+
+    polling = true
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    handleVisibilityChange()
+  }
+
+  function stopPolling(): void {
+    if (!polling) {
+      clearRefreshTimer()
+      return
+    }
+
+    polling = false
+    clearRefreshTimer()
+    invalidateActiveRefresh()
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
+
+  function handleVisibilityChange(): void {
+    clearRefreshTimer()
+
+    if (!polling || document.hidden) {
+      invalidateActiveRefresh()
+      return
+    }
+
+    void refreshAll()
+    if (pollingConfiguration.enabled) {
+      refreshTimer = setInterval(() => void refreshAll(), pollingConfiguration.intervalMs)
+    }
+  }
+
+  function clearRefreshTimer(): void {
+    if (refreshTimer !== undefined) {
+      clearInterval(refreshTimer)
+      refreshTimer = undefined
+    }
   }
 
   function invalidateActiveRefresh(): void {
@@ -184,7 +272,10 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     lastSuccessfulRefreshAt,
     previousSnapshotsByCode,
     refreshAll,
+    setPollingConfiguration,
     snapshotsByCode,
+    startPolling,
+    stopPolling,
   }
 }
 

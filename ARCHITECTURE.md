@@ -12,6 +12,8 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | ------------ | ------------------------------------------------------ | ------------------------------------------------------------- |
 | 客户端启动   | `src/main.ts`                                          | 加载样式、初始化天天基金 deviceid、注册 Pinia 并挂载 Vue 应用 |
 | 应用壳       | `src/App.vue`                                          | 组合全局 Provider、页头、内容区、页脚和功能入口               |
+| 应用设置     | `src/app/settings/`                                    | 版本化刷新偏好、配置传输格式和跨领域持久化协调                |
+| 设置入口     | `src/features/settings/SettingsEntry.vue`              | 响应式设置、草稿保存和配置导入导出入口                        |
 | 指数概览     | `src/features/index-overview/IndexOverviewSection.vue` | 指数业务的应用级入口                                          |
 | 指数状态     | `useIndexQuotesStore`                                  | 行情刷新、合并、健康状态和生命周期                            |
 | 指数行情     | `fetchEastmoneyIndexQuotes`                            | 东方财富行情适配器的领域入口                                  |
@@ -48,9 +50,11 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/features` 保存面向用户的功能组合。Feature 可以读取一个或多个领域，生成页面模型并管理局部交互，但不拥有第三方协议知识。
 
+`src/app` 保存跨领域但仍属于本应用的协调能力。`src/app/settings` 保存应用级刷新偏好和纯配置传输协议；它通过 Domain facade 读写指数分组与基金设置，不读取原始 localStorage，也不接触行情快照或设备标识。
+
 `src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage，并由独立 adapter 描述具体请求的匹配、key、缓存名称和响应装饰。
 
-`src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/persistence` 集中浏览器字符串存储的能力检测、原始读写结果和异常捕获；基金设置、指数分组和天天基金 deviceid 仍分别拥有自己的 key、schema、校验、恢复与会话语义。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
+`src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/persistence` 集中浏览器字符串存储的能力检测、原始读写结果和异常捕获；基金设置、指数分组、应用刷新偏好和天天基金 deviceid 仍分别拥有自己的 key、schema、校验、恢复与会话语义。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
 
 这样组织的目的，是让业务变化集中在对应领域，让页面变化集中在对应 feature，并让跨领域复用保持审慎。
 
@@ -78,6 +82,8 @@ Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker �
 
 基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
 
+应用刷新偏好使用独立版本化 key `pure-hold:app-settings:v1`，默认启用指数 10 秒、基金 2 分钟；它们只控制首页指数行情和基金快照的定时刷新，详情历史与局部会话不受影响。配置传输包只包含指数分组和完整 `FundSettings`（含持仓），不包含刷新偏好、运行时快照、生成的指数目录或天天基金 deviceid。
+
 实时指数行情、基金搜索和腾讯市场状态不进入 Service Worker 缓存。天天基金的 GET `/mm`、`/mm/**` 请求和精确匹配的快照 POST 请求由 Service Worker 处理；页面未被 Service Worker 控制时仍直接使用网络。离线重新打开应用时，指数定义以及已保存的基金设置和持仓仍可展示，行情由受控页面的缓存响应更新或先显示空快照。
 
 ## Code Map
@@ -88,7 +94,8 @@ src/
 ├─ App.vue                      # 应用壳
 ├─ sw.ts                        # Service Worker 运行时入口与查询缓存路由
 ├─ app/
-│  └─ components/               # 应用级基础设施 UI
+│  ├─ components/               # 应用级基础设施 UI
+│  └─ settings/                 # 应用刷新偏好与配置传输协调
 ├─ domains/
 │  ├─ indices/
 │  │  ├─ config/                # 生成的离线指数目录与默认分组
@@ -114,7 +121,8 @@ src/
 │  ├─ fund-group-settings/      # 自定义基金分组管理
 │  ├─ fund-holding-form/        # 新增与编辑共用的持仓字段和校验
 │  ├─ fund-edit/                # 单基金持仓与分组编辑
-│  └─ fund-search/              # 搜索会话、累计选择和批量新增
+│  ├─ fund-search/              # 搜索会话、累计选择和批量新增
+│  └─ settings/                 # 刷新偏好、配置导入导出和响应式设置 UI
 ├─ pwa/
 │  └─ cache/                    # 查询缓存共同策略与天天基金 GET/快照 POST adapter
 └─ shared/
@@ -124,7 +132,7 @@ src/
    └─ transport/                # PWA 与 Domain 共用的中性响应 metadata contract
 ```
 
-`App.vue` 只组合应用壳和 feature 入口。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
+`App.vue` 只组合应用壳和 feature 入口。`SettingsEntry` 是应用设置的 Feature 入口，负责草稿、响应式 Dialog/Drawer、浏览器 Clipboard/File/Download 适配和用户确认；纯传输解析与跨 Store 回滚协调留在 `src/app/settings/`。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、应用刷新偏好到指数轮询 seam 的连接、全局手动刷新订阅、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
 `FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类；仅在“持仓”分类中组合当前快照、上一份确认快照和汇总持仓，通过纯领域计算生成持仓指标，再由 presenter 统一格式化金额、百分比、日期和排序原始值。桌面表格和移动卡片只消费行模型，并把操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
@@ -189,6 +197,23 @@ main.ts 初始化天天基金 deviceid
 ```
 
 快照缓存保存原始 HTTP 响应，不保存领域 DTO；DTO 校验与转换仍由 `services/tiantian/` 完成。行情数值、标签和时间戳更新不会触发 localStorage 写入。
+
+首页刷新偏好与配置传输的数据流是：
+
+```text
+pure-hold:app-settings:v1
+  -> loadAppRefreshPreferences
+  -> useAppSettingsStore（草稿提交前保持旧值）
+  -> IndexOverviewSection / FundListSection
+  -> 各自 Domain polling seam（秒/分钟转换为毫秒）
+
+IndexGroupDefinition[] + FundSettings
+  -> configurationTransfer（纯 JSON 包、分区校验与警告）
+  -> SettingsEntry 选择分区并确认覆盖
+  -> Domain facade 先持久化、再更新内存；后续写入失败时回滚已写分区
+```
+
+刷新偏好只影响首页的指数与基金快照定时刷新，手动全局刷新仍调用现有一次性协调器；配置传输不携带刷新偏好、运行时快照、生成目录或 deviceid。
 
 单基金编辑的数据流是：
 
@@ -322,9 +347,10 @@ FundDetailEntry 当前基金代码
 - `useFundMetrics` 隐藏首次可见加载、共同截止日、相对超额、风险参数会话、内存重算、成功批次原子替换、指数刷新保旧数据和 notice 批次去重。
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
-- `createFundSettingsCommandModule` 隐藏六类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
-- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、刷新元数据、上一份确认快照和行情名称观察。
-- `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组和组织排序不向 Feature 暴露内部 module。
+- `createFundSettingsCommandModule` 隐藏七类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
+- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、可见性轮询、刷新元数据、上一份确认快照和行情名称观察。
+- `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组、组织排序、完整设置替换和轮询内部状态不向 Feature 暴露内部 module。
+- `useAppSettingsStore` 隐藏应用刷新偏好的版本化加载、校验、先保存后提交和损坏恢复；`configurationTransfer` 隐藏导入包解析、分区校验、未知指数引用警告和跨分区回滚协调。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
 - `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
 - `createCachePolicyHandler` 隐藏查询缓存的新鲜判断、网络访问、200 响应写入、过期清理、24 小时回退和容量淘汰；具体 HTTP 请求差异由两个 PWA adapter 提供。

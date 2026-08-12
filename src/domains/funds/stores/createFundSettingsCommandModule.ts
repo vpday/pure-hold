@@ -22,10 +22,12 @@ export type FundSettingsCommand =
       readonly code: string
       readonly selectedGroupIds: ReadonlySet<string>
     }
+  | { readonly kind: 'replace-settings'; readonly settings: FundSettings }
 
 export type FundSettingsEffect =
   | { readonly kind: 'funds-added'; readonly funds: readonly FundSetting[] }
   | { readonly kind: 'fund-deleted'; readonly code: string }
+  | { readonly kind: 'settings-replaced'; readonly funds: readonly FundSetting[] }
 
 export type FundSettingsCommandFailure =
   | 'no-additions'
@@ -161,6 +163,28 @@ function createCandidate(
       return createHoldingCandidate(command.holding, current)
     case 'update-fund-group-membership':
       return createMembershipCandidate(command.code, command.selectedGroupIds, current)
+    case 'replace-settings':
+      return createReplaceCandidate(command.settings, current)
+  }
+}
+
+function createReplaceCandidate(
+  settings: FundSettings,
+  current: FundSettings,
+): CandidateResult | { readonly ok: false; readonly reason: FundSettingsCommandFailure } {
+  let validated: FundSettings
+  try {
+    validated = cloneSettings(settings)
+  } catch {
+    return { ok: false, reason: 'invalid-settings' }
+  }
+
+  const changed = JSON.stringify(validated) !== JSON.stringify(current)
+  return {
+    changed,
+    effect: changed ? { funds: validated.funds, kind: 'settings-replaced' } : undefined,
+    ok: true,
+    settings: validated,
   }
 }
 

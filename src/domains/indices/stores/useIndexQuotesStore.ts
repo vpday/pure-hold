@@ -14,7 +14,19 @@ import { fetchTencentMarketStatus } from '../services/tencent/fetchTencentMarket
 import { selectActiveIndexDefinitions } from './selectActiveIndexDefinitions'
 import { selectOpenMarketIndexDefinitions } from './selectOpenMarketIndexDefinitions'
 
-const refreshInterval = 10_000
+export interface IndexPollingConfiguration {
+  readonly enabled: boolean
+  readonly intervalMs: number
+}
+
+export type IndexGroupsPersistenceResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'persistence-failed' }
+
+const defaultPollingConfiguration: IndexPollingConfiguration = {
+  enabled: true,
+  intervalMs: 10_000,
+}
 
 export const useIndexQuotesStore = defineStore('index-quotes', () => {
   const definitions = shallowRef<readonly IndexDefinition[]>(defaultIndexDefinitions)
@@ -33,6 +45,7 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
   let lifecycle = 0
   let polling = false
   let refreshTimer: ReturnType<typeof setInterval> | undefined
+  let pollingConfiguration = defaultPollingConfiguration
 
   if (typeof window !== 'undefined') {
     window.addEventListener('storage', handleStorageChange)
@@ -152,6 +165,24 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     }
   }
 
+  function getSettingsSnapshot(): readonly IndexGroupDefinition[] {
+    return cloneGroups(groups.value)
+  }
+
+  function replaceGroupsPersisted(
+    newGroups: readonly IndexGroupDefinition[],
+  ): IndexGroupsPersistenceResult {
+    const nextGroups = cloneGroups(newGroups)
+    try {
+      saveIndexGroups(nextGroups)
+    } catch {
+      return { ok: false, reason: 'persistence-failed' }
+    }
+
+    replaceGroups(nextGroups)
+    return { ok: true }
+  }
+
   function saveGroups(newGroups: readonly IndexGroupDefinition[] = groups.value): void {
     saveIndexGroups(newGroups)
   }
@@ -179,6 +210,21 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     handleVisibilityChange()
   }
 
+  function setPollingConfiguration(configuration: IndexPollingConfiguration): void {
+    pollingConfiguration = { ...configuration }
+    if (!polling || typeof document === 'undefined') {
+      return
+    }
+
+    clearRefreshTimer()
+    if (document.hidden || !pollingConfiguration.enabled) {
+      return
+    }
+
+    refreshWhenCurrentRequestSettles()
+    refreshTimer = setInterval(() => void refreshOpenMarkets(), pollingConfiguration.intervalMs)
+  }
+
   function stopPolling(): void {
     if (!polling) {
       return
@@ -200,7 +246,9 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     }
 
     refreshWhenCurrentRequestSettles()
-    refreshTimer = setInterval(() => void refreshOpenMarkets(), refreshInterval)
+    if (pollingConfiguration.enabled) {
+      refreshTimer = setInterval(() => void refreshOpenMarkets(), pollingConfiguration.intervalMs)
+    }
   }
 
   function refreshWhenCurrentRequestSettles(): void {
@@ -226,8 +274,17 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     }
   }
 
+  function cloneGroups(groupsToClone: readonly IndexGroupDefinition[]): IndexGroupDefinition[] {
+    return groupsToClone.map((group) => ({
+      id: group.id,
+      name: group.name,
+      quoteCodes: [...group.quoteCodes],
+    }))
+  }
+
   return {
     definitions,
+    getSettingsSnapshot,
     groups,
     health,
     isRefreshing,
@@ -236,7 +293,9 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     quotesByIndexId,
     refresh,
     replaceGroups,
+    replaceGroupsPersisted,
     saveGroups,
+    setPollingConfiguration,
     startPolling,
     stopPolling,
     syncFromStorage,

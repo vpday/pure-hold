@@ -7,7 +7,10 @@ import type { FundHolding } from '../models/fundHolding.ts'
 import type { FundSettings } from '../models/fundSettings.ts'
 import { loadFundSettings } from '../services/persistence/loadFundSettings.ts'
 import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
-import { createFundMarketRuntime } from './createFundMarketRuntime.ts'
+import {
+  createFundMarketRuntime,
+  type FundPollingConfiguration,
+} from './createFundMarketRuntime.ts'
 import {
   createFundSettingsCommandModule,
   type FundSettingsCommandFailure,
@@ -85,6 +88,32 @@ export const useFundsStore = defineStore('funds', () => {
     return {}
   }
 
+  function getSettingsSnapshot(): FundSettings {
+    return settingsCommands.getSettings()
+  }
+
+  function replaceSettingsPersisted(
+    settings: FundSettings,
+  ):
+    | { readonly ok: true }
+    | { readonly ok: false; readonly reason: 'invalid-settings' | 'persistence-failed' } {
+    const result = settingsCommands.commit({ kind: 'replace-settings', settings })
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: result.reason === 'invalid-settings' ? 'invalid-settings' : 'persistence-failed',
+      }
+    }
+
+    applySettings(result.settings)
+    marketRuntime.applySettingsEffect(result.effect)
+    return { ok: true }
+  }
+
+  function setPollingConfiguration(configuration: FundPollingConfiguration): void {
+    marketRuntime.setPollingConfiguration(configuration)
+  }
+
   function updateFundHolding(holding: FundHolding): { error?: string } {
     const result = settingsCommands.commit({ holding, kind: 'update-fund-holding' })
     if (!result.ok) {
@@ -135,6 +164,7 @@ export const useFundsStore = defineStore('funds', () => {
     addFunds,
     deleteFund,
     fundOrder,
+    getSettingsSnapshot,
     groups,
     holdingOrder,
     holdingsByCode,
@@ -145,7 +175,11 @@ export const useFundsStore = defineStore('funds', () => {
     previousSnapshotsByCode: marketRuntime.previousSnapshotsByCode,
     refreshAll,
     replaceFundOrganization,
+    replaceSettingsPersisted,
     replaceGroups,
+    setPollingConfiguration,
+    startPolling: marketRuntime.startPolling,
+    stopPolling: marketRuntime.stopPolling,
     snapshotsByCode: marketRuntime.snapshotsByCode,
     updateFundGroupMembership,
     updateFundHolding,

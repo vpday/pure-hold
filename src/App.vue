@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
 import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
+import SettingsEntry from '@/features/settings/SettingsEntry.vue'
 import FundHoldingStatisticsEntry from '@/features/fund-list/FundHoldingStatisticsEntry.vue'
 import FundListSection from '@/features/fund-list/FundListSection.vue'
 import FundSearchEntry from '@/features/fund-search/FundSearchEntry.vue'
@@ -11,6 +12,7 @@ import { requestGlobalRefresh } from '@/shared/services/globalRefreshCoordinator
 
 const globalRefreshing = ref(false)
 const fundSearchEntry = ref<{ open: () => void }>()
+const settingsEntry = ref<{ open: () => void }>()
 
 async function refreshAllData(): Promise<void> {
   if (globalRefreshing.value) {
@@ -46,7 +48,9 @@ async function refreshAllData(): Promise<void> {
               <a href="javascript:;" title="搜索并添加基金" @click="fundSearchEntry?.open()"
                 ><t-icon class="t-menu__operations-icon" name="search"
               /></a>
-              <a href="javascript:;"><t-icon class="t-menu__operations-icon" name="setting" /></a>
+              <a href="javascript:;" title="设置" @click="settingsEntry?.open()"
+                ><t-icon class="t-menu__operations-icon" name="setting"
+              /></a>
             </template>
           </t-head-menu>
         </div>
@@ -65,6 +69,7 @@ async function refreshAllData(): Promise<void> {
       </t-footer>
     </t-layout>
     <FundSearchEntry ref="fundSearchEntry" />
+    <SettingsEntry ref="settingsEntry" />
   </t-config-provider>
 </template>
 

@@ -1,0 +1,182 @@
+import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
+import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
+import { validateAndCloneFundSettings } from '@/domains/funds/services/persistence/validateFundSettings.ts'
+
+export const configurationTransferFormat = 'pure-hold-settings'
+export const configurationTransferVersion = 1
+
+export interface ConfigurationTransferPackage {
+  readonly format: typeof configurationTransferFormat
+  readonly version: typeof configurationTransferVersion
+  readonly index?: {
+    readonly groups: readonly IndexGroupDefinition[]
+  }
+  readonly funds?: FundSettings
+}
+
+export interface ConfigurationTransferSources {
+  readonly indexGroups?: readonly IndexGroupDefinition[]
+  readonly fundSettings?: FundSettings
+}
+
+export interface ConfigurationTransferWarning {
+  readonly section: 'index' | 'funds'
+  readonly message: string
+}
+
+export interface ConfigurationTransferSectionError {
+  readonly section: 'index' | 'funds'
+  readonly message: string
+}
+
+export type ConfigurationTransferParseResult =
+  | {
+      readonly ok: true
+      readonly package: ConfigurationTransferPackage
+      readonly warnings: readonly ConfigurationTransferWarning[]
+      readonly sectionErrors: readonly ConfigurationTransferSectionError[]
+    }
+  | { readonly ok: false; readonly message: string }
+
+export function createConfigurationTransferPackage(
+  sources: ConfigurationTransferSources,
+): ConfigurationTransferPackage {
+  const result: {
+    format: typeof configurationTransferFormat
+    version: typeof configurationTransferVersion
+    index?: { readonly groups: readonly IndexGroupDefinition[] }
+    funds?: FundSettings
+  } = {
+    format: configurationTransferFormat,
+    version: configurationTransferVersion,
+  }
+
+  if (sources.indexGroups !== undefined) {
+    result.index = { groups: cloneIndexGroups(sources.indexGroups) }
+  }
+  if (sources.fundSettings !== undefined) {
+    result.funds = validateAndCloneFundSettings(sources.fundSettings)
+  }
+  return result
+}
+
+export function serializeConfigurationTransfer(sources: ConfigurationTransferSources): string {
+  return JSON.stringify(createConfigurationTransferPackage(sources), null, 2)
+}
+
+export function parseConfigurationTransfer(
+  text: string,
+  knownIndexQuoteCodes: ReadonlySet<string>,
+): ConfigurationTransferParseResult {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return { message: '配置文件不是有效的 JSON', ok: false }
+  }
+
+  if (
+    !isRecord(parsed) ||
+    parsed.format !== configurationTransferFormat ||
+    parsed.version !== configurationTransferVersion
+  ) {
+    return { message: '配置文件版本或格式不兼容', ok: false }
+  }
+
+  const warnings: ConfigurationTransferWarning[] = []
+  const sectionErrors: ConfigurationTransferSectionError[] = []
+  const result: {
+    format: typeof configurationTransferFormat
+    version: typeof configurationTransferVersion
+    index?: { readonly groups: readonly IndexGroupDefinition[] }
+    funds?: FundSettings
+  } = {
+    format: configurationTransferFormat,
+    version: configurationTransferVersion,
+  }
+
+  const hasIndex = parsed.index !== undefined
+  if (hasIndex) {
+    try {
+      const groups = parseIndexGroups(parsed.index, knownIndexQuoteCodes, warnings)
+      result.index = { groups }
+    } catch (error) {
+      sectionErrors.push({ section: 'index', message: getErrorMessage(error, '指数配置结构无效') })
+    }
+  }
+
+  const hasFunds = parsed.funds !== undefined
+  if (hasFunds) {
+    try {
+      result.funds = validateAndCloneFundSettings(parsed.funds)
+    } catch (error) {
+      sectionErrors.push({ section: 'funds', message: getErrorMessage(error, '基金配置结构无效') })
+    }
+  }
+
+  if (!hasIndex && !hasFunds) {
+    return { message: '配置文件不包含可导入的配置分区', ok: false }
+  }
+
+  return { ok: true, package: result, sectionErrors, warnings }
+}
+
+function parseIndexGroups(
+  value: unknown,
+  knownQuoteCodes: ReadonlySet<string>,
+  warnings: ConfigurationTransferWarning[],
+): IndexGroupDefinition[] {
+  if (!isRecord(value) || !Array.isArray(value.groups)) {
+    throw new TypeError('指数配置缺少 groups 数组')
+  }
+
+  let removedQuoteCount = 0
+  const groups = value.groups.map((group) => {
+    if (
+      !isRecord(group) ||
+      typeof group.id !== 'string' ||
+      typeof group.name !== 'string' ||
+      !Array.isArray(group.quoteCodes) ||
+      group.quoteCodes.some((quoteCode) => typeof quoteCode !== 'string')
+    ) {
+      throw new TypeError('指数分组结构无效')
+    }
+
+    const quoteCodes = group.quoteCodes.filter((quoteCode) => {
+      const known = knownQuoteCodes.has(quoteCode)
+      if (!known) removedQuoteCount += 1
+      return known
+    })
+    return { id: group.id, name: group.name, quoteCodes }
+  })
+
+  if (removedQuoteCount > 0) {
+    warnings.push({
+      message: `指数配置中有 ${removedQuoteCount} 个未知指数引用已跳过`,
+      section: 'index',
+    })
+  }
+  return groups
+}
+
+function cloneIndexGroups(groups: readonly IndexGroupDefinition[]): IndexGroupDefinition[] {
+  return groups.map((group) => {
+    if (
+      typeof group.id !== 'string' ||
+      typeof group.name !== 'string' ||
+      !Array.isArray(group.quoteCodes) ||
+      group.quoteCodes.some((quoteCode) => typeof quoteCode !== 'string')
+    ) {
+      throw new TypeError('指数配置结构无效')
+    }
+    return { id: group.id, name: group.name, quoteCodes: [...group.quoteCodes] }
+  })
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.length > 0 ? error.message : fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

@@ -10,7 +10,7 @@ const props = defineProps<{
   loading: boolean
   viewModel: FundHoldingStatisticsViewModel
 }>()
-const amountsMasked = ref(false)
+const amountsMasked = ref(true)
 
 function trendClass(trend: FundHoldingStatisticValueViewModel['trend']): string {
   if (amountsMasked.value) return 'text-(--td-text-color-secondary)'
