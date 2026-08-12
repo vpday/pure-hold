@@ -15,13 +15,21 @@ import type { FundRollingExcessReturnChartModel } from './fundRollingExcessRetur
 
 export type FundPerformancePanelId = FundPerformanceView | 'distribution'
 
-export type FundPerformancePanelRendererKey =
-  | 'cumulative-returns'
-  | 'cumulative-excess-return'
-  | 'drawdown-comparison'
-  | 'net-value'
-  | 'rolling-excess-return'
-  | 'distribution'
+export type FundPerformancePanelDescriptor<
+  TId extends FundPerformancePanelId = FundPerformancePanelId,
+> = TId extends 'distribution'
+  ? {
+      readonly defaultView: boolean
+      readonly id: TId
+      readonly kind: 'distribution'
+      readonly label: string
+    }
+  : {
+      readonly defaultView: boolean
+      readonly id: TId
+      readonly kind: 'chart'
+      readonly label: string
+    }
 
 export type FundPerformanceRangeByView = {
   readonly 'cumulative-returns': FundHistoryRange
@@ -40,10 +48,28 @@ export type FundPerformanceSelectRangeAction = {
   }
 }[FundPerformanceView]
 
+export type FundPerformancePanelActionFor<TId extends FundPerformancePanelId> =
+  TId extends 'cumulative-returns'
+    ?
+        | Extract<FundPerformanceSelectRangeAction, { readonly view: TId }>
+        | {
+            readonly type: 'select-reference-index'
+            readonly code: string
+            readonly view: TId
+          }
+    : TId extends FundPerformanceView
+      ? Extract<FundPerformanceSelectRangeAction, { readonly view: TId }>
+      : never
+
+export type FundPerformancePanelAction = FundPerformancePanelActionFor<FundPerformancePanelId>
+
+export type FundPerformancePanelRendererActionFor<TId extends FundPerformancePanelId> =
+  | FundPerformancePanelActionFor<TId>
+  | { readonly type: 'retry-panel'; readonly panelId: TId }
+
 export type FundPerformanceAction =
   | { readonly type: 'select-view'; readonly view: FundPerformanceView }
-  | FundPerformanceSelectRangeAction
-  | { readonly type: 'select-reference-index'; readonly code: string }
+  | FundPerformancePanelAction
   | { readonly type: 'activate-panel'; readonly panelId: FundPerformancePanelId }
   | { readonly type: 'retry-panel'; readonly panelId: FundPerformancePanelId }
 

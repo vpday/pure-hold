@@ -5,11 +5,7 @@ import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
 import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
 import type { FundRowViewModel, FundSortField } from '../models/fundListViewModel.ts'
-import {
-  createFundRowComparator,
-  moveMissingFundRowsLast,
-  sortFundRows,
-} from './sortFundSnapshots.ts'
+import { sortFundRows } from './sortFundSnapshots.ts'
 import { toFundListViewModel } from './toFundListViewModel.ts'
 
 const sortFields = [
@@ -148,23 +144,6 @@ test('fund row sorting covers every field, stays stable and keeps missing values
       `${field} descending`,
     )
   }
-})
-
-test('desktop adapter restores null-last after TDesign reverses comparator arguments', () => {
-  const field = 'estimatedChangePercent'
-  const rows = [
-    rowWithSortValue('a', field, 2),
-    rowWithSortValue('b', field, null),
-    rowWithSortValue('c', field, 1),
-    rowWithSortValue('d', field, 2),
-  ]
-  const compare = createFundRowComparator(field)
-  const tdesignDescendingRows = [...rows].sort((left, right) => compare(right, left))
-
-  assert.deepEqual(
-    moveMissingFundRowsLast(tdesignDescendingRows, field).map((row) => row.code),
-    ['a', 'd', 'c', 'b'],
-  )
 })
 
 test('null sort restores the input order', () => {

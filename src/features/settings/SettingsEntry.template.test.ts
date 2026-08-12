@@ -16,7 +16,7 @@ test('forwards refresh preference updates from SettingsContent to the draft', ()
 test('renders import selection in a dialog and overwrite confirmation as a popconfirm', () => {
   assert.match(transferSource, /<t-dialog[\s\S]*header="配置恢复"/)
   assert.match(transferSource, /已读取配置，请选择要恢复的分区/)
-  assert.match(transferSource, /:visible="importState !== null"/)
+  assert.match(transferSource, /<t-dialog[\s\S]*v-if="importState"[\s\S]*:visible="true"/)
   assert.match(transferSource, /<t-popconfirm[\s\S]*:content="overwriteMessage"/)
   assert.match(transferSource, /:popup-props="\{ attach: 'body', zIndex: 2700 \}"/)
   assert.doesNotMatch(source, /header="确认覆盖配置"/)

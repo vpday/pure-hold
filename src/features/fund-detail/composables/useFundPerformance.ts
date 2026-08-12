@@ -9,20 +9,20 @@ import {
 } from 'vue'
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
+import type { LoadFundDistribution } from '../models/fundDistributionTableModel'
 import type { LoadFundCumulativeReturns } from '../models/fundCumulativeReturnsChart'
-import type { FundPerformanceAction } from '../models/fundPerformancePanel'
+import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
+import type { FundPerformanceAction, FundPerformancePanelId } from '../models/fundPerformancePanel'
 import type { FundPerformanceView } from '../models/fundPerformanceView'
 import type { FundPerformanceSectionModel } from '../models/fundPerformanceSectionModel'
-import { fundPerformancePanelRegistry } from '../config/fundPerformancePanelRegistry'
+import { createFundPerformancePanelDefinitions } from './performance-panels/createFundPerformancePanelDefinitions'
+import { resolveFundPerformancePanelDefinition } from './performance-panels/fundPerformancePanelDefinition'
 import {
   type FundBenchmarkDataSource,
   type LoadFundBenchmarkHistory,
   useFundBenchmarkDataSource,
 } from './useFundBenchmarkDataSource'
-import { createFundPerformancePanelAdapters } from './createFundPerformancePanelAdapters'
 import { type FundHistoryDataSource, useFundHistoryDataSource } from './useFundHistoryDataSource'
-import type { LoadFundDistribution } from '../models/fundDistributionTableModel'
-import type { LoadFundNetValueHistory } from '../models/fundNetValueChart'
 
 interface UseFundPerformanceOptions {
   readonly benchmarkDataSource?: FundBenchmarkDataSource
@@ -48,101 +48,83 @@ export function useFundPerformance(
       loadDistribution: options.loadDistribution,
       loadNetValueHistory: options.loadNetValueHistory,
     })
-  const adapters = createFundPerformancePanelAdapters({
+  const definitions = createFundPerformancePanelDefinitions({
     benchmarkDataSource,
     historyDataSource,
     loadCumulativeReturns: options.loadCumulativeReturns,
   })
-  const activeView = ref<FundPerformanceView>('cumulative-returns')
+  const defaultDefinition = definitions.find(({ descriptor }) => descriptor.defaultView)
+  if (!defaultDefinition || defaultDefinition.descriptor.kind !== 'chart') {
+    throw new Error('Missing default fund performance chart')
+  }
+  const defaultView = defaultDefinition.descriptor.id
+  const activeView = ref<FundPerformanceView>(defaultView)
   const currentFundCode = ref<string>()
   const basicInfo = shallowRef<FundBasicInfo>()
 
   const model = computed<FundPerformanceSectionModel>(() => ({
     activeView: activeView.value,
+    descriptors: definitions.map(({ descriptor }) => descriptor),
     isVisible: toValue(isVisible),
-    panels: fundPerformancePanelRegistry.map(({ adapterKey }) => adapters[adapterKey].model.value),
+    panels: definitions.map(({ model: panelModel }) => panelModel.value),
   }))
 
   function open(code: string): void {
     currentFundCode.value = code
     basicInfo.value = undefined
-    activeView.value = 'cumulative-returns'
-    for (const { adapterKey } of fundPerformancePanelRegistry) {
-      adapters[adapterKey].initialize(code)
-    }
+    activeView.value = defaultView
+    for (const definition of definitions) definition.open(code)
   }
 
   function close(): void {
     currentFundCode.value = undefined
     basicInfo.value = undefined
-    for (const { adapterKey } of fundPerformancePanelRegistry) {
-      adapters[adapterKey].close()
-    }
+    for (const definition of definitions) definition.close()
   }
 
   async function updateBasicInfo(code: string, value: FundBasicInfo): Promise<void> {
     if (code !== currentFundCode.value) return
     basicInfo.value = value
-    if (activeView.value === 'cumulative-returns') {
-      await adapters['cumulative-returns'].updateBasicInfo(code, value)
-    }
+    await definitionFor(activeView.value).updateBasicInfo?.(code, value)
   }
 
   async function dispatch(action: FundPerformanceAction): Promise<void> {
     switch (action.type) {
       case 'select-view':
         activeView.value = action.view
-        if (action.view === 'cumulative-returns') {
-          const code = currentFundCode.value
-          const info = basicInfo.value
-          if (code && info) await adapters['cumulative-returns'].updateBasicInfo(code, info)
-        } else {
-          await adapters[action.view].activate()
-        }
+        await activateDefinition(action.view)
         return
       case 'select-range':
-        switch (action.view) {
-          case 'cumulative-returns':
-            await adapters['cumulative-returns'].selectRange(action.range)
-            return
-          case 'cumulative-excess-return':
-            await adapters['cumulative-excess-return'].selectRange(action.range)
-            return
-          case 'drawdown-comparison':
-            await adapters['drawdown-comparison'].selectRange(action.range)
-            return
-          case 'net-value':
-            await adapters['net-value'].selectRange(action.range)
-            return
-          case 'reinvested-net-value':
-            await adapters['reinvested-net-value'].selectRange(action.range)
-            return
-          case 'rolling-excess-return':
-            await adapters['rolling-excess-return'].selectRange(action.range)
-            return
-        }
-        return
       case 'select-reference-index':
-        await adapters['cumulative-returns'].selectReferenceIndex(action.code)
+        await definitionFor(action.view).dispatch(action)
         return
       case 'activate-panel':
-        if (action.panelId === 'cumulative-returns') {
-          const code = currentFundCode.value
-          const info = basicInfo.value
-          if (code && info) await adapters['cumulative-returns'].updateBasicInfo(code, info)
-        } else {
-          await adapters[action.panelId].activate()
-        }
+        await activateDefinition(action.panelId)
         return
       case 'retry-panel':
-        await adapters[action.panelId].retry()
+        await definitionFor(action.panelId).retry()
         return
     }
   }
 
   async function refresh(): Promise<void> {
     if (!toValue(isVisible)) return
-    await Promise.all([adapters[activeView.value].refresh(), adapters.distribution.refresh()])
+    await Promise.all([
+      definitionFor(activeView.value).refresh(),
+      definitionFor('distribution').refresh(),
+    ])
+  }
+
+  function definitionFor<TId extends FundPerformancePanelId>(id: TId) {
+    return resolveFundPerformancePanelDefinition(definitions, id)
+  }
+
+  async function activateDefinition(id: FundPerformancePanelId): Promise<void> {
+    const definition = definitionFor(id)
+    const code = currentFundCode.value
+    const info = basicInfo.value
+    if (definition.updateBasicInfo && code && info) await definition.updateBasicInfo(code, info)
+    else await definition.activate()
   }
 
   if (getCurrentScope() && (ownsHistoryDataSource || ownsBenchmarkDataSource)) {

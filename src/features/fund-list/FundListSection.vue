@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
-import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
 import FundDetailEntry from '@/features/fund-detail/FundDetailEntry.vue'
@@ -13,12 +12,7 @@ import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinat
 import FundDesktopTable from './components/FundDesktopTable.vue'
 import FundEmptyState from './components/FundEmptyState.vue'
 import FundMobileList from './components/FundMobileList.vue'
-import type { FundSort } from './models/fundListViewModel'
-import { buildFundCategories } from './presenters/buildFundCategories'
-import { clearFundCategorySorts } from './presenters/clearFundCategorySorts'
-import { formatEstimatedDisplayDate, formatNavDisplayDate } from './presenters/formatFundDates'
-import { sortFundRows } from './presenters/sortFundSnapshots'
-import { toFundListViewModel } from './presenters/toFundListViewModel'
+import { useFundListSession } from './composables/useFundListSession'
 
 const emit = defineEmits<{ searchFunds: [] }>()
 const store = useFundsStore()
@@ -34,57 +28,19 @@ const {
   snapshotsByCode,
 } = storeToRefs(store)
 const { preferences } = storeToRefs(appSettingsStore)
-const activeCategoryId = ref('all')
-const sortByCategory = ref<Record<string, FundSort | null>>({})
 const groupSettings = ref<{ open: () => void }>()
 const mobileList = ref<{ openSortDrawer: () => void }>()
 const fundEdit = ref<{ open: (code: string) => void }>()
 const fundDetail = ref<{ open: (code: string) => void }>()
-const categories = computed(() =>
-  buildFundCategories(fundOrder.value, holdingOrder.value, groups.value),
-)
-const categoryTabs = computed(() =>
-  categories.value.map((category) => ({
-    label: `${category.name}（${category.fundCodes.length}）`,
-    value: category.id,
-  })),
-)
-const activeCategory = computed(
-  () =>
-    categories.value.find((category) => category.id === activeCategoryId.value) ??
-    categories.value[0]!,
-)
-const activeSort = computed(() => sortByCategory.value[activeCategory.value.id] ?? null)
-const holdingMode = computed(() => activeCategory.value.id === 'holdings')
-const orderedSnapshots = computed(() =>
-  activeCategory.value.fundCodes.flatMap((code) => {
-    const snapshot = snapshotsByCode.value[code]
-    return snapshot ? [snapshot] : []
-  }),
-)
-const baseRows = computed(() =>
-  orderedSnapshots.value.map((snapshot) => {
-    const holding = holdingMode.value ? holdingsByCode.value[snapshot.code] : undefined
-    return toFundListViewModel(
-      snapshot,
-      holding
-        ? calculateFundHoldingMetrics({
-            currentSnapshot: snapshot,
-            holding,
-            previousConfirmedSnapshot: previousSnapshotsByCode.value[snapshot.code],
-            today: shanghaiDate(),
-          })
-        : undefined,
-    )
-  }),
-)
-const rows = computed(() => sortFundRows(baseRows.value, activeSort.value))
-const latestEstimatedAt = computed(() =>
-  formatEstimatedDisplayDate(latestText(baseRows.value.map((row) => row.estimatedAtText))),
-)
-const latestNavDate = computed(() =>
-  formatNavDisplayDate(latestText(baseRows.value.map((row) => row.navDateText))),
-)
+const { clearCategorySorts, model, selectCategory, setSort } = useFundListSession({
+  fundOrder,
+  groups,
+  holdingOrder,
+  holdingsByCode,
+  lastRefreshIssues,
+  previousSnapshotsByCode,
+  snapshotsByCode,
+})
 
 const refreshObserver = () => store.refreshAll({ force: true })
 let unsubscribeRefresh: (() => void) | undefined
@@ -113,37 +69,16 @@ function applyPollingConfiguration(): void {
   })
 }
 
-watch(categories, (nextCategories) => {
-  if (!nextCategories.some((category) => category.id === activeCategoryId.value)) {
-    activeCategoryId.value = 'all'
-  }
-})
-
 watch(isRefreshing, (refreshing, wasRefreshing) => {
   if (refreshing || !wasRefreshing) return
-  if (lastRefreshIssues.value.some((issue) => issue.code === 'persistence-failed')) {
-    MessagePlugin.warning('刷新成功，但未能保存；刷新页面后可能恢复旧数据')
-  }
-  if (lastRefreshIssues.value.some((issue) => issue.code === 'cache-fallback')) {
-    MessagePlugin.warning('网络刷新失败，已显示缓存数据')
-  }
-  const hasOtherIssues = lastRefreshIssues.value.some(
-    (issue) => issue.code !== 'persistence-failed' && issue.code !== 'cache-fallback',
-  )
-  if (hasOtherIssues) {
-    const hasFreshData = rows.value.some(
-      (row) => snapshotsByCode.value[row.code]?.fetchedAt !== null,
-    )
-    MessagePlugin.error(hasFreshData ? '部分基金刷新失败' : '基金刷新失败，请稍后重试')
+  for (const notice of model.value.refreshNotices) {
+    if (notice.level === 'warning') MessagePlugin.warning(notice.message)
+    else MessagePlugin.error(notice.message)
   }
 })
 
-function setSort(sort: FundSort | null): void {
-  sortByCategory.value = { ...sortByCategory.value, [activeCategory.value.id]: sort }
-}
-
 function clearSavedCategorySorts(categoryIds: readonly string[]): void {
-  sortByCategory.value = clearFundCategorySorts(sortByCategory.value, categoryIds)
+  clearCategorySorts(categoryIds)
 }
 
 function showComingSoon(): void {
@@ -156,48 +91,33 @@ function deleteFund(code: string): void {
     MessagePlugin.error(result.error)
   }
 }
-
-function latestText(values: readonly string[]): string {
-  const available = values.filter((value) => value !== '--')
-  return available.sort().at(-1) ?? '--'
-}
-
-function shanghaiDate(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-  }).formatToParts(now)
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
-  return `${values.year}-${values.month}-${values.day}`
-}
 </script>
 
 <template>
   <section aria-label="自选基金" class="bg-(--td-bg-color-container) mt-4 p-4">
     <t-tabs
-      v-model:value="activeCategoryId"
-      :list="categoryTabs"
+      :value="model.activeCategory.id"
+      :list="model.categoryTabs"
       aria-label="基金分类"
       class="mb-4 min-w-0"
+      @update:value="selectCategory(String($event))"
     >
       <template #action>
         <div class="flex items-center">
-          <span v-if="rows.length" class="flex sm:hidden">
+          <span v-if="model.rows.length" class="flex sm:hidden">
             <t-button
-              :aria-label="activeSort ? '调整基金排序' : '设置基金排序'"
+              :aria-label="model.activeSort ? '调整基金排序' : '设置基金排序'"
               shape="square"
               size="medium"
-              :theme="activeSort ? 'primary' : 'default'"
+              :theme="model.activeSort ? 'primary' : 'default'"
               variant="text"
               @click="mobileList?.openSortDrawer()"
             >
               <template #icon>
                 <t-icon
                   :name="
-                    activeSort
-                      ? activeSort.descending
+                    model.activeSort
+                      ? model.activeSort.descending
                         ? 'order-descending'
                         : 'order-ascending'
                       : 'filter-sort'
@@ -228,20 +148,20 @@ function shanghaiDate(now = new Date()): string {
     </t-tabs>
 
     <FundEmptyState
-      v-if="rows.length === 0"
-      :is-all-category="activeCategory.id === 'all'"
+      v-if="model.rows.length === 0"
+      :is-all-category="model.activeCategory.id === 'all'"
       @coming-soon="showComingSoon"
       @search="emit('searchFunds')"
     />
     <template v-else>
       <div class="hidden sm:block">
         <FundDesktopTable
-          :estimated-at="latestEstimatedAt"
-          :holding-mode="holdingMode"
+          :estimated-at="model.latestEstimatedAt"
+          :holding-mode="model.holdingMode"
           :loading="isRefreshing"
-          :nav-date="latestNavDate"
-          :rows="baseRows"
-          :sort="activeSort"
+          :nav-date="model.latestNavDate"
+          :rows="model.rows"
+          :sort="model.activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
           @detail="fundDetail?.open($event)"
@@ -252,9 +172,9 @@ function shanghaiDate(now = new Date()): string {
       <div class="sm:hidden">
         <FundMobileList
           ref="mobileList"
-          :holding-mode="holdingMode"
-          :rows="rows"
-          :sort="activeSort"
+          :holding-mode="model.holdingMode"
+          :rows="model.rows"
+          :sort="model.activeSort"
           @coming-soon="showComingSoon"
           @delete="deleteFund"
           @detail="fundDetail?.open($event)"

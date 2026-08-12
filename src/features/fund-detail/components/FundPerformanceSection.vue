@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-import { fundPerformancePanelRegistry } from '../config/fundPerformancePanelRegistry'
 import type {
   FundPerformanceAction,
   FundPerformancePanelId,
@@ -23,7 +22,7 @@ function panelForId(id: FundPerformancePanelId): FundPerformancePanelModel {
 }
 
 function selectTab(value: string): void {
-  const descriptor = fundPerformancePanelRegistry.find(({ id }) => id === value)
+  const descriptor = props.model.descriptors.find(({ id }) => id === value)
   if (!descriptor) return
   activeTab.value = descriptor.id
   if (descriptor.kind === 'chart') {
@@ -55,7 +54,7 @@ onBeforeUnmount(() => {
     <h2 id="fund-detail-performance-title" class="performance-title">业绩表现</h2>
     <t-tabs class="performance-tabs" :value="activeTab" @update:value="selectTab(String($event))">
       <t-tab-panel
-        v-for="panelDescriptor in fundPerformancePanelRegistry"
+        v-for="panelDescriptor in model.descriptors"
         :key="panelDescriptor.id"
         :label="panelDescriptor.label"
         :value="panelDescriptor.id"

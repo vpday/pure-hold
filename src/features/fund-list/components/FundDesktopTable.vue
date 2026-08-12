@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, h, ref, watch } from 'vue'
-import type { DropdownProps, PrimaryTableProps, SortOptions } from 'tdesign-vue-next'
+import { computed, h, ref } from 'vue'
+import type { DropdownProps, PrimaryTableProps } from 'tdesign-vue-next'
 
 import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
@@ -16,11 +16,6 @@ import {
   isIncomeEmpty,
   shouldShowIncomeDate,
 } from '../presenters/fundDisplayRules'
-import {
-  createFundRowComparator,
-  moveMissingFundRowsLast,
-  sortFundRows,
-} from '../presenters/sortFundSnapshots'
 
 const props = defineProps<{
   estimatedAt: string
@@ -38,21 +33,6 @@ const emit = defineEmits<{
   sortChange: [sort: FundSort | null]
 }>()
 const pendingDeleteCode = ref<string>()
-const tableRows = ref<FundRowViewModel[]>([...props.rows])
-
-watch(
-  () => props.rows,
-  (rows) => {
-    tableRows.value = sortFundRows(rows, props.sort)
-  },
-)
-
-watch(
-  () => props.sort,
-  (sort) => {
-    if (!sort) tableRows.value = [...props.rows]
-  },
-)
 
 const returnColumns: readonly { cell: string; colKey: FundReturnField; title: string }[] = [
   { cell: 'one-week-cell', colKey: 'oneWeek', title: '近1周' },
@@ -66,6 +46,17 @@ const returnColumns: readonly { cell: string; colKey: FundReturnField; title: st
   { cell: 'five-years-cell', colKey: 'fiveYears', title: '近5年' },
   { cell: 'since-inception-cell', colKey: 'sinceInception', title: '成立以来' },
 ]
+const sortableFields = new Set<FundSortField>([
+  'dailyChangePercent',
+  'estimatedChangePercent',
+  'estimatedIncome',
+  'holdingAmount',
+  'holdingDays',
+  'holdingIncomePercent',
+  'todayIncome',
+  'yesterdayIncome',
+  ...returnColumns.map(({ colKey }) => colKey),
+])
 const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
   const estimatedAt = props.estimatedAt
   const navDate = props.navDate
@@ -80,13 +71,13 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
     {
       cell: 'estimated-nav-cell',
       colKey: 'estimatedChangePercent',
-      sorter: createFundRowComparator('estimatedChangePercent'),
+      sorter: true,
       title: () => renderQuoteTitle('净值估算', estimatedAt),
     },
     {
       cell: 'nav-cell',
       colKey: 'dailyChangePercent',
-      sorter: createFundRowComparator('dailyChangePercent'),
+      sorter: true,
       title: () => renderQuoteTitle('单位净值', navDate),
     },
   ]
@@ -104,43 +95,43 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
       {
         cell: 'estimated-income-cell',
         colKey: 'estimatedIncome',
-        sorter: createFundRowComparator('estimatedIncome'),
+        sorter: true,
         title: () => renderQuoteTitle('估算收益', estimatedAt),
       },
       {
         cell: 'today-income-cell',
         colKey: 'todayIncome',
-        sorter: createFundRowComparator('todayIncome'),
+        sorter: true,
         title: () => renderQuoteTitle('今日收益', navDate),
       },
       {
         cell: 'yesterday-income-cell',
         colKey: 'yesterdayIncome',
-        sorter: createFundRowComparator('yesterdayIncome'),
+        sorter: true,
         title: () => renderQuoteTitle('昨日收益', navDate),
       },
       ...quoteColumns,
       {
         cell: 'holding-income-cell',
         colKey: 'holdingIncomePercent',
-        sorter: createFundRowComparator('holdingIncomePercent'),
+        sorter: true,
         title: '持仓收益',
       },
       {
         cell: 'holding-amount-cell',
         colKey: 'holdingAmount',
-        sorter: createFundRowComparator('holdingAmount'),
+        sorter: true,
         title: '持仓金额',
       },
       {
         cell: 'holding-days-cell',
         colKey: 'holdingDays',
-        sorter: createFundRowComparator('holdingDays'),
+        sorter: true,
         title: '持有天数',
       },
       ...returnColumns.map((column) => ({
         ...column,
-        sorter: createFundRowComparator(column.colKey),
+        sorter: true,
       })),
       actionColumn,
     ]
@@ -151,7 +142,7 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
     ...quoteColumns,
     ...returnColumns.map((column) => ({
       ...column,
-      sorter: createFundRowComparator(column.colKey),
+      sorter: true,
     })),
     actionColumn,
   ]
@@ -164,36 +155,27 @@ const moreActionOptions = [
   { content: '记录卖出', value: 'sell' },
 ] satisfies NonNullable<DropdownProps['options']>
 
-function handleDataChange(rows: FundRowViewModel[]): void {
-  tableRows.value = props.sort ? moveMissingFundRowsLast(rows, props.sort.sortBy) : rows
-}
-
-function handleSortChange(value: unknown, options: SortOptions<FundRowViewModel>): void {
+function handleSortChange(value: unknown): void {
   if (!isTableSort(value)) {
-    tableRows.value = options.currentDataSource ?? tableRows.value
     emit('sortChange', null)
     return
   }
-  const sort: FundSort = {
+  emit('sortChange', {
     descending: value.descending,
-    sortBy: value.sortBy as FundSortField,
-  }
-  tableRows.value = moveMissingFundRowsLast(
-    options.currentDataSource ?? tableRows.value,
-    sort.sortBy,
-  )
-  emit('sortChange', sort)
+    sortBy: value.sortBy,
+  })
 }
 
 function isTableSort(
   value: unknown,
-): value is { readonly descending: boolean; readonly sortBy: string } {
+): value is { readonly descending: boolean; readonly sortBy: FundSortField } {
   return (
     typeof value === 'object' &&
     value !== null &&
     !Array.isArray(value) &&
     'sortBy' in value &&
     typeof value.sortBy === 'string' &&
+    sortableFields.has(value.sortBy as FundSortField) &&
     'descending' in value &&
     typeof value.descending === 'boolean'
   )
@@ -245,7 +227,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 <template>
   <t-primary-table
     :columns="columns"
-    :data="tableRows"
+    :data="rows"
     :loading="loading"
     :sort="sort ?? undefined"
     size="small"
@@ -254,7 +236,6 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     row-key="code"
     table-layout="fixed"
     table-content-width="1380px"
-    @data-change="handleDataChange"
     @sort-change="handleSortChange"
   >
     <template #name-cell="{ row }">

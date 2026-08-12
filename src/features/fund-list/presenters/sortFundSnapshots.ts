@@ -20,13 +20,13 @@ export function sortFundRows(
   return moveMissingFundRowsLast(sortedRows, sort.sortBy)
 }
 
-export function createFundRowComparator(
+function createFundRowComparator(
   field: FundSortField,
 ): (left: FundRowViewModel, right: FundRowViewModel) => number {
   return (left, right) => compareFundSortValues(left.sortValues[field], right.sortValues[field])
 }
 
-export function moveMissingFundRowsLast(
+function moveMissingFundRowsLast(
   rows: readonly FundRowViewModel[],
   field: FundSortField,
 ): FundRowViewModel[] {

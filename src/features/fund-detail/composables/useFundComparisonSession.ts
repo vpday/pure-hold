@@ -5,39 +5,47 @@ import {
   type FundReinvestedNavResult,
 } from '@/domains/funds/models/fundReinvestedNav.ts'
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
-import { defaultFundDrawdownRange } from '../config/fundDrawdownRangeOptions.ts'
-import {
-  calculateFundDrawdownComparison,
-  type FundDrawdownComparisonResult,
-  type FundDrawdownRange,
-} from '../models/fundDrawdownComparison.ts'
 import type { FundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
 import type { FundHistoryDataSource } from './useFundHistoryDataSource.ts'
 
-interface SuccessfulInputs {
+export interface FundComparisonInputs {
   readonly benchmark: IndexPerformanceHistory
   readonly fund: FundReinvestedNavResult
 }
 
-export function useFundDrawdownComparison(
+interface FundComparisonResult {
+  readonly sourceIssues: {
+    readonly benchmark: readonly unknown[]
+    readonly fund: readonly unknown[]
+  }
+}
+
+export interface FundComparisonCalculationAdapter<TRange, TResult extends FundComparisonResult> {
+  readonly defaultRange: TRange
+  readonly initialLoadError: string
+  calculate(inputs: FundComparisonInputs, range: TRange): TResult
+}
+
+export function useFundComparisonSession<TRange, TResult extends FundComparisonResult>(
   historyDataSource: FundHistoryDataSource,
   benchmarkDataSource: FundBenchmarkDataSource,
+  calculation: FundComparisonCalculationAdapter<TRange, TResult>,
 ) {
   const currentFundCode = ref<string>()
-  const data = shallowRef<FundDrawdownComparisonResult>()
+  const data = shallowRef<TResult>()
   const error = ref('')
   const isLoading = ref(false)
-  const selectedRange = ref<FundDrawdownRange>(defaultFundDrawdownRange)
+  const selectedRange = ref<TRange>(calculation.defaultRange)
   const warning = ref('')
   let active = false
-  let lastSuccessfulInputs: SuccessfulInputs | undefined
+  let lastSuccessfulInputs: FundComparisonInputs | undefined
   let requestGeneration = 0
   let activeRequest:
     | {
         readonly controller: AbortController
         readonly fundCode: string
         readonly generation: number
-        readonly promise: Promise<SuccessfulInputs>
+        readonly promise: Promise<FundComparisonInputs>
       }
     | undefined
 
@@ -55,7 +63,7 @@ export function useFundDrawdownComparison(
     await request(false)
   }
 
-  function selectRange(range: FundDrawdownRange): void {
+  function selectRange(range: TRange): void {
     selectedRange.value = range
     if (lastSuccessfulInputs) applyInputs(lastSuccessfulInputs)
   }
@@ -91,7 +99,7 @@ export function useFundDrawdownComparison(
     } catch (requestError) {
       if (!isCurrentRequest(fundCode, pending.generation) || isAbortError(requestError)) return
       if (data.value) warning.value = '刷新失败，当前展示旧数据'
-      else error.value = '回撤对比加载失败，请稍后重试'
+      else error.value = calculation.initialLoadError
     } finally {
       if (isCurrentRequest(fundCode, pending.generation)) isLoading.value = false
     }
@@ -118,12 +126,8 @@ export function useFundDrawdownComparison(
     return pending
   }
 
-  function applyInputs(inputs: SuccessfulInputs): void {
-    const result = calculateFundDrawdownComparison(
-      inputs.fund,
-      inputs.benchmark,
-      selectedRange.value,
-    )
+  function applyInputs(inputs: FundComparisonInputs): void {
+    const result = calculation.calculate(inputs, selectedRange.value)
     data.value = result
     error.value = ''
     warning.value =
@@ -141,7 +145,7 @@ export function useFundDrawdownComparison(
     error.value = ''
     isLoading.value = false
     lastSuccessfulInputs = undefined
-    selectedRange.value = defaultFundDrawdownRange
+    selectedRange.value = calculation.defaultRange
     warning.value = ''
   }
 

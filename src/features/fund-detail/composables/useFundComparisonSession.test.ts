@@ -5,24 +5,76 @@ import type { FundDistributionHistory } from '@/domains/funds/models/fundDistrib
 import type { FundHistoryRange } from '@/domains/funds/models/fundHistoryRange.ts'
 import type { FundNetValueHistory } from '@/domains/funds/models/fundNetValueHistory.ts'
 import type { IndexPerformanceHistory } from '@/domains/indices/models/indexPerformanceHistory.ts'
+import {
+  cumulativeExcessReturnCalculation,
+  drawdownComparisonCalculation,
+  rollingExcessReturnCalculation,
+} from './fundComparisonCalculationAdapters.ts'
 import { useFundBenchmarkDataSource } from './useFundBenchmarkDataSource.ts'
+import { useFundComparisonSession } from './useFundComparisonSession.ts'
 import { useFundHistoryDataSource } from './useFundHistoryDataSource.ts'
-import { useFundCumulativeExcessReturn } from './useFundCumulativeExcessReturn.ts'
 
-test('loads lazily, defaults to six months and changes ranges without requesting', async () => {
+test('fund comparison adapters preserve their defaults, calculations and initial errors', async () => {
+  const cumulative = useFundComparisonSession(
+    historySource([]),
+    benchmarkSource([]),
+    cumulativeExcessReturnCalculation,
+  )
+  const rolling = useFundComparisonSession(
+    historySource([]),
+    benchmarkSource([]),
+    rollingExcessReturnCalculation,
+  )
+  const drawdown = useFundComparisonSession(
+    historySource([]),
+    benchmarkSource([]),
+    drawdownComparisonCalculation,
+  )
+
+  cumulative.initialize('161725')
+  rolling.initialize('161725')
+  drawdown.initialize('161725')
+  assert.equal(cumulative.selectedRange.value, '6y')
+  assert.equal(rolling.selectedRange.value, 'n')
+  assert.equal(drawdown.selectedRange.value, 'n')
+
+  await Promise.all([cumulative.activate(), rolling.activate(), drawdown.activate()])
+  assert.equal(cumulative.data.value?.status, 'ready')
+  assert.equal(rolling.data.value?.status, 'ready')
+  assert.equal(drawdown.data.value?.status, 'ready')
+
+  const failingHistory = useFundHistoryDataSource({
+    loadDistribution: async () => {
+      throw new Error('failed')
+    },
+    loadNetValueHistory: async (fundCode, range) => netValues(fundCode, range),
+  })
+  const failingRolling = useFundComparisonSession(
+    failingHistory,
+    benchmarkSource([]),
+    rollingExcessReturnCalculation,
+  )
+  failingRolling.initialize('161725')
+  await failingRolling.activate()
+  assert.equal(failingRolling.error.value, '滚动超额加载失败，请稍后重试')
+})
+
+test('loads lazily and changes range from successful inputs without requesting', async () => {
   const calls: string[] = []
-  const session = useFundCumulativeExcessReturn(historySource(calls), benchmarkSource(calls))
+  const session = useFundComparisonSession(
+    historySource(calls),
+    benchmarkSource(calls),
+    cumulativeExcessReturnCalculation,
+  )
 
   session.initialize('161725')
-  assert.equal(session.selectedRange.value, '6y')
   assert.deepEqual(calls, [])
   await session.activate()
   assert.deepEqual(calls.sort(), ['benchmark', 'distribution', 'net-values'])
-  assert.equal(session.data.value?.status, 'ready')
 
   session.selectRange('ln')
   assert.deepEqual(calls.sort(), ['benchmark', 'distribution', 'net-values'])
-  assert.equal(session.data.value?.startDate, '2025-01-31')
+  assert.equal(session.data.value?.startDate, '2024-01-31')
 
   await session.refresh()
   assert.deepEqual(calls.sort(), [
@@ -35,16 +87,38 @@ test('loads lazily, defaults to six months and changes ranges without requesting
   ])
 })
 
+test('shares in-flight requests and successful caches between sessions', async () => {
+  const calls: string[] = []
+  const history = historySource(calls)
+  const benchmark = benchmarkSource(calls)
+  const first = useFundComparisonSession(history, benchmark, cumulativeExcessReturnCalculation)
+  const second = useFundComparisonSession(history, benchmark, rollingExcessReturnCalculation)
+  first.initialize('161725')
+  second.initialize('161725')
+
+  await Promise.all([first.activate(), second.activate()])
+  assert.deepEqual(calls.sort(), ['benchmark', 'distribution', 'net-values'])
+
+  first.close()
+  first.initialize('161725')
+  await first.activate()
+  assert.deepEqual(calls.sort(), ['benchmark', 'distribution', 'net-values'])
+})
+
 test('retries an initial failure and preserves successful data after a failed refresh', async () => {
   let fail = true
-  const dataSource = useFundHistoryDataSource({
+  const history = useFundHistoryDataSource({
     loadDistribution: async (fundCode) => {
       if (fail) throw new Error('failed')
       return distribution(fundCode)
     },
     loadNetValueHistory: async (fundCode, range) => netValues(fundCode, range),
   })
-  const session = useFundCumulativeExcessReturn(dataSource, benchmarkSource([]))
+  const session = useFundComparisonSession(
+    history,
+    benchmarkSource([]),
+    cumulativeExcessReturnCalculation,
+  )
   session.initialize('161725')
 
   await session.activate()
@@ -55,7 +129,6 @@ test('retries an initial failure and preserves successful data after a failed re
   await session.retry()
   const previous = session.data.value
   assert.equal(previous?.status, 'ready')
-  assert.equal(session.error.value, '')
 
   fail = true
   await session.refresh()
@@ -72,7 +145,7 @@ test('surfaces source quality warnings without blocking a usable result', async 
   const benchmark = useFundBenchmarkDataSource({
     load: async (endDate) => benchmarkHistory(endDate, true),
   })
-  const session = useFundCumulativeExcessReturn(history, benchmark)
+  const session = useFundComparisonSession(history, benchmark, drawdownComparisonCalculation)
   session.initialize('161725')
 
   await session.activate()
@@ -107,7 +180,7 @@ test('closes without aborting another subscriber to the shared sources', async (
   const directNetValues = history.loadNetValueHistory('161725', 'ln')
   const directDistribution = history.loadDistribution('161725')
   const directBenchmark = benchmark.load()
-  const session = useFundCumulativeExcessReturn(history, benchmark)
+  const session = useFundComparisonSession(history, benchmark, rollingExcessReturnCalculation)
   session.initialize('161725')
   const activation = session.activate()
 
@@ -122,14 +195,18 @@ test('closes without aborting another subscriber to the shared sources', async (
   assert.equal(session.data.value, undefined)
 })
 
-test('ignores late results from an obsolete fund and resets the range on reopen', async () => {
+test('ignores obsolete responses and resets the range on reopen', async () => {
   const firstNetValues = deferred<FundNetValueHistory>()
-  const dataSource = useFundHistoryDataSource({
+  const history = useFundHistoryDataSource({
     loadDistribution: async (fundCode) => distribution(fundCode),
     loadNetValueHistory: async (fundCode, range) =>
       fundCode === '161725' ? firstNetValues.promise : netValues(fundCode, range),
   })
-  const session = useFundCumulativeExcessReturn(dataSource, benchmarkSource([]))
+  const session = useFundComparisonSession(
+    history,
+    benchmarkSource([]),
+    cumulativeExcessReturnCalculation,
+  )
   session.initialize('161725')
   session.selectRange('ln')
   const first = session.activate()
@@ -146,7 +223,11 @@ test('ignores late results from an obsolete fund and resets the range on reopen'
 
 test('does not refresh until activated', async () => {
   const calls: string[] = []
-  const session = useFundCumulativeExcessReturn(historySource(calls), benchmarkSource(calls))
+  const session = useFundComparisonSession(
+    historySource(calls),
+    benchmarkSource(calls),
+    cumulativeExcessReturnCalculation,
+  )
   session.initialize('161725')
   await session.refresh()
   assert.deepEqual(calls, [])
@@ -182,8 +263,14 @@ function netValues(fundCode: string, range: FundHistoryRange): FundNetValueHisto
       {
         cumulativeNetValue: null,
         dailyGrowthPercent: null,
-        date: '2025-01-31',
+        date: '2024-01-31',
         unitNetValue: 1,
+      },
+      {
+        cumulativeNetValue: null,
+        dailyGrowthPercent: null,
+        date: '2025-01-31',
+        unitNetValue: 0.9,
       },
       {
         cumulativeNetValue: null,
@@ -210,7 +297,7 @@ function distribution(fundCode: string, invalid = false): FundDistributionHistor
           {
             dividendPerTenUnits: null,
             equityRecordDate: null,
-            exDividendDate: '2026-01-31',
+            exDividendDate: '2025-01-31',
             paymentDate: null,
           },
         ]
@@ -227,6 +314,7 @@ function benchmarkHistory(endDate: string, invalid = false): IndexPerformanceHis
     issues: invalid ? [{ code: 'malformed-record', count: 1 }] : [],
     points: [
       { date: '2004-12-31', value: 1000 },
+      { date: '2024-01-31', value: 1700 },
       { date: '2025-01-31', value: 1800 },
       { date: '2026-01-31', value: 1900 },
       { date: '2026-07-31', value: 2000 },

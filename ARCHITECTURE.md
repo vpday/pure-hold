@@ -134,7 +134,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`SettingsEntry` 是应用设置的 Feature 入口，负责草稿、响应式 Dialog/Drawer、浏览器 Clipboard/File/Download 适配和用户确认；纯传输解析与跨 Store 回滚协调留在 `src/app/settings/`。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、应用刷新偏好到指数轮询 seam 的连接、全局手动刷新订阅、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责从 Funds Store 派生系统分类和自定义分类；仅在“持仓”分类中组合当前快照、上一份确认快照和汇总持仓，通过纯领域计算生成持仓指标，再由 presenter 统一格式化金额、百分比、日期和排序原始值。桌面表格和移动卡片只消费行模型，并把操作入口连接到同一个 `FundDetailEntry` 和 `FundEditEntry`。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、行投影、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 ## 数据流与 Seams
 
@@ -308,9 +308,9 @@ FundDetailEntry 当前基金代码
      -> toFundMetricsSectionModel -> FundMetricsSection
 ```
 
-净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额、回撤对比、数据指标和风险比较属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；它们共用 `src/features/fund-detail/models/fundBenchmarkTimeSeriesAlignment.ts`，在 feature 边界执行有效点过滤、升序排序、重复日期第一条有效记录优先、精确共同日期交集和共同截止日。只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
+净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额和回撤对比共同使用 `useFundComparisonSession`；该 session 隐藏三路输入加载、复权构造、generation、取消、懒激活、刷新保旧数据、source warning 和本地范围重算，三个 calculation adapters 只保存默认范围、首次错误文案和计算函数。数据指标继续使用独立会话，因为它同时维护收益、风险、质量和可编辑参数的原子结果。比较图表、数据指标和风险比较属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；它们共用 `src/features/fund-detail/models/fundBenchmarkTimeSeriesAlignment.ts`，在 feature 边界执行有效点过滤、升序排序、重复日期第一条有效记录优先、精确共同日期交集和共同截止日。只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
 
-业绩表现的七个面板由 `fundPerformancePanelRegistry` 以稳定 ID、kind、顺序、能力和 renderer/adapter 键静态描述；`useFundPerformance` 为每个详情会话创建独立的运行时 adapter，并只向调用方暴露 `FundPerformanceSectionModel` 的有序 `panels` 集合和带判别类型的 action dispatcher。组件 renderer 只负责把 panel union 窄化为专属图表或分红送配表格，分红送配保持独立的 `distribution` table kind，不进入 `FundPerformanceView` 或当前图表刷新目标。registry、adapter 和 panel model 均属于 fund-detail Feature，不进入 Store、localStorage 或 Service Worker；`FundDetailEntry` 仍持有并注入共享 history/benchmark data source，并负责其 dispose 生命周期。
+业绩表现的七个 panel definitions 各自集中稳定 descriptor、运行时 session、presenter、model、生命周期和带判别类型的 panel action；`useFundPerformance` 只协调有序 definitions、active view、基础资料通知、跨 panel 刷新和详情关闭。同步 renderer registry 是独立 view seam，以 panel ID 映射命名导入的 Vue renderer；Host 只解析动态 renderer 和转发 props/events，不包含 panel-specific 分支。分红送配保持独立的 `distribution` table kind，不进入 `FundPerformanceView` 或当前图表刷新目标。definitions、renderer registry 和 panel model 均属于 fund-detail Feature，不进入 Store、localStorage 或 Service Worker；`FundDetailEntry` 仍持有并注入共享 history/benchmark data source，并负责其 dispose 生命周期。
 
 复权净值把现金分红按除息日单位净值立即再投资，并把份额折算计入连续收益。`fundBenchmarkTimeSeriesAlignment` 集中基金与 `H00300` 的共同日期口径：先保留第一条有效重复记录并排序，再取精确日期交集与最近共同截止日；不做前值填充、最近日期匹配或插值。`calculateFundCumulativeExcessReturn` 按共同截止日选择 UTC 日历范围，只保留范围内精确共同日期并把第一个共同点归零；逐点复合超额复用 `(1 + 基金收益) / (1 + 基准收益) - 1`，范围切换仅重算内存结果。`calculateFundRollingExcessReturn` 复用成立来的精确共同日序列，在每个已完成日历月保留最后一个共同观测，并且只把当前月与准确向前12个日历月的端点配对；当前请求日处于月中时排除当月，处于日历月末时允许使用当月最后共同交易日。近 1/3/5 年与成立来范围只裁剪已经完成的滚动结果，年轻基金达到固定窗口后允许部分展示；每点基金、基准和超额仍使用复合增长公式，现有累计超额的固定起点累计语义保持不变。`calculateFundDrawdownComparison` 消费同一组共同点，随后通过 `calculateDrawdownPath` 对两条单序列按日期排序、第一条重复优先并维护各自运行中高点；两条路径首点为 `0`，其余值非正，领域最大回撤保留负号。`calculateFundMetricsComparison` 与风险比较也只把精确共同点传给指标计算；风险数值使用共同点，覆盖率、连续缺口和最小样本判断仍使用规范化的 H00300 预期日历。风险计算的样本标准差、252 期年化、365.2425 日 CAGR、无风险/目标收益率、Sharpe、Sortino、Calmar 和质量阈值不因对齐重构改变。无风险利率和目标收益率草稿、已应用参数及最近成功计算输入只存在于 `useFundMetrics` 会话内，不进入 Pinia 或持久化；点击应用只基于内存输入重算，不发网络请求。无效单位净值、无效或无法对齐的企业行动以及重复折算会被排除并形成结构化问题；中证响应部分不完整时展示可计算结果。指数刷新失败保留旧缓存和旧对比模型。领域层保留完整数值精度，Presenter 才负责两位百分比、显式正负号和展示语义。
 
@@ -327,15 +327,16 @@ FundDetailEntry 当前基金代码
 - `fetchCsindexPerformanceHistory` 隐藏中证代理 URL、固定 `H00300` 和 `20041231`、上海动态结束日、取消、响应身份校验、日期排序和正数点位归一化。
 - `fetchTiantianFundBasicInfo` 隐藏 `FundBaseInfos` 表单、UUID、响应校验，以及基础资料和交易规则字段的领域归一化。
 - `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
-- `fundPerformancePanelRegistry` 隐藏七个业绩面板的稳定目录、能力、范围键、激活策略和 renderer/adapter 关联。
-- `createFundPerformancePanelAdapters` 隐藏七个异构性能会话的生命周期组合、presenter 投影和窄能力路由；它不拥有共享 data source。
+- `FundPerformancePanelDefinition` 隐藏单个业绩面板的 descriptor、运行时 session、presenter、model、生命周期和 typed action；有序 definitions 是新增或调整面板的运行时 seam。
+- `fundPerformancePanelRendererRegistry` 隐藏 panel ID 到同步 Vue renderer 的映射；renderer 只消费 props 并发送 typed action。
 - `useFundPerformance` 隐藏性能 panel 集合的聚合、图表 activeView、action dispatcher、可见性刷新以及详情会话关闭语义。
 - `useFundCumulativeReturns` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
 - `FundHistoryDataSource` 隐藏净值历史与分红送配的详情级成功缓存、同键 Promise 复用和多消费者取消。
 - `FundBenchmarkDataSource` 隐藏固定全收益指数的详情级单序列成功缓存、全量 force 替换、进行中 Promise 复用和多消费者取消。
 - `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、重试和过期响应隔离。
 - `useFundReinvestedNavHistory` 隐藏成立来复权计算、本地范围截取、共享缓存订阅、重试和过期响应隔离。
-- `useFundCumulativeExcessReturn` 隐藏三份历史的并行订阅、懒激活、本地范围重算、刷新保旧数据、取消和过期响应隔离。
+- `useFundComparisonSession` 隐藏三个比较图表共同的三份历史并行订阅、复权构造、懒激活、本地范围重算、刷新保旧数据、取消和过期响应隔离；calculation adapters 只表达算法差异。
+- `useFundListSession` 隐藏基金分类恢复、每分类排序、持仓指标、行投影、日期标题和刷新 notices；轮询、Toast、Store 命令和 Feature 入口仍由 `FundListSection` 拥有。
 - `fundBenchmarkTimeSeriesAlignment` 隐藏基金与 H00300 的有效点过滤、第一条重复日期优先、排序、精确日期交集、共同截止日和基准预期日历。
 - `calculateFundCumulativeExcessReturn` 隐藏共同对齐结果、共同截止、UTC 范围、首点归零和逐点复合相对收益口径。
 - `useFundRollingExcessReturn` 隐藏三份共享历史的懒订阅、近 1 年默认、四项本地范围重算、刷新保旧数据、取消和过期响应隔离。
