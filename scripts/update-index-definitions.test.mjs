@@ -85,8 +85,26 @@ test('preserves nullable classification fields', () => {
   assert.equal(definition?.indexType, null)
 })
 
-test('rejects duplicate quote codes', () => {
-  assert.throws(() => normalizeIndexDefinitions([record(), record()]), /Duplicate quote code/)
+test('keeps the first definition and warns on duplicate quote codes', () => {
+  const warnings = []
+  const originalWarn = console.warn
+  console.warn = (...args) => warnings.push(args)
+
+  try {
+    const definitions = normalizeIndexDefinitions([
+      record({ INDEXCODE: '399416', NEWINDEXTEXCH: '0', INDEXNAME: '首条名称' }),
+      record({ INDEXCODE: '399416', NEWINDEXTEXCH: '0', INDEXNAME: '重复名称' }),
+    ])
+
+    assert.equal(definitions.length, 1)
+    assert.equal(definitions[0]?.quoteCode, '0.399416')
+    assert.equal(definitions[0]?.name, '首条名称')
+    assert.equal(warnings.length, 1)
+    assert.match(warnings[0]?.[0], /Duplicate quote code.*0\.399416/)
+    assert.equal(warnings[0]?.[1]?.quoteCode, '0.399416')
+  } finally {
+    console.warn = originalWarn
+  }
 })
 
 test('rejects mismatched sector lists', () => {

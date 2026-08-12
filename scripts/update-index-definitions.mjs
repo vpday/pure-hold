@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { rm, rename, writeFile } from 'node:fs/promises'
+import { rename, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const endpoint = 'https://fundcomapi.tiantianfunds.com/mm/FundIndex/FundZSBIndexRankV2'
@@ -22,18 +22,25 @@ export function parseIndexRankPage(value) {
 }
 
 export function normalizeIndexDefinitions(records) {
-  const definitions = records
-    .filter((record) => isRecord(record) && record.ISQUOT === '1')
-    .map(normalizeRecord)
-  definitions.sort((left, right) => left.quoteCode.localeCompare(right.quoteCode, 'en'))
-
   const quoteCodes = new Set()
-  for (const definition of definitions) {
-    if (quoteCodes.has(definition.quoteCode)) {
-      throw new Error(`Duplicate quote code: ${definition.quoteCode}`)
-    }
-    quoteCodes.add(definition.quoteCode)
-  }
+  const definitions = records
+    .filter(
+      (record) =>
+        isRecord(record) && record.ISQUOT === '1' && toRefreshMarketCodes(record) !== null,
+    )
+    .map(normalizeRecord)
+    .filter((definition) => {
+      if (quoteCodes.has(definition.quoteCode)) {
+        console.warn(
+          `Duplicate quote code ignored, keeping first: ${definition.quoteCode}`,
+          definition,
+        )
+        return false
+      }
+      quoteCodes.add(definition.quoteCode)
+      return true
+    })
+  definitions.sort((left, right) => left.quoteCode.localeCompare(right.quoteCode, 'en'))
 
   return definitions
 }
@@ -91,11 +98,14 @@ function normalizeRecord(record) {
     typeCode: nullableString(record.TYPE_CODE, 'TYPE_CODE'),
     indexType,
     quoteMarketCode,
-    refreshMarketCodes: toRefreshMarketCodes(quoteMarketCode, securityCode),
+    refreshMarketCodes: toRefreshMarketCodes(record),
   }
 }
 
-function toRefreshMarketCodes(quoteMarketCode, securityCode) {
+function toRefreshMarketCodes(record) {
+  const securityCode = requiredString(record.INDEXCODE, 'INDEXCODE')
+  const quoteMarketCode = requiredString(record.NEWINDEXTEXCH, 'NEWINDEXTEXCH')
+
   if (quoteMarketCode === '0') {
     return ['SZ']
   }
@@ -132,7 +142,8 @@ function toRefreshMarketCodes(quoteMarketCode, securityCode) {
     }
   }
 
-  throw new Error(`No refresh market mapping for ${quoteMarketCode}.${securityCode}`)
+  console.warn(`No refresh market mapping for ${quoteMarketCode}.${securityCode}`, record)
+  return null
 }
 
 function requiredString(value, field) {
@@ -184,7 +195,7 @@ async function fetchPage(pageIndex) {
     sortType: 'DESC',
     secCode: '0',
     type: '0',
-    valuationType: '0',
+    valuationType: '',
     plat: 'Web',
     product: 'EFund',
     version: '6.5.5',
