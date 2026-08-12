@@ -34,21 +34,21 @@ function isPlaceholderPair(first: string, second: string): boolean {
 <template>
   <t-card :bordered="true" class="w-full">
     <div class="flex items-start justify-between gap-3">
-      <button type="button" class="min-w-0 flex-1 text-left" @click="emit('detail', row.code)">
+      <button type="button" class="min-w-0 text-left" @click="emit('detail', row.code)">
         <span class="block font-medium">{{ row.name }}</span>
-        <span class="block font-mono text-xs tabular-nums text-(--td-text-color-secondary)">
-          {{ row.code }}
-        </span>
-        <span v-if="row.tags.length" class="mt-1 flex flex-wrap gap-1">
-          <t-tag
-            v-for="tag in row.tags"
-            :key="tag"
-            size="small"
-            :theme="fundTagTheme(tag)"
-            variant="light"
-          >
-            {{ tag }}
-          </t-tag>
+        <span class="mt-1 flex flex-wrap gap-2 items-center">
+          <t-tag color="var(--td-gray-color-8)" size="small" variant="light">{{ row.code }}</t-tag>
+          <span v-if="row.tags.length" class="flex flex-wrap gap-1">
+            <t-tag
+              v-for="tag in row.tags"
+              :key="tag"
+              size="small"
+              :theme="fundTagTheme(tag)"
+              variant="light"
+            >
+              {{ tag }}
+            </t-tag>
+          </span>
         </span>
       </button>
       <t-button
@@ -61,7 +61,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
       </t-button>
     </div>
 
-    <div class="mt-4 grid gap-3" :class="holdingMode ? 'grid-cols-3' : 'grid-cols-2'">
+    <div class="mt-4 grid gap-3 grid-cols-4">
       <div v-if="holdingMode && row.holding">
         <p class="text-xs text-(--td-text-color-secondary)">
           {{ row.holding.currentIncome.label }}
@@ -236,7 +236,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
 }
 
 .fund-holding-grid {
-  @apply grid min-w-sm grid-cols-4 gap-x-3 text-left;
+  @apply grid grid-cols-4 gap-3 text-left;
 }
 
 .fund-returns-grid {

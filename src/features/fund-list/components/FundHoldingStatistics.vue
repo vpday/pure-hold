@@ -96,7 +96,7 @@ function formatAbsolute(value: number): string {
         :loading="loading"
       />
 
-      <div class="mt-4 pt-4 border-t border-(--td-component-stroke)">
+      <div class="mt-3 pt-4 border-t border-(--td-component-stroke)">
         <div class="flex flex-row justify-between text-left">
           <t-skeleton :loading="loading" :row-col="[1, 1, 1]">
             <p class="whitespace-nowrap text-sm text-(--td-text-color-secondary)">

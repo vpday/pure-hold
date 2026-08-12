@@ -134,7 +134,7 @@ function openIndexSettings(): void {
       :footer="false"
       header="自选指数"
       placement="bottom"
-      size="100vh"
+      size="100dvh"
     >
       <IndexQuoteList
         :groups="viewModel.groups"
