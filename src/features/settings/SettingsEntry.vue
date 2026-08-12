@@ -41,10 +41,10 @@ const overwriteMessage = computed(
 )
 
 const transferCoordinator = createConfigurationTransferCoordinator({
+  commitIndexGroups: indexStore.commitGroups,
   getFundSettings: fundStore.getSettingsSnapshot,
   getIndexGroups: indexStore.getSettingsSnapshot,
   replaceFundSettings: fundStore.replaceSettingsPersisted,
-  replaceIndexGroups: indexStore.replaceGroupsPersisted,
 })
 
 function open(): void {

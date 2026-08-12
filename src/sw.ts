@@ -1,11 +1,9 @@
 import {
-  handleTiantianFundSnapshotPostRequest,
-  matchesTiantianFundSnapshotPostRequest,
-} from '@/pwa/cache/tiantianFundSnapshotPostCacheAdapter.ts'
-import {
-  handleTiantianMmGetRequest,
-  matchesTiantianMmGetRequest,
-} from '@/pwa/cache/tiantianMmGetCacheAdapter.ts'
+  createCacheRouteRegistry,
+  type CacheRouteRegistry,
+} from '@/pwa/cache/cacheRouteRegistry.ts'
+import { tiantianFundSnapshotPostCacheRoute } from '@/pwa/cache/tiantianFundSnapshotPostCacheAdapter.ts'
+import { tiantianMmGetCacheRoute } from '@/pwa/cache/tiantianMmGetCacheAdapter.ts'
 
 type ManifestEntry = string | { revision?: string; url: string }
 
@@ -42,6 +40,10 @@ type ServiceWorkerScope = typeof globalThis & {
 const serviceWorker = globalThis as ServiceWorkerScope
 const isServiceWorkerRuntime =
   typeof self !== 'undefined' && 'clients' in serviceWorker && 'skipWaiting' in serviceWorker
+const cacheRouteRegistry = createCacheRouteRegistry([
+  tiantianMmGetCacheRoute,
+  tiantianFundSnapshotPostCacheRoute,
+])
 
 if (isServiceWorkerRuntime) {
   void initializeServiceWorker()
@@ -63,12 +65,18 @@ async function initializeServiceWorker(): Promise<void> {
   })
 
   serviceWorker.addEventListener('fetch', (event) => {
-    if (matchesTiantianMmGetRequest(event.request)) {
-      event.respondWith(handleTiantianMmGetRequest(event.request))
-    } else if (matchesTiantianFundSnapshotPostRequest(event.request)) {
-      event.respondWith(handleTiantianFundSnapshotPostRequest(event.request))
-    }
+    handleCacheFetchEvent(event)
   })
+}
+
+export function handleCacheFetchEvent(
+  event: Pick<FetchEventLike, 'request' | 'respondWith'>,
+  registry: CacheRouteRegistry = cacheRouteRegistry,
+): void {
+  const resolution = registry.resolve(event.request)
+  if (resolution.handled) {
+    event.respondWith(resolution.route.handle(event.request))
+  }
 }
 
 function isSkipWaitingMessage(data: unknown): data is { type: 'SKIP_WAITING' } {

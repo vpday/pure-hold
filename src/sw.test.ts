@@ -17,6 +17,7 @@ import {
   cacheResponseSourceHeader,
   readCacheResponseMetadata,
 } from './shared/transport/cacheResponseMetadata.ts'
+import { handleCacheFetchEvent } from './sw.ts'
 
 test('matches only the intended Tiantian GET and snapshot POST requests', () => {
   assert.equal(
@@ -55,6 +56,33 @@ test('matches only the intended Tiantian GET and snapshot POST requests', () => 
     ),
     false,
   )
+})
+
+test('service worker responds only when the cache registry resolves one route', async () => {
+  const request = new Request('https://example.com/request')
+  const responses: Promise<Response>[] = []
+  const event = {
+    request,
+    respondWith(response: Promise<Response> | Response): void {
+      responses.push(Promise.resolve(response))
+    },
+  }
+
+  handleCacheFetchEvent(event, { resolve: () => ({ handled: false }) })
+  assert.equal(responses.length, 0)
+
+  handleCacheFetchEvent(event, {
+    resolve: () => ({
+      handled: true,
+      route: {
+        handle: async () => new Response('handled'),
+        id: 'test-route',
+        matches: () => true,
+      },
+    }),
+  })
+  assert.equal(responses.length, 1)
+  assert.equal(await (await responses[0]!).text(), 'handled')
 })
 
 test('applies the shared cache policy to Tiantian GET responses without snapshot metadata', async () => {

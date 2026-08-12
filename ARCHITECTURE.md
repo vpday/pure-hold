@@ -52,7 +52,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/app` 保存跨领域但仍属于本应用的协调能力。`src/app/settings` 保存应用级刷新偏好和纯配置传输协议；它通过 Domain facade 读写指数分组与基金设置，不读取原始 localStorage，也不接触行情快照或设备标识。
 
-`src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage，并由独立 adapter 描述具体请求的匹配、key、缓存名称和响应装饰。
+`src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage；每个 route object 将请求 matcher 与 handler 绑定，独立 adapter 描述具体请求的 key、缓存名称和响应装饰。
 
 `src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/persistence` 集中浏览器字符串存储的能力检测、原始读写结果和异常捕获；基金设置、指数分组、应用刷新偏好和天天基金 deviceid 仍分别拥有自己的 key、schema、校验、恢复与会话语义。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。
 
@@ -136,6 +136,8 @@ src/
 
 `FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、行投影、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
+详情图表共同使用 feature-local ECharts runtime 管理 DOM、实例和 observer；历史数据源共同使用请求池管理 pending 与订阅者。图表 option、业务展示语义、成功缓存、force 和交易日策略仍留在各自 component 或 data source adapter。
+
 ## 数据流与 Seams
 
 Seam 是模块向调用方暴露的稳定接口，调用方通过它使用能力，而不需要理解内部实现。
@@ -157,6 +159,19 @@ indexDefinitions.json
 ```
 
 后续定时刷新先由 `fetchTencentMarketStatus` 将 GBK 文本转换为腾讯交易中的市场代码集合，再按离线目录中每个指数的 `refreshMarketCodes` 筛选活动定义，并只把对应定义交给东方财富行情适配器。默认分组通过东方财富 `quoteCode` 引用定义，Store 仍以完整 `quoteCode` 形式的稳定指数 ID 合并行情。
+
+指数分组设置的写入路径是：
+
+```text
+IndexSettings Feature 草稿 / 配置导入
+  -> useIndexQuotesStore.commitGroups
+  -> createIndexSettingsCommandModule
+  -> validateIndexGroups（完整领域不变量）
+  -> saveIndexGroups
+  -> Store 私有运行时 apply
+```
+
+`commitGroups` 是指数分组的唯一公开写入口。UI 即时校验、配置导入和 storage load 最终都受同一严格 validator 约束；无效候选不写入、不应用，持久化失败保留旧运行时状态。损坏的已保存设置先备份原始值再恢复默认组；配置导入不静默过滤未知指数，也不部分应用无效分区。
 
 基金搜索与新增的数据流是：
 
@@ -310,6 +325,8 @@ FundDetailEntry 当前基金代码
 
 净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额和回撤对比共同使用 `useFundComparisonSession`；该 session 隐藏三路输入加载、复权构造、generation、取消、懒激活、刷新保旧数据、source warning 和本地范围重算，三个 calculation adapters 只保存默认范围、首次错误文案和计算函数。数据指标继续使用独立会话，因为它同时维护收益、风险、质量和可编辑参数的原子结果。比较图表、数据指标和风险比较属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；它们共用 `src/features/fund-detail/models/fundBenchmarkTimeSeriesAlignment.ts`，在 feature 边界执行有效点过滤、升序排序、重复日期第一条有效记录优先、精确共同日期交集和共同截止日。只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
 
+`createSharedRequestPool` 只拥有同 key pending、独立订阅取消、最后订阅者 abort、显式取消和 dispose；历史多 key 缓存、force 规则以及 benchmark 的上海日期失效仍由两个 data source adapter 拥有。七个详情 ECharts 使用点通过 `useEChartsRuntime` 共享容器尺寸、首次初始化、resize、条件 DOM 替换、observer 重绑、过期回调隔离和 scope dispose；runtime 不理解 series、tooltip、范围、主题色或可访问摘要，这些业务配置仍由各 component 和 option builder 拥有。
+
 业绩表现的七个 panel definitions 各自集中稳定 descriptor、运行时 session、presenter、model、生命周期和带判别类型的 panel action；`useFundPerformance` 只协调有序 definitions、active view、基础资料通知、跨 panel 刷新和详情关闭。同步 renderer registry 是独立 view seam，以 panel ID 映射命名导入的 Vue renderer；Host 只解析动态 renderer 和转发 props/events，不包含 panel-specific 分支。分红送配保持独立的 `distribution` table kind，不进入 `FundPerformanceView` 或当前图表刷新目标。definitions、renderer registry 和 panel model 均属于 fund-detail Feature，不进入 Store、localStorage 或 Service Worker；`FundDetailEntry` 仍持有并注入共享 history/benchmark data source，并负责其 dispose 生命周期。
 
 复权净值把现金分红按除息日单位净值立即再投资，并把份额折算计入连续收益。`fundBenchmarkTimeSeriesAlignment` 集中基金与 `H00300` 的共同日期口径：先保留第一条有效重复记录并排序，再取精确日期交集与最近共同截止日；不做前值填充、最近日期匹配或插值。`calculateFundCumulativeExcessReturn` 按共同截止日选择 UTC 日历范围，只保留范围内精确共同日期并把第一个共同点归零；逐点复合超额复用 `(1 + 基金收益) / (1 + 基准收益) - 1`，范围切换仅重算内存结果。`calculateFundRollingExcessReturn` 复用成立来的精确共同日序列，在每个已完成日历月保留最后一个共同观测，并且只把当前月与准确向前12个日历月的端点配对；当前请求日处于月中时排除当月，处于日历月末时允许使用当月最后共同交易日。近 1/3/5 年与成立来范围只裁剪已经完成的滚动结果，年轻基金达到固定窗口后允许部分展示；每点基金、基准和超额仍使用复合增长公式，现有累计超额的固定起点累计语义保持不变。`calculateFundDrawdownComparison` 消费同一组共同点，随后通过 `calculateDrawdownPath` 对两条单序列按日期排序、第一条重复优先并维护各自运行中高点；两条路径首点为 `0`，其余值非正，领域最大回撤保留负号。`calculateFundMetricsComparison` 与风险比较也只把精确共同点传给指标计算；风险数值使用共同点，覆盖率、连续缺口和最小样本判断仍使用规范化的 H00300 预期日历。风险计算的样本标准差、252 期年化、365.2425 日 CAGR、无风险/目标收益率、Sharpe、Sortino、Calmar 和质量阈值不因对齐重构改变。无风险利率和目标收益率草稿、已应用参数及最近成功计算输入只存在于 `useFundMetrics` 会话内，不进入 Pinia 或持久化；点击应用只基于内存输入重算，不发网络请求。无效单位净值、无效或无法对齐的企业行动以及重复折算会被排除并形成结构化问题；中证响应部分不完整时展示可计算结果。指数刷新失败保留旧缓存和旧对比模型。领域层保留完整数值精度，Presenter 才负责两位百分比、显式正负号和展示语义。
@@ -319,6 +336,7 @@ FundDetailEntry 当前基金代码
 - `fetchEastmoneyIndexQuotes` 隐藏 HTTPS、超时、每次请求生成的 UUID v4 设备标识、查询参数和东方财富字段协议。
 - `fetchTencentMarketStatus` 隐藏 GBK 解码、腾讯文本协议和主市场映射。
 - `useIndexQuotesStore` 隐藏请求去重、可见性轮询、市场门控、部分失败合并和旧数据保留。
+- `validateIndexGroups` 与 `createIndexSettingsCommandModule` 隐藏完整指数分组不变量和“校验、持久化、成功后应用”的唯一写顺序。
 - `toIndexOverviewViewModel` 隐藏分组组装、数字、时间、状态文案和涨跌语义格式化。
 - `useBreakpoints` 隐藏 Tailwind CSS 变量读取和 `matchMedia` 监听。
 - `fetchEastmoneyFundSearchPage` 隐藏基金搜索 URL、查询参数、UUID、超时、取消和第三方响应字段。
@@ -333,6 +351,8 @@ FundDetailEntry 当前基金代码
 - `useFundCumulativeReturns` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
 - `FundHistoryDataSource` 隐藏净值历史与分红送配的详情级成功缓存、同键 Promise 复用和多消费者取消。
 - `FundBenchmarkDataSource` 隐藏固定全收益指数的详情级单序列成功缓存、全量 force 替换、进行中 Promise 复用和多消费者取消。
+- `createSharedRequestPool` 隐藏同 key pending 复用、订阅者取消、底层 abort、失败广播和 dispose，不拥有成功缓存或日期策略。
+- `useEChartsRuntime` 隐藏详情图表的 DOM、ECharts instance、ResizeObserver 和销毁生命周期，不拥有图表 option。
 - `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、重试和过期响应隔离。
 - `useFundReinvestedNavHistory` 隐藏成立来复权计算、本地范围截取、共享缓存订阅、重试和过期响应隔离。
 - `useFundComparisonSession` 隐藏三个比较图表共同的三份历史并行订阅、复权构造、懒激活、本地范围重算、刷新保旧数据、取消和过期响应隔离；calculation adapters 只表达算法差异。
@@ -355,6 +375,7 @@ FundDetailEntry 当前基金代码
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
 - `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
 - `createCachePolicyHandler` 隐藏查询缓存的新鲜判断、网络访问、200 响应写入、过期清理、24 小时回退和容量淘汰；具体 HTTP 请求差异由两个 PWA adapter 提供。
+- `createCacheRouteRegistry` 要求 route 同时拥有 matcher 与 handler；只有唯一匹配会处理请求，重叠或 matcher 异常会记录错误并让 Service Worker 网络直通。
 - `readCacheResponseMetadata` 隐藏三个 transport header 的解析与缺失 metadata 时的网络时间 fallback，使 Funds Domain 不依赖 PWA 实现。
 - `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
 
@@ -387,11 +408,13 @@ FundDetailEntry 当前基金代码
 
 `useIndexQuotesStore` 是指数行情的唯一运行时状态所有者。Store 保存生成的完整离线目录，但首次可见加载只请求默认分组引用的活动定义，使闭市市场也能显示最近快照；后续刷新先读取腾讯市场状态，再按各活动定义的 `refreshMarketCodes` 筛选。Store 保证整个状态加行情请求链不并发，合并部分成功结果，失败时保留当前会话内最后有效数据，并根据页面可见性启停轮询。具体刷新间隔和实现以 `useIndexQuotesStore.ts` 为权威来源。
 
+指数分组通过 `createIndexSettingsCommandModule` 执行唯一公开提交：完整候选先由 `validateIndexGroups` 严格验证，再写入版本化 storage，成功后才由 Store 私有 callback 应用并重置相关行情生命周期。Feature 和 App 协调器不能分别调用保存与运行时替换原语。
+
 `useFundsStore` 是基金共享领域的公共 facade 和投影协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再替换设置投影；行情 runtime 独立持有 `snapshotsByCode`、`previousSnapshotsByCode`、刷新请求和元数据。确认日期严格推进时，当前确认快照成为上一份快照；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
 
 ### PWA 与缓存
 
-`vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。该入口只负责预缓存、用户确认后的版本切换、生命周期和查询缓存路由；请求匹配与 Cache Storage 实现在 `src/pwa/cache/`。两个查询 adapter 共用 `cachePolicy.ts` 的同一套新鲜判断、网络访问、过期回退和容量淘汰流程，HTTP 方法只决定匹配与 cache key，不决定缓存策略。
+`vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。该入口只负责预缓存、用户确认后的版本切换、生命周期和查询缓存路由；请求匹配与 Cache Storage 实现在 `src/pwa/cache/`。每个 production route 在同一 object 中绑定稳定 ID、matcher 与 handler，registry 执行 exclusive-match：0 个匹配不接管请求，唯一匹配才调用 handler，多路匹配或 matcher 异常记录 method、URL 和 route ID 后不调用 `respondWith`，由浏览器网络直通。两个查询 adapter 共用 `cachePolicy.ts` 的同一套新鲜判断、网络访问、过期回退和容量淘汰流程，HTTP 方法只决定匹配与 cache key，不决定缓存策略。
 
 实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。`tiantianMmGetCacheAdapter.ts` 只匹配天天基金 GET `/mm`、`/mm/**`；`tiantianFundSnapshotPostCacheAdapter.ts` 只在来源、精确路径、POST 方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时处理首页快照。固定的页面会话 deviceid 使相同天天基金请求可以复用缓存。
 
@@ -430,28 +453,30 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 ARCHITECTURE 记录稳定设计，不复制所有易变配置。具体事实以下列文件为准：
 
-| 事实                         | 权威来源                                          |
-| ---------------------------- | ------------------------------------------------- |
-| 依赖版本和命令               | `package.json`                                    |
-| Vite 插件、PWA 构建和分包    | `vite.config.ts`                                  |
-| Service Worker 运行时与路由  | `src/sw.ts`                                       |
-| 查询缓存共同策略             | `src/pwa/cache/cachePolicy.ts`                    |
-| 查询匹配、key 与缓存名称     | `src/pwa/cache/*CacheAdapter.ts`                  |
-| 缓存响应 metadata contract   | `src/shared/transport/cacheResponseMetadata.ts`   |
-| 浏览器字符串存储 Adapter     | `src/shared/persistence/browserStorageAdapter.ts` |
-| TypeScript 范围和约束        | `tsconfig*.json`                                  |
-| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`                 |
-| 离线指数目录                 | `indexDefinitions.json`                           |
-| 指数目录更新规则             | `scripts/update-index-definitions.mjs`            |
-| 默认指数组                   | `defaultIndexGroups.ts`                           |
-| 指数刷新行为                 | `useIndexQuotesStore.ts`                          |
-| 基金运行时状态形状           | `createFundMarketRuntime.ts`                      |
-| 基金设置形状                 | `fundSettings.ts`                                 |
-| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`                    |
-| 基金搜索协议                 | `services/eastmoney/`                             |
-| 基金实时行情、资料与历史协议 | `services/tiantian/`                              |
-| 基金状态与刷新行为           | `useFundsStore.ts`                                |
-| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                             |
-| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量         |
+| 事实                         | 权威来源                                                        |
+| ---------------------------- | --------------------------------------------------------------- |
+| 依赖版本和命令               | `package.json`                                                  |
+| Vite 插件、PWA 构建和分包    | `vite.config.ts`                                                |
+| Service Worker 运行时与路由  | `src/sw.ts`                                                     |
+| 缓存路由组合与排他匹配       | `src/pwa/cache/cacheRouteRegistry.ts`                           |
+| 查询缓存共同策略             | `src/pwa/cache/cachePolicy.ts`                                  |
+| 查询匹配、key 与缓存名称     | `src/pwa/cache/*CacheAdapter.ts`                                |
+| 缓存响应 metadata contract   | `src/shared/transport/cacheResponseMetadata.ts`                 |
+| 浏览器字符串存储 Adapter     | `src/shared/persistence/browserStorageAdapter.ts`               |
+| TypeScript 范围和约束        | `tsconfig*.json`                                                |
+| 格式化和 lint 规则           | `.oxfmtrc.json`、`.oxlintrc.json`                               |
+| 离线指数目录                 | `indexDefinitions.json`                                         |
+| 指数目录更新规则             | `scripts/update-index-definitions.mjs`                          |
+| 默认指数组                   | `defaultIndexGroups.ts`                                         |
+| 指数组校验与提交顺序         | `validateIndexGroups.ts`、`createIndexSettingsCommandModule.ts` |
+| 指数刷新行为                 | `useIndexQuotesStore.ts`                                        |
+| 基金运行时状态形状           | `createFundMarketRuntime.ts`                                    |
+| 基金设置形状                 | `fundSettings.ts`                                               |
+| 基金设置持久化版本与 key     | `fundSettingsSchemaVersion.ts`                                  |
+| 基金搜索协议                 | `services/eastmoney/`                                           |
+| 基金实时行情、资料与历史协议 | `services/tiantian/`                                            |
+| 基金状态与刷新行为           | `useFundsStore.ts`                                              |
+| 天天基金 deviceid 生命周期   | `tiantianDeviceId.ts`                                           |
+| 响应式断点                   | Tailwind 生成的 `--breakpoint-*` CSS 变量                       |
 
 只有系统职责、模块关系、依赖方向或关键 seam 发生变化时才更新本文。具体命令和执行规则放在 `AGENTS.md`，单次实施过程放在 ExecPlan，不在本文记录变更历史。

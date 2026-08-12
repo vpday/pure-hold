@@ -9,9 +9,10 @@ import {
 import * as echarts from 'echarts/core'
 import { UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed } from 'vue'
 
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
+import { useEChartsRuntime } from '../composables/useEChartsRuntime.ts'
 import type { FundRollingExcessReturnChartModel } from '../models/fundRollingExcessReturnChart'
 import { buildFundRollingExcessReturnChartOption } from '../presenters/buildFundRollingExcessReturnChartOption'
 
@@ -33,37 +34,27 @@ const props = defineProps<{
   warning: string
 }>()
 const emit = defineEmits<{ retry: [] }>()
-const container = ref<HTMLDivElement>()
 const { isLgUp } = useBreakpoints()
 const hasChart = computed(() => Boolean(props.model?.dates.length))
 
-let chart: echarts.ECharts | undefined
-let resizeObserver: ResizeObserver | undefined
-
-function render(): void {
-  if (!chart || !props.model || !hasChart.value) return
-  chart.setOption(
-    buildFundRollingExcessReturnChartOption(props.model, {
-      showLegend: isLgUp.value,
-      theme: {
-        benchmark: themeColor('--td-brand-color-4'),
-        excess: themeColor('--td-brand-color-6'),
-        fund: themeColor('--td-error-color-6'),
-      },
-    }),
-    true,
-  )
-}
-
-async function syncChart(): Promise<void> {
-  if (!hasChart.value) return
-  await nextTick()
-  const element = container.value
-  if (!element || element.clientWidth === 0 || element.clientHeight === 0) return
-  chart ??= echarts.init(element)
-  chart.resize()
-  render()
-}
+const { setContainer } = useEChartsRuntime({
+  enabled: () => props.visible && hasChart.value,
+  render: (chart) => {
+    if (!props.model || !hasChart.value) return
+    chart.setOption(
+      buildFundRollingExcessReturnChartOption(props.model, {
+        showLegend: isLgUp.value,
+        theme: {
+          benchmark: themeColor('--td-brand-color-4'),
+          excess: themeColor('--td-brand-color-6'),
+          fund: themeColor('--td-error-color-6'),
+        },
+      }),
+      true,
+    )
+  },
+  renderDependencies: [() => props.model, isLgUp],
+})
 
 function themeColor(name: string): string | undefined {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -85,27 +76,6 @@ function summaryValueColor(
   if (trend === 'down') return 'var(--td-success-color)'
   return undefined
 }
-
-onMounted(() => {
-  const element = container.value
-  if (!element) return
-  resizeObserver = new ResizeObserver(() => void syncChart())
-  resizeObserver.observe(element)
-  void syncChart()
-})
-
-watch(
-  () => props.model,
-  () => void syncChart(),
-)
-watch(isLgUp, () => render())
-watch(() => props.visible, syncChart)
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  chart?.dispose()
-  chart = undefined
-})
 </script>
 
 <template>
@@ -126,7 +96,7 @@ onBeforeUnmount(() => {
         </span>
       </div>
     </div>
-    <div v-show="hasChart" ref="container" class="h-90 w-full" />
+    <div v-show="hasChart" :ref="setContainer" class="h-90 w-full" />
 
     <div v-if="isLoading" class="loading-overlay">
       <t-loading text="滚动超额加载中" />

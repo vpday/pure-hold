@@ -3,8 +3,7 @@ import { BarChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { ComponentPublicInstance } from 'vue'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { TableProps } from 'tdesign-vue-next'
 
 import type {
@@ -15,6 +14,7 @@ import type {
   FundRiskComparisonRowModel,
 } from '../models/fundMetricsSectionModel.ts'
 import type { FundRiskPeriodKey } from '@/domains/funds/models/fundRiskMetrics.ts'
+import { useEChartsRuntime } from '../composables/useEChartsRuntime.ts'
 import { buildFundCalendarReturnsChartOption } from '../presenters/buildFundCalendarReturnsChartOption.ts'
 
 echarts.use([BarChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
@@ -32,12 +32,8 @@ const emit = defineEmits<{
   updateRiskFreeRate: [value: number | null]
   updateTargetRate: [value: number | null]
 }>()
-const calendarChartContainer = ref<HTMLDivElement>()
 const dismissedAlertKeys = ref<ReadonlySet<string>>(new Set())
 const selectedRiskPeriod = ref<FundRiskPeriodKey>('oneYear')
-
-let calendarChart: echarts.ECharts | undefined
-let calendarChartResizeObserver: ResizeObserver | undefined
 
 const tabs = [
   { label: '阶段涨幅', value: 'periods' },
@@ -109,39 +105,13 @@ function nullableNumber(value: number | undefined): number | null {
   return value ?? null
 }
 
-function renderCalendarChart(): void {
-  const model = props.model
-  if (!calendarChart || !model) return
-  calendarChart.setOption(buildFundCalendarReturnsChartOption(model), true)
-}
-
-function disposeCalendarChart(): void {
-  calendarChartResizeObserver?.disconnect()
-  calendarChartResizeObserver = undefined
-  calendarChart?.dispose()
-  calendarChart = undefined
-}
-
-function setCalendarChartContainer(element: Element | ComponentPublicInstance | null): void {
-  calendarChartContainer.value = element instanceof HTMLDivElement ? element : undefined
-}
-
-async function syncCalendarChart(): Promise<void> {
-  if (props.activeView !== 'calendar' || !props.model) return
-  await nextTick()
-  const element = calendarChartContainer.value
-  if (!element) return
-  if (calendarChart && calendarChart.getDom() !== element) disposeCalendarChart()
-  if (!calendarChart) {
-    calendarChart = echarts.init(element)
-    calendarChartResizeObserver = new ResizeObserver(() => calendarChart?.resize())
-    calendarChartResizeObserver.observe(element)
-  }
-  calendarChart.resize()
-  renderCalendarChart()
-}
-
-watch(() => [props.activeView, props.model] as const, syncCalendarChart, { immediate: true })
+const { setContainer: setCalendarChartContainer } = useEChartsRuntime({
+  enabled: () => props.activeView === 'calendar' && Boolean(props.model),
+  render: (chart) => {
+    if (props.model) chart.setOption(buildFundCalendarReturnsChartOption(props.model), true)
+  },
+  renderDependencies: [() => props.model],
+})
 watch(
   () => props.model?.alerts.map(({ key }) => key) ?? [],
   (alertKeys) => {
@@ -151,10 +121,6 @@ watch(
     )
   },
 )
-
-onBeforeUnmount(() => {
-  disposeCalendarChart()
-})
 </script>
 
 <template>

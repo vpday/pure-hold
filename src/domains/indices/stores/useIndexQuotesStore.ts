@@ -6,6 +6,8 @@ import type { IndexGroupDefinition } from '../models/indexGroupDefinition'
 import type { IndexDefinition } from '../models/indexDefinition'
 import type { IndexQuoteBatch, IndexQuoteHealth, IndexQuoteSnapshot } from '../models/indexQuote'
 import type { IndexQuoteIssue } from '../models/indexQuoteIssue'
+import { createIndexSettingsCommandModule } from '../services/createIndexSettingsCommandModule.ts'
+import type { CommitIndexGroupsResult } from '../services/createIndexSettingsCommandModule.ts'
 import { fetchEastmoneyIndexQuotes } from '../services/eastmoney/fetchEastmoneyIndexQuotes'
 import { loadIndexGroups } from '../services/persistence/loadIndexGroups'
 import { indexGroupsStorageKey } from '../services/persistence/indexSettingsSchemaVersion'
@@ -18,10 +20,6 @@ export interface IndexPollingConfiguration {
   readonly enabled: boolean
   readonly intervalMs: number
 }
-
-export type IndexGroupsPersistenceResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly reason: 'persistence-failed' }
 
 const defaultPollingConfiguration: IndexPollingConfiguration = {
   enabled: true,
@@ -169,22 +167,14 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     return cloneGroups(groups.value)
   }
 
-  function replaceGroupsPersisted(
-    newGroups: readonly IndexGroupDefinition[],
-  ): IndexGroupsPersistenceResult {
-    const nextGroups = cloneGroups(newGroups)
-    try {
-      saveIndexGroups(nextGroups)
-    } catch {
-      return { ok: false, reason: 'persistence-failed' }
-    }
+  const settingsCommands = createIndexSettingsCommandModule({
+    apply: replaceGroups,
+    knownQuoteCodes: new Set(definitions.value.map(({ quoteCode }) => quoteCode)),
+    persist: saveIndexGroups,
+  })
 
-    replaceGroups(nextGroups)
-    return { ok: true }
-  }
-
-  function saveGroups(newGroups: readonly IndexGroupDefinition[] = groups.value): void {
-    saveIndexGroups(newGroups)
+  function commitGroups(newGroups: readonly IndexGroupDefinition[]): CommitIndexGroupsResult {
+    return settingsCommands.commitReplace(newGroups)
   }
 
   function syncFromStorage(): void {
@@ -292,13 +282,10 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
     lastSuccessfulAt,
     quotesByIndexId,
     refresh,
-    replaceGroups,
-    replaceGroupsPersisted,
-    saveGroups,
+    commitGroups,
     setPollingConfiguration,
     startPolling,
     stopPolling,
-    syncFromStorage,
   }
 })
 

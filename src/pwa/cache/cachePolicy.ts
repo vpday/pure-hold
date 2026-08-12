@@ -13,7 +13,6 @@ export interface CacheResponseContext {
 export interface CachePolicyAdapter {
   readonly createCacheKey: (request: Request) => Promise<Request> | Request
   readonly decorateResponse?: (response: Response, context: CacheResponseContext) => Response
-  readonly matches: (request: Request) => boolean
   readonly metadataCacheName: string
   readonly responseCacheName: string
 }

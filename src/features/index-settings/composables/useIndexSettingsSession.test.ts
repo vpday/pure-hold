@@ -62,7 +62,7 @@ test('maintains group invariants and applies index commands to the selected grou
   scope.stop()
 })
 
-test('commits persistence before memory and keeps a failed draft dirty', () => {
+test('commits through one store command and keeps a failed draft dirty', () => {
   const store = createStore()
   const scope = effectScope()
   const session = scope.run(() => useIndexSettingsSession(store, true))!
@@ -72,14 +72,14 @@ test('commits persistence before memory and keeps a failed draft dirty', () => {
 
   assert.equal(session.renameGroup('group-a', '已保存'), null)
   assert.equal(session.commit(), null)
-  assert.deepEqual(store.calls, ['save', 'replace'])
+  assert.deepEqual(store.calls, ['commit'])
   assert.equal(store.groups[0]?.name, '已保存')
   assert.equal(session.model.value.shell.isDirty, false)
 
   store.failSave = true
   assert.equal(session.renameGroup('group-a', '未保存'), null)
   assert.equal(session.commit(), '保存设置失败，请检查浏览器存储空间后重试')
-  assert.deepEqual(store.calls, ['save', 'replace', 'save'])
+  assert.deepEqual(store.calls, ['commit', 'commit'])
   assert.equal(store.groups[0]?.name, '已保存')
   assert.equal(session.model.value.shell.isDirty, true)
   scope.stop()
@@ -110,13 +110,18 @@ function createStore() {
       { id: 'group-a', name: '分组一', quoteCodes: ['index-1'] },
       { id: 'group-b', name: '分组二', quoteCodes: [] },
     ]),
-    replaceGroups(groups: readonly IndexGroupDefinition[]): void {
-      calls.push('replace')
-      this.groups = cloneGroups(groups)
-    },
-    saveGroups(): void {
-      calls.push('save')
-      if (this.failSave) throw new Error('storage failed')
+    commitGroups(groups: readonly IndexGroupDefinition[]) {
+      calls.push('commit')
+      if (this.failSave) {
+        return {
+          error: new Error('storage failed'),
+          ok: false as const,
+          reason: 'persistence-failed' as const,
+        }
+      }
+      const committedGroups = cloneGroups(groups)
+      this.groups = committedGroups
+      return { groups: committedGroups, ok: true as const }
     },
   }
 }

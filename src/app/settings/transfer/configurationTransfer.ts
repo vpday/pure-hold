@@ -1,4 +1,5 @@
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
+import { validateIndexGroups } from '@/domains/indices/models/validateIndexGroups.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import { validateAndCloneFundSettings } from '@/domains/funds/services/persistence/validateFundSettings.ts'
 
@@ -83,8 +84,6 @@ export function parseConfigurationTransfer(
     return { message: '配置文件版本或格式不兼容', ok: false }
   }
 
-  const warnings: ConfigurationTransferWarning[] = []
-  const sectionErrors: ConfigurationTransferSectionError[] = []
   const result: {
     format: typeof configurationTransferFormat
     version: typeof configurationTransferVersion
@@ -98,10 +97,10 @@ export function parseConfigurationTransfer(
   const hasIndex = parsed.index !== undefined
   if (hasIndex) {
     try {
-      const groups = parseIndexGroups(parsed.index, knownIndexQuoteCodes, warnings)
+      const groups = parseIndexGroups(parsed.index, knownIndexQuoteCodes)
       result.index = { groups }
     } catch (error) {
-      sectionErrors.push({ section: 'index', message: getErrorMessage(error, '指数配置结构无效') })
+      return { message: getErrorMessage(error, '指数配置结构无效'), ok: false }
     }
   }
 
@@ -110,7 +109,7 @@ export function parseConfigurationTransfer(
     try {
       result.funds = validateAndCloneFundSettings(parsed.funds)
     } catch (error) {
-      sectionErrors.push({ section: 'funds', message: getErrorMessage(error, '基金配置结构无效') })
+      return { message: getErrorMessage(error, '基金配置结构无效'), ok: false }
     }
   }
 
@@ -118,19 +117,17 @@ export function parseConfigurationTransfer(
     return { message: '配置文件不包含可导入的配置分区', ok: false }
   }
 
-  return { ok: true, package: result, sectionErrors, warnings }
+  return { ok: true, package: result, sectionErrors: [], warnings: [] }
 }
 
 function parseIndexGroups(
   value: unknown,
   knownQuoteCodes: ReadonlySet<string>,
-  warnings: ConfigurationTransferWarning[],
 ): IndexGroupDefinition[] {
   if (!isRecord(value) || !Array.isArray(value.groups)) {
     throw new TypeError('指数配置缺少 groups 数组')
   }
 
-  let removedQuoteCount = 0
   const groups = value.groups.map((group) => {
     if (
       !isRecord(group) ||
@@ -142,21 +139,14 @@ function parseIndexGroups(
       throw new TypeError('指数分组结构无效')
     }
 
-    const quoteCodes = group.quoteCodes.filter((quoteCode) => {
-      const known = knownQuoteCodes.has(quoteCode)
-      if (!known) removedQuoteCount += 1
-      return known
-    })
-    return { id: group.id, name: group.name, quoteCodes }
+    return { id: group.id, name: group.name, quoteCodes: [...group.quoteCodes] }
   })
 
-  if (removedQuoteCount > 0) {
-    warnings.push({
-      message: `指数配置中有 ${removedQuoteCount} 个未知指数引用已跳过`,
-      section: 'index',
-    })
+  const validation = validateIndexGroups(groups, knownQuoteCodes)
+  if (!validation.ok) {
+    throw new TypeError(`指数配置无效：${validation.issue.code}`)
   }
-  return groups
+  return [...validation.groups]
 }
 
 function cloneIndexGroups(groups: readonly IndexGroupDefinition[]): IndexGroupDefinition[] {

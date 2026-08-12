@@ -1,6 +1,8 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition'
+import type { IndexGroupsValidationIssue } from '@/domains/indices/models/validateIndexGroups.ts'
+import type { CommitIndexGroupsResult } from '@/domains/indices/services/createIndexSettingsCommandModule.ts'
 import type { IndexSettingsSessionModel } from '../models/indexSettingsSessionModel'
 import {
   generateGroupId,
@@ -13,8 +15,7 @@ import {
 
 interface IndexSettingsStore {
   readonly groups: readonly IndexGroupDefinition[]
-  replaceGroups(groups: readonly IndexGroupDefinition[]): void
-  saveGroups(groups: readonly IndexGroupDefinition[]): void
+  commitGroups(groups: readonly IndexGroupDefinition[]): CommitIndexGroupsResult
 }
 
 export function useIndexSettingsSession(
@@ -137,13 +138,12 @@ export function useIndexSettingsSession(
     if (groups.value.length === 0) return '至少保留一个分组'
 
     const nextGroups = toIndexGroupDefinitions(groups.value)
-    try {
-      store.saveGroups(nextGroups)
-    } catch {
+    const result = store.commitGroups(nextGroups)
+    if (!result.ok && result.reason === 'persistence-failed') {
       return '保存设置失败，请检查浏览器存储空间后重试'
     }
+    if (!result.ok) return validationIssueMessage(result.issue)
 
-    store.replaceGroups(nextGroups)
     initialSnapshot.value = toDraftGroups(groups.value)
     return null
   }
@@ -164,6 +164,22 @@ export function useIndexSettingsSession(
     reset,
     returnToGroups,
     selectGroup,
+  }
+}
+
+function validationIssueMessage(issue: IndexGroupsValidationIssue): string {
+  switch (issue.code) {
+    case 'empty-groups':
+      return '至少保留一个分组'
+    case 'empty-group-name':
+    case 'non-canonical-group-name':
+      return '请输入有效的分组名称'
+    case 'group-name-too-long':
+      return '分组名称不能超过 20 个字符'
+    case 'duplicate-group-name':
+      return '分组名称不能重复'
+    default:
+      return '指数设置内容无效，请重新检查后保存'
   }
 }
 

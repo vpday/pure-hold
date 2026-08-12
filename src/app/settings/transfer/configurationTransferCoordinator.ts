@@ -1,12 +1,11 @@
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
+import type { CommitIndexGroupsResult } from '@/domains/indices/services/createIndexSettingsCommandModule.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import type { ConfigurationTransferPackage } from './configurationTransfer.ts'
 
 export interface ConfigurationTransferStoreAdapters {
   readonly getIndexGroups: () => readonly IndexGroupDefinition[]
-  readonly replaceIndexGroups: (
-    groups: readonly IndexGroupDefinition[],
-  ) => ConfigurationTransferReplaceResult
+  readonly commitIndexGroups: (groups: readonly IndexGroupDefinition[]) => CommitIndexGroupsResult
   readonly getFundSettings: () => FundSettings
   readonly replaceFundSettings: (settings: FundSettings) => ConfigurationTransferReplaceResult
 }
@@ -47,9 +46,13 @@ export function createConfigurationTransferCoordinator(
 
     const originalIndexGroups = selection.index ? adapters.getIndexGroups() : undefined
     if (selection.index) {
-      const result = adapters.replaceIndexGroups(packageValue.index!.groups)
+      const result = adapters.commitIndexGroups(packageValue.index!.groups)
       if (!result.ok) {
-        return { ok: false, partialPersistence: false, reason: '指数配置保存失败' }
+        return {
+          ok: false,
+          partialPersistence: false,
+          reason: result.reason === 'invalid-groups' ? '指数配置内容无效' : '指数配置保存失败',
+        }
       }
     }
 
@@ -57,7 +60,7 @@ export function createConfigurationTransferCoordinator(
       const result = adapters.replaceFundSettings(packageValue.funds!)
       if (!result.ok) {
         if (selection.index && originalIndexGroups !== undefined) {
-          const rollback = adapters.replaceIndexGroups(originalIndexGroups)
+          const rollback = adapters.commitIndexGroups(originalIndexGroups)
           return {
             ok: false,
             partialPersistence: !rollback.ok,

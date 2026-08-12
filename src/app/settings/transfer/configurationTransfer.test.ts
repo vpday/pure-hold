@@ -47,7 +47,7 @@ test('configuration transfer round trips both domains without refresh preference
   }
 })
 
-test('configuration transfer skips unknown index references and rejects only broken fund section', () => {
+test('configuration transfer rejects an import containing invalid sections without partial data', () => {
   const packageValue = createConfigurationTransferPackage({ indexGroups: defaultIndexGroups })
   const raw = JSON.stringify({
     ...packageValue,
@@ -59,15 +59,8 @@ test('configuration transfer skips unknown index references and rejects only bro
     },
   })
   const result = parseConfigurationTransfer(raw, new Set(['1.000001']))
-  assert.equal(result.ok, true)
-  if (result.ok) {
-    assert.deepEqual(result.package.index?.groups, [
-      { id: 'custom', name: '自定义', quoteCodes: ['1.000001'] },
-    ])
-    assert.equal(result.package.funds, undefined)
-    assert.equal(result.warnings.length, 1)
-    assert.equal(result.sectionErrors[0]?.section, 'funds')
-  }
+  assert.equal(result.ok, false)
+  if (!result.ok) assert.match(result.message, /unknown-quote-code/)
 })
 
 test('configuration transfer coordinator rolls back an earlier section when a later write fails', () => {
@@ -77,10 +70,10 @@ test('configuration transfer coordinator rolls back an earlier section when a la
     getFundSettings: () => fundSettings,
     getIndexGroups: () => indexGroups,
     replaceFundSettings: () => ({ ok: false, reason: 'quota exceeded' }),
-    replaceIndexGroups: (groups) => {
+    commitIndexGroups: (groups) => {
       writes += 1
       indexGroups = groups
-      return { ok: true }
+      return { groups, ok: true }
     },
   })
   const packageValue = createConfigurationTransferPackage({
@@ -104,9 +97,11 @@ test('configuration transfer reports partial persistence when rollback fails', (
     getFundSettings: () => fundSettings,
     getIndexGroups: () => defaultIndexGroups,
     replaceFundSettings: () => ({ ok: false, reason: 'quota exceeded' }),
-    replaceIndexGroups: () => {
+    commitIndexGroups: (groups) => {
       indexWrites += 1
-      return indexWrites === 1 ? { ok: true } : { ok: false, reason: 'rollback failed' }
+      return indexWrites === 1
+        ? { groups, ok: true }
+        : { error: new Error('rollback failed'), ok: false, reason: 'persistence-failed' }
     },
   })
   const packageValue = createConfigurationTransferPackage({

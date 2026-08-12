@@ -4,6 +4,7 @@ import {
   cacheResponseSourceHeader,
 } from '@/shared/transport/cacheResponseMetadata.ts'
 import { createCachePolicyHandler, type CacheResponseContext } from './cachePolicy.ts'
+import type { CacheRoute } from './cacheRouteRegistry.ts'
 
 export const tiantianFundSnapshotEndpoint =
   'https://fundcomapi.tiantianfunds.com/mm/FundFavor/FundFavorInfo'
@@ -11,7 +12,6 @@ export const tiantianFundSnapshotEndpoint =
 const tiantianFundSnapshotPostCacheAdapter = {
   createCacheKey: createTiantianFundSnapshotCacheKey,
   decorateResponse: createSnapshotResponse,
-  matches: matchesTiantianFundSnapshotPostRequest,
   metadataCacheName: 'pure-hold-fund-snapshot-metadata-v1',
   responseCacheName: 'pure-hold-fund-snapshot-v1',
 }
@@ -19,6 +19,12 @@ const tiantianFundSnapshotPostCacheAdapter = {
 export const handleTiantianFundSnapshotPostRequest = createCachePolicyHandler(
   tiantianFundSnapshotPostCacheAdapter,
 )
+
+export const tiantianFundSnapshotPostCacheRoute: CacheRoute = {
+  handle: handleTiantianFundSnapshotPostRequest,
+  id: 'tiantian-fund-snapshot-post',
+  matches: matchesTiantianFundSnapshotPostRequest,
+}
 
 export function matchesTiantianFundSnapshotPostRequest(request: Request): boolean {
   if (request.method !== 'POST') {

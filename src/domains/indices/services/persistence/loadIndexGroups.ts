@@ -1,6 +1,7 @@
 import { defaultIndexDefinitions } from '../../config/defaultIndexDefinitions.ts'
 import { defaultIndexGroups } from '../../config/defaultIndexGroups.ts'
 import type { IndexGroupDefinition } from '../../models/indexGroupDefinition'
+import { validateIndexGroups } from '../../models/validateIndexGroups.ts'
 import { browserStorageAdapter } from '@/shared/persistence/browserStorageAdapter.ts'
 import {
   INDEX_SETTINGS_SCHEMA_VERSION,
@@ -15,7 +16,12 @@ interface PersistedIndexGroups {
 }
 
 export function loadIndexGroups(): readonly IndexGroupDefinition[] {
-  const fallbackGroups = cloneGroups(defaultIndexGroups)
+  const knownQuoteCodes = new Set(defaultIndexDefinitions.map(({ quoteCode }) => quoteCode))
+  const fallbackValidation = validateIndexGroups(defaultIndexGroups, knownQuoteCodes)
+  if (!fallbackValidation.ok) {
+    throw new Error(`Default index groups are invalid: ${fallbackValidation.issue.code}`)
+  }
+  const fallbackGroups = fallbackValidation.groups
   browserStorageAdapter.requestPersistence()
   const result = browserStorageAdapter.read(indexGroupsStorageKey)
   if (result.status === 'failed') {
@@ -29,11 +35,11 @@ export function loadIndexGroups(): readonly IndexGroupDefinition[] {
 
   try {
     const persisted = parsePersistedIndexGroups(raw)
-    const groups = filterUnknownQuoteCodes(persisted.groups)
-    if (!areGroupsEqual(persisted.groups, groups)) {
-      saveIndexGroups(groups)
+    const validation = validateIndexGroups(persisted.groups, knownQuoteCodes)
+    if (!validation.ok) {
+      throw new TypeError(`Persisted index groups are invalid: ${validation.issue.code}`)
     }
-    return groups
+    return validation.groups
   } catch (error) {
     backupCorruptedData(raw)
     persistRecovery(fallbackGroups)
@@ -73,43 +79,6 @@ function isIndexGroupDefinition(value: unknown): value is IndexGroupDefinition {
     typeof value.name === 'string' &&
     Array.isArray(value.quoteCodes) &&
     value.quoteCodes.every((quoteCode) => typeof quoteCode === 'string')
-  )
-}
-
-function filterUnknownQuoteCodes(
-  groups: readonly IndexGroupDefinition[],
-): readonly IndexGroupDefinition[] {
-  const knownQuoteCodes = new Set(defaultIndexDefinitions.map((definition) => definition.quoteCode))
-  return groups.map((group) => ({
-    id: group.id,
-    name: group.name,
-    quoteCodes: group.quoteCodes.filter((quoteCode) => knownQuoteCodes.has(quoteCode)),
-  }))
-}
-
-function cloneGroups(groups: readonly IndexGroupDefinition[]): IndexGroupDefinition[] {
-  return groups.map((group) => ({
-    id: group.id,
-    name: group.name,
-    quoteCodes: [...group.quoteCodes],
-  }))
-}
-
-function areGroupsEqual(
-  first: readonly IndexGroupDefinition[],
-  second: readonly IndexGroupDefinition[],
-): boolean {
-  return (
-    first.length === second.length &&
-    first.every(
-      (group, index) =>
-        group.id === second[index]?.id &&
-        group.name === second[index]?.name &&
-        group.quoteCodes.length === second[index]?.quoteCodes.length &&
-        group.quoteCodes.every(
-          (quoteCode, quoteCodeIndex) => quoteCode === second[index]?.quoteCodes[quoteCodeIndex],
-        ),
-    )
   )
 }
 

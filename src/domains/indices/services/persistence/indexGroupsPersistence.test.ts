@@ -74,7 +74,7 @@ test('loadIndexGroups restores defaults for an incompatible schema version', () 
   })
 })
 
-test('loadIndexGroups removes quote codes that are no longer defined', () => {
+test('loadIndexGroups backs up and resets groups containing unknown quote codes', () => {
   withStorage((storage) => {
     const groups = [{ id: 'custom', name: '自定义', quoteCodes: ['1.000001', 'missing'] }]
     storage.setItem(
@@ -82,12 +82,19 @@ test('loadIndexGroups removes quote codes that are no longer defined', () => {
       JSON.stringify({ groups, version: INDEX_SETTINGS_SCHEMA_VERSION }),
     )
 
-    assert.deepEqual(loadIndexGroups(), [
-      { id: 'custom', name: '自定义', quoteCodes: ['1.000001'] },
-    ])
-    assert.deepEqual(readStoredGroups(storage), [
-      { id: 'custom', name: '自定义', quoteCodes: ['1.000001'] },
-    ])
+    const warn = console.warn
+    console.warn = () => {}
+    try {
+      assert.deepEqual(loadIndexGroups(), defaultIndexGroups)
+    } finally {
+      console.warn = warn
+    }
+
+    assert.deepEqual(readStoredGroups(storage), defaultIndexGroups)
+    assert.equal(
+      storage.keys().some((key) => key.startsWith(corruptIndexGroupsStorageKeyPrefix)),
+      true,
+    )
   })
 })
 
@@ -95,8 +102,10 @@ test('saveIndexGroups validates data and surfaces storage failures', () => {
   withStorage(() => {
     assert.throws(
       () => saveIndexGroups([{ id: 'invalid', name: '无效', quoteCodes: [1] }] as never),
-      /invalid shape/,
+      /invalid-quote-code/,
     )
+
+    assert.throws(() => saveIndexGroups([]), /empty-groups/)
   })
 
   const storage = new MemoryStorage()
