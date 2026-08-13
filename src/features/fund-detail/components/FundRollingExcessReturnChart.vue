@@ -89,10 +89,9 @@ function summaryValueColor(
     >
       <div v-for="item in model.summary" :key="item.label" class="summary-item">
         <span class="summary-dot" :style="{ backgroundColor: summaryColor(item.color) }" />
-        <span class="truncate">
-          {{ item.label }}：<span :style="{ color: summaryValueColor(item.trend) }">
-            {{ item.valueText }}
-          </span>
+        <span class="min-w-0 flex-1 truncate">{{ item.label }}：</span>
+        <span class="shrink-0" :style="{ color: summaryValueColor(item.trend) }">
+          {{ item.valueText }}
         </span>
       </div>
     </div>
@@ -131,7 +130,7 @@ function summaryValueColor(
 }
 
 .summary-grid {
-  @apply grid grid-cols-2 text-xs text-(--td-text-color-primary) lg:flex lg:flex-nowrap lg:gap-3;
+  @apply grid gap-1 text-xs text-(--td-text-color-primary) lg:flex lg:flex-nowrap lg:gap-3;
 }
 
 .summary-item {
