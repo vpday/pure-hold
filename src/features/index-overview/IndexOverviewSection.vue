@@ -45,6 +45,7 @@ watch(isSmUp, (desktop) => {
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {
   applyPollingConfiguration()
+  void store.refresh()
   store.startPolling()
   unsubscribeRefresh = subscribeGlobalRefresh(store.refresh)
 })

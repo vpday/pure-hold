@@ -46,6 +46,7 @@ const refreshObserver = () => store.refreshAll({ force: true })
 let unsubscribeRefresh: (() => void) | undefined
 onMounted(() => {
   applyPollingConfiguration()
+  void store.refreshAll()
   store.startPolling()
   unsubscribeRefresh = subscribeGlobalRefresh(refreshObserver)
 })

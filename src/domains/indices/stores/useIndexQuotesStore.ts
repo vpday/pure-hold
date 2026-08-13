@@ -235,10 +235,8 @@ export const useIndexQuotesStore = defineStore('index-quotes', () => {
       return
     }
 
-    refreshWhenCurrentRequestSettles()
-    if (pollingConfiguration.enabled) {
-      refreshTimer = setInterval(() => void refreshOpenMarkets(), pollingConfiguration.intervalMs)
-    }
+    if (!pollingConfiguration.enabled) return
+    refreshTimer = setInterval(() => void refreshOpenMarkets(), pollingConfiguration.intervalMs)
   }
 
   function refreshWhenCurrentRequestSettles(): void {

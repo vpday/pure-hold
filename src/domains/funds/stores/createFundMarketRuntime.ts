@@ -216,10 +216,8 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
       return
     }
 
-    void refreshAll()
-    if (pollingConfiguration.enabled) {
-      refreshTimer = setInterval(() => void refreshAll(), pollingConfiguration.intervalMs)
-    }
+    if (!pollingConfiguration.enabled) return
+    refreshTimer = setInterval(() => void refreshAll(), pollingConfiguration.intervalMs)
   }
 
   function clearRefreshTimer(): void {
