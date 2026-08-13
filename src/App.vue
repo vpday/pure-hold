@@ -35,28 +35,59 @@ async function refreshAllData(): Promise<void> {
         <div class="mx-auto w-full max-w-7xl">
           <t-head-menu theme="light" height="120px">
             <template #logo>
-              <div class="text-xl">简持</div>
+              <div class="flex items-center gap-2 text-xl">
+                <img
+                  src="/icon.svg"
+                  alt=""
+                  aria-hidden="true"
+                  class="size-10 shrink-0"
+                  width="40"
+                  height="40"
+                />
+                <span>简持</span>
+              </div>
             </template>
             <template #operations>
-              <a
-                href="javascript:;"
+              <t-button
                 title="刷新全部数据"
+                aria-label="刷新全部数据"
+                shape="square"
+                variant="text"
                 :disabled="globalRefreshing"
                 @click="refreshAllData"
-                ><t-icon class="t-menu__operations-icon" name="refresh"
-              /></a>
-              <a href="javascript:;" title="搜索并添加基金" @click="fundSearchEntry?.open()"
-                ><t-icon class="t-menu__operations-icon" name="search"
-              /></a>
-              <a href="javascript:;" title="设置" @click="settingsEntry?.open()"
-                ><t-icon class="t-menu__operations-icon" name="setting"
-              /></a>
+              >
+                <template #icon>
+                  <t-icon name="refresh" aria-hidden="true" />
+                </template>
+              </t-button>
+              <t-button
+                title="搜索并添加基金"
+                aria-label="搜索并添加基金"
+                shape="square"
+                variant="text"
+                @click="fundSearchEntry?.open()"
+              >
+                <template #icon>
+                  <t-icon name="search" aria-hidden="true" />
+                </template>
+              </t-button>
+              <t-button
+                title="设置"
+                aria-label="设置"
+                shape="square"
+                variant="text"
+                @click="settingsEntry?.open()"
+              >
+                <template #icon>
+                  <t-icon name="setting" aria-hidden="true" />
+                </template>
+              </t-button>
             </template>
           </t-head-menu>
         </div>
       </t-header>
       <t-content class="flex-1">
-        <div class="mx-auto w-full max-w-7xl pt-4">
+        <div class="mx-auto w-full max-w-7xl pt-4 pl-0 pr-0 sm:pl-6 sm:pr-4">
           <IndexOverviewSection />
           <FundHoldingStatisticsEntry />
           <FundListSection @search-funds="fundSearchEntry?.open()" />
