@@ -36,7 +36,7 @@ export interface UseFundHoldingsOptions {
 }
 
 export function useFundHoldings(
-  isSectionVisible: MaybeRefOrGetter<boolean>,
+  isSectionActive: MaybeRefOrGetter<boolean>,
   options: UseFundHoldingsOptions = {},
 ) {
   const loadDates = options.loadDates ?? fetchTiantianFundHoldingDates
@@ -91,14 +91,13 @@ export function useFundHoldings(
           : undefined,
         error: assetAllocation.error.value,
         isLoading: assetAllocation.isLoading.value,
-        visible: toValue(isSectionVisible) && activeView.value === 'allocation',
         warning: assetAllocation.warning.value,
       },
     }
   })
 
   watch(
-    () => toValue(isSectionVisible),
+    () => toValue(isSectionActive),
     (visible, wasVisible) => {
       if (!isActivated.value || activeView.value !== 'positions') return
       if (visible && !wasVisible && disclosure.value) void refreshQuotes()
@@ -276,14 +275,14 @@ export function useFundHoldings(
       void assetAllocation.activate()
       return
     }
-    if (toValue(isSectionVisible) && disclosure.value) void refreshQuotes()
+    if (toValue(isSectionActive) && disclosure.value) void refreshQuotes()
     updatePolling()
   }
 
   async function refresh(): Promise<void> {
     if (!currentCode.value || !isActivated.value) return
     const allocationRefresh =
-      toValue(isSectionVisible) && activeView.value === 'allocation'
+      toValue(isSectionActive) && activeView.value === 'allocation'
         ? assetAllocation.refresh()
         : Promise.resolve()
     const datesLoaded = await loadReportDates(true)
@@ -309,7 +308,7 @@ export function useFundHoldings(
     if (
       isActivated.value &&
       activeView.value === 'positions' &&
-      toValue(isSectionVisible) &&
+      toValue(isSectionActive) &&
       disclosure.value &&
       quoteRequests(disclosure.value).length > 0
     ) {

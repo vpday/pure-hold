@@ -42,6 +42,33 @@ test('ECharts runtime initializes only a visible non-zero container and reuses i
   scope.stop()
 })
 
+test('ECharts runtime observes an enabled zero-size container until it becomes visible', () => {
+  const harness = createHarness()
+  const scope = effectScope()
+  const runtime = scope.run(() =>
+    useEChartsRuntime({
+      dependencies: harness.dependencies,
+      enabled: true,
+      render: (chart) => harness.renders.push(chart),
+    }),
+  )!
+  const element = createElement(0, 100)
+
+  runtime.container.value = element
+  runtime.sync()
+  harness.flush()
+  assert.equal(harness.charts.length, 0)
+  assert.equal(harness.observers.length, 1)
+  assert.equal(harness.observers[0]?.observed, element)
+
+  setElementSize(element, 200, 100)
+  harness.observers[0]!.callback()
+  harness.flush()
+  assert.equal(harness.charts.length, 1)
+  assert.equal(harness.renders.length, 1)
+  scope.stop()
+})
+
 test('ECharts runtime resizes from the current observer and ignores stale observers', () => {
   const harness = createHarness()
   const scope = effectScope()
@@ -72,6 +99,7 @@ test('ECharts runtime resizes from the current observer and ignores stale observ
   firstObserver.callback()
   assert.equal(secondChart.resizeCount, resizeCount)
   harness.observers[1]!.callback()
+  harness.flush()
   assert.equal(secondChart.resizeCount, resizeCount + 1)
   scope.stop()
   assert.equal(secondChart.disposed, true)

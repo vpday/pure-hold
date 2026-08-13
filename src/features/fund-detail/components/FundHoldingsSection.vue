@@ -224,7 +224,7 @@ function trendClass(trend: FundHoldingsTrend): string {
             :error="model.allocation.error"
             :is-loading="model.allocation.isLoading"
             :model="model.allocation.chart"
-            :visible="model.allocation.visible"
+            :visible="model.activeView === 'allocation'"
             :warning="model.allocation.warning"
             @retry="emit('retryAllocation')"
           />

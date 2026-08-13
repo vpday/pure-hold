@@ -34,7 +34,7 @@ interface UseFundPerformanceOptions {
 }
 
 export function useFundPerformance(
-  isVisible: MaybeRefOrGetter<boolean>,
+  isSectionActive: MaybeRefOrGetter<boolean>,
   options: UseFundPerformanceOptions = {},
 ) {
   const ownsBenchmarkDataSource = !options.benchmarkDataSource
@@ -65,7 +65,6 @@ export function useFundPerformance(
   const model = computed<FundPerformanceSectionModel>(() => ({
     activeView: activeView.value,
     descriptors: definitions.map(({ descriptor }) => descriptor),
-    isVisible: toValue(isVisible),
     panels: definitions.map(({ model: panelModel }) => panelModel.value),
   }))
 
@@ -108,7 +107,7 @@ export function useFundPerformance(
   }
 
   async function refresh(): Promise<void> {
-    if (!toValue(isVisible)) return
+    if (!toValue(isSectionActive)) return
     await Promise.all([
       definitionFor(activeView.value).refresh(),
       definitionFor('distribution').refresh(),

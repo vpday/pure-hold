@@ -278,7 +278,7 @@ FundBasicInfo 中成对归一化的跟踪指数代码与名称
 
 ```text
 FundDetailEntry 当前基金代码
-  -> useFundHoldings 编排持仓 tab、章节可见性和全局刷新
+  -> useFundHoldings 编排持仓 tab、章节活动状态和全局刷新
   -> useFundAssetAllocation 首次切换资产配置时激活
   -> fetchTiantianFundAssetAllocation(top=20)
   -> FundAssetAllocationTop DTO 记录级校验、日期去重与升序
@@ -287,7 +287,7 @@ FundDetailEntry 当前基金代码
   -> FundAssetAllocationChart 三柱一线双轴图
 ```
 
-资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节可见且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 匹配 `src/pwa/cache/tiantianMmGetCacheAdapter.ts` 的 `fundcomapi.tiantianfunds.com/mm/**` GET 通用规则；稳定的页面会话 deviceid 允许相同请求复用 Service Worker 缓存，但 Feature 仍负责当前详情会话的成功数据和取消逻辑。
+资产配置保留最多 20 个有效报告期，图表使用 `inside` dataZoom 默认显示最新 6 期，并允许拖拽或触摸平移到更早数据。成功数据只缓存在 `FundDetailEntry` 生命周期内，不进入 Pinia 或 localStorage；只有持仓章节处于活动状态且当前 tab 为资产配置时，全局刷新才强制更新，失败保留旧图并提示。该 endpoint 匹配 `src/pwa/cache/tiantianMmGetCacheAdapter.ts` 的 `fundcomapi.tiantianfunds.com/mm/**` GET 通用规则；稳定的页面会话 deviceid 允许相同请求复用 Service Worker 缓存，但 Feature 仍负责当前详情会话的成功数据和取消逻辑。
 
 基金详情净值历史与数据指标的数据流是：
 
@@ -325,7 +325,7 @@ FundDetailEntry 当前基金代码
 
 净值走势、复权净值、累计超额、滚动超额和回撤对比各自保存日期范围，但同一基金和范围共享完整 `FundNetValueHistory` 成功缓存与进行中请求；分红送配按基金代码共享。复权净值始终先用成立来净值和分红送配连续计算，再按所选范围截取，因此范围切换不发请求且不会改变同一日期的绝对复权值。累计超额、滚动超额和回撤对比共同使用 `useFundComparisonSession`；该 session 隐藏三路输入加载、复权构造、generation、取消、懒激活、刷新保旧数据、source warning 和本地范围重算，三个 calculation adapters 只保存默认范围、首次错误文案和计算函数。数据指标继续使用独立会话，因为它同时维护收益、风险、质量和可编辑参数的原子结果。比较图表、数据指标和风险比较属于 fund-detail Feature，因为它们组合 Funds 与 Indices 两个 Domain；它们共用 `src/features/fund-detail/models/fundBenchmarkTimeSeriesAlignment.ts`，在 feature 边界执行有效点过滤、升序排序、重复日期第一条有效记录优先、精确共同日期交集和共同截止日。只在首次切换到对应 Tab 时订阅详情级基金历史和固定基准数据源，不写 Store 或持久化。滚动超额和回撤对比都只提供近 1/3/5 年和成立来四项范围，每次打开默认近 1 年。固定的沪深 300 全收益指数 `H00300` 使用独立单序列缓存：普通加载复用上海当天的成功缓存，`force: true` 绕过成功缓存并重新全量请求，成功后原子替换；performance 与 metrics 的并发刷新复用同一个进行中请求。调用方取消只移除自己的订阅，最后一个订阅取消才中止底层请求。第三方 `FSRQ`、`DWJZ`、`tradeDate` 和 `close` 等字段只存在于对应适配器。关闭详情会重置视图，但 `FundDetailEntry` 生命周期内的成功缓存继续复用，不进入 Pinia、localStorage 或 Service Worker；中证历史仍不进入 Service Worker 缓存。
 
-`createSharedRequestPool` 只拥有同 key pending、独立订阅取消、最后订阅者 abort、显式取消和 dispose；历史多 key 缓存、force 规则以及 benchmark 的上海日期失效仍由两个 data source adapter 拥有。七个详情 ECharts 使用点通过 `useEChartsRuntime` 共享容器尺寸、首次初始化、resize、条件 DOM 替换、observer 重绑、过期回调隔离和 scope dispose；runtime 不理解 series、tooltip、范围、主题色或可访问摘要，这些业务配置仍由各 component 和 option builder 拥有。
+`createSharedRequestPool` 只拥有同 key pending、独立订阅取消、最后订阅者 abort、显式取消和 dispose；历史多 key 缓存、force 规则以及 benchmark 的上海日期失效仍由两个 data source adapter 拥有。七个详情 ECharts 使用点通过 `useEChartsRuntime` 共享容器尺寸、启用后立即绑定 observer、非零尺寸首次初始化、resize、条件 DOM 替换、observer 重绑、过期回调隔离和 scope dispose；容器初始为零尺寸时，runtime 等待尺寸恢复后再初始化。runtime 不理解 series、tooltip、范围、主题色或可访问摘要，这些业务配置仍由各 component 和 option builder 拥有。
 
 业绩表现的七个 panel definitions 各自集中稳定 descriptor、运行时 session、presenter、model、生命周期和带判别类型的 panel action；`useFundPerformance` 只协调有序 definitions、active view、基础资料通知、跨 panel 刷新和详情关闭。同步 renderer registry 是独立 view seam，以 panel ID 映射命名导入的 Vue renderer；Host 只解析动态 renderer 和转发 props/events，不包含 panel-specific 分支。分红送配保持独立的 `distribution` table kind，不进入 `FundPerformanceView` 或当前图表刷新目标。definitions、renderer registry 和 panel model 均属于 fund-detail Feature，不进入 Store、localStorage 或 Service Worker；`FundDetailEntry` 仍持有并注入共享 history/benchmark data source，并负责其 dispose 生命周期。
 
@@ -347,7 +347,7 @@ FundDetailEntry 当前基金代码
 - `useFundDetail` 隐藏基础资料会话缓存、取消、重试、全局刷新和过期响应隔离。
 - `FundPerformancePanelDefinition` 隐藏单个业绩面板的 descriptor、运行时 session、presenter、model、生命周期和 typed action；有序 definitions 是新增或调整面板的运行时 seam。
 - `fundPerformancePanelRendererRegistry` 隐藏 panel ID 到同步 Vue renderer 的映射；renderer 只消费 props 并发送 typed action。
-- `useFundPerformance` 隐藏性能 panel 集合的聚合、图表 activeView、action dispatcher、可见性刷新以及详情会话关闭语义。
+- `useFundPerformance` 隐藏性能 panel 集合的聚合、图表 activeView、action dispatcher、章节活动状态门控的刷新以及详情会话关闭语义。
 - `useFundCumulativeReturns` 隐藏参考指数与范围选择、组合缓存、取消、重试、刷新和过期响应隔离。
 - `FundHistoryDataSource` 隐藏净值历史与分红送配的详情级成功缓存、同键 Promise 复用和多消费者取消。
 - `FundBenchmarkDataSource` 隐藏固定全收益指数的详情级单序列成功缓存、全量 force 替换、进行中 Promise 复用和多消费者取消。
@@ -430,7 +430,7 @@ TDesign Vue Next 提供 UI 组件和中文语言配置，模板组件由 Vite re
 
 基金列表的汇总持仓统计由 `FundHoldingStatisticsEntry` 组合领域计算结果和 presenter 展示模型，`FundHoldingStatistics` 只负责展示，不直接读取 Store 或计算业务口径。桌面端使用四张统计卡片：持仓市值单独作为金额主值；当日/估算收益、昨日收益和持仓收益分别以金额为主值，并在同一卡片内通过 `t-space` 垂直排列“金额主值、主题边框分隔线、收益率”。收益率必须与对应收益金额保持同卡关联，不拆成独立业务卡片，因为三类收益率的计算基准不同，且当前收益标题可能是“当日收益”“估算收益”或“当日/估算收益”。移动端使用独立的响应式展示分支，将持仓市值和三类收益聚合到一张卡片；这类布局变化只修改 Feature 组件，不改变 Domain 模型、Store 状态或 presenter 的数据口径。
 
-基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。业绩表现保留“累计收益”“累计超额”“滚动超额”“回撤对比”“净值走势”“复权净值”“分红送配”七个内层 Tab；六个图表视图各自保存日期范围，可选择的参考指数只属于累计收益。累计超额固定比较基金复权净值与沪深 300 全收益，显示三项同期摘要和一条固定起点累计超额收益曲线，Y 轴围绕零对称。滚动超额位于累计超额和回撤对比之间，固定显示基金近12月收益、沪深300全收益近12月收益和滚动12个月超额三项摘要及三条对应曲线；超额线比两条上下文线更粗，只有超额线携带不进入图例的 `0%` 参考线。Tooltip 保持三项顺序和完整共同观测日，X 轴只显示 `YYYY-MM`，Y 轴按三条线共同范围围绕零对称，窄屏隐藏图例；图表默认展示完整区间，并通过 `inside` dataZoom 支持滚轮、拖拽和触摸缩放平移。回撤对比显示基金红色面积实线、沪深 300 全收益蓝色实线、`0%` 历史高点基线和两项正幅度最大回撤摘要，Tooltip 同样显示正幅度，Y 轴保持非正。数据指标固定比较沪深 300 全收益指数，不提供下拉，包含“阶段涨幅”“季/年度涨幅”“年化收益”“风险指标”四个内层 Tab；前三个收益表继续以时间为行，以基金收益、基准收益和相对超额为列。风险表按选中的近1/2/3/5年或成立以来窗口展示基金、基准和中性差值，参数区允许换行，表格在窄屏局部横向滚动。累计收益图保留三条收益曲线、摘要和最大回撤；净值走势图展示单位净值和累计净值，复权净值图展示单位净值和绝对复权净值，并在滚动离开章节后重新显示时随容器 resize。持仓构成包含“持仓信息”和“资产配置”两个内层 Tab；资产配置使用股票、债券、现金占比柱形与资产净值折线的双轴图，并在固定画布中平移历史窗口。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。成交记录尚未实现时只显示紧凑占位。每次打开详情时，章节回到基金概览，业绩内层 Tab 回到累计收益；滚动超额与回撤对比范围回到近 1 年，其他四个图表范围回到近 6 月。指标内层 Tab 回到阶段涨幅，持仓内层 Tab 回到持仓信息；风险参数在当前应用会话内跨基金和详情开关保留，刷新页面后恢复默认值。
+基金详情在桌面和移动端都使用底部 Drawer。桌面高度为 `90dvh` 且最大宽度与 `max-w-7xl` 一致，移动端占满 `100dvh` 并保留底部安全区。一级内容按基金概览、业绩表现、数据指标、持仓构成、交易规则和成交记录连续排列；宽屏在右侧显示跟随 Drawer 内部滚动的纵向 Anchor，窄屏不显示章节导航并让内容占满宽度。Anchor 的活动章节只用于数据激活、刷新和轮询门控，不作为 DOM、ECharts 或其他面板内容的渲染条件；面板是否渲染只由其本地 Tab/View 选择和可用 model 决定。业绩表现保留“累计收益”“累计超额”“滚动超额”“回撤对比”“净值走势”“复权净值”“分红送配”七个内层 Tab；六个图表视图各自保存日期范围，可选择的参考指数只属于累计收益。累计超额固定比较基金复权净值与沪深 300 全收益，显示三项同期摘要和一条固定起点累计超额收益曲线，Y 轴围绕零对称。滚动超额位于累计超额和回撤对比之间，固定显示基金近12月收益、沪深300全收益近12月收益和滚动12个月超额三项摘要及三条对应曲线；超额线比两条上下文线更粗，只有超额线携带不进入图例的 `0%` 参考线。Tooltip 保持三项顺序和完整共同观测日，X 轴只显示 `YYYY-MM`，Y 轴按三条线共同范围围绕零对称，窄屏隐藏图例；图表默认展示完整区间，并通过 `inside` dataZoom 支持滚轮、拖拽和触摸缩放平移。回撤对比显示基金红色面积实线、沪深 300 全收益蓝色实线、`0%` 历史高点基线和两项正幅度最大回撤摘要，Tooltip 同样显示正幅度，Y 轴保持非正。数据指标固定比较沪深 300 全收益指数，不提供下拉，包含“阶段涨幅”“季/年度涨幅”“年化收益”“风险指标”四个内层 Tab；前三个收益表继续以时间为行，以基金收益、基准收益和相对超额为列。风险表按选中的近1/2/3/5年或成立以来窗口展示基金、基准和中性差值，参数区允许换行，表格在窄屏局部横向滚动。累计收益图保留三条收益曲线、摘要和最大回撤；净值走势图展示单位净值和累计净值，复权净值图展示单位净值和绝对复权净值，并在滚动离开章节后重新显示时随容器 resize。持仓构成包含“持仓信息”和“资产配置”两个内层 Tab；资产配置使用股票、债券、现金占比柱形与资产净值折线的双轴图，并在固定画布中平移历史窗口。交易规则在桌面使用四列成本、四列限制和三列确认信息，移动端全部改为单列，并复用 Drawer 的纵向滚动。成交记录尚未实现时只显示紧凑占位。每次打开详情时，章节回到基金概览，业绩内层 Tab 回到累计收益；滚动超额与回撤对比范围回到近 1 年，其他四个图表范围回到近 6 月。指标内层 Tab 回到阶段涨幅，持仓内层 Tab 回到持仓信息；风险参数在当前应用会话内跨基金和详情开关保留，刷新页面后恢复默认值。
 
 ### 时间和行情语义
 

@@ -11,7 +11,6 @@ export interface FundAssetAllocationPanelModel {
   readonly chart?: FundAssetAllocationChartModel
   readonly error: string
   readonly isLoading: boolean
-  readonly visible: boolean
   readonly warning: string
 }
 

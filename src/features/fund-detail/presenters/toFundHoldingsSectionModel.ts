@@ -64,7 +64,6 @@ export function toFundHoldingsSectionModel(
     allocation: {
       error: '',
       isLoading: false,
-      visible: false,
       warning: '',
     },
     bondTotalLabel: `前 ${bonds.length} 只持仓占比合计`,

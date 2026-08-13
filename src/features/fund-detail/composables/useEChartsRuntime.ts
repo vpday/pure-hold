@@ -51,14 +51,20 @@ export function useEChartsRuntime<TChart extends EChartsRuntimeInstance = echart
 
   let chart: TChart | undefined
   let observer: EChartsRuntimeObserver | undefined
+  let observedElement: HTMLElement | undefined
   let synchronization = 0
+
+  function clearResources(): void {
+    observer?.disconnect()
+    observer = undefined
+    observedElement = undefined
+    chart?.dispose()
+    chart = undefined
+  }
 
   function dispose(): void {
     synchronization += 1
-    observer?.disconnect()
-    observer = undefined
-    chart?.dispose()
-    chart = undefined
+    clearResources()
   }
 
   function sync(): void {
@@ -70,29 +76,29 @@ export function useEChartsRuntime<TChart extends EChartsRuntimeInstance = echart
         dispose()
         return
       }
-      if (!toValue(options.enabled) || element.clientWidth === 0 || element.clientHeight === 0) {
-        return
+      if ((observer && observedElement !== element) || (chart && chart.getDom() !== element)) {
+        clearResources()
       }
+      if (!toValue(options.enabled)) return
 
-      if (chart && chart.getDom() !== element) dispose()
-      if (!chart) {
-        chart = initialize(element)
-        const currentChart = chart
+      if (!observer) {
         const currentObserver = observe(() => {
           if (
             observer !== currentObserver ||
-            chart !== currentChart ||
-            currentChart.getDom() !== container.value ||
-            !toValue(options.enabled)
+            observedElement !== element ||
+            container.value !== element
           ) {
             return
           }
-          currentChart.resize()
-          options.render(currentChart)
+          sync()
         })
         observer = currentObserver
+        observedElement = element
         currentObserver.observe(element)
       }
+
+      if (element.clientWidth === 0 || element.clientHeight === 0) return
+      chart ??= initialize(element)
 
       chart.resize()
       options.render(chart)

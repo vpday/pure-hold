@@ -184,7 +184,6 @@ test('loads allocation only on first selection and reuses its session cache afte
   await nextTask()
   assert.deepEqual(allocationCalls, ['161725'])
   assert.equal(session.model.value.allocation.chart?.series[0].values[0], 1)
-  assert.equal(session.model.value.allocation.visible, true)
 
   session.selectView('positions')
   session.selectView('allocation')
@@ -239,7 +238,6 @@ test('refreshes allocation only while its visible tab is active and retains stal
   await nextMicrotask()
   await session.refresh()
   assert.equal(allocationCalls, 2)
-  assert.equal(session.model.value.allocation.visible, false)
 
   visible.value = true
   shouldFail = false

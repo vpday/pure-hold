@@ -61,7 +61,7 @@ onBeforeUnmount(() => {
       >
         <FundPerformancePanelHost
           :panel="panelForId(panelDescriptor.id)"
-          :visible="model.isVisible && activeTab === panelDescriptor.id"
+          :visible="activeTab === panelDescriptor.id"
           @action="emit('action', $event)"
         />
       </t-tab-panel>
