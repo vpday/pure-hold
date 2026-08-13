@@ -64,6 +64,7 @@ function confirm(): void {
     MessagePlugin.error(error)
     return
   }
+  MessagePlugin.success('基金分组已保存')
   emit('saved', reorderedCategoryIds)
   close()
 }

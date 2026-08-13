@@ -45,6 +45,7 @@ function handleConfirm(): void {
     return
   }
 
+  MessagePlugin.success('指数设置已保存')
   close()
 }
 

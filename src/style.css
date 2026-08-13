@@ -3,7 +3,6 @@
 @layer base {
   html {
     scrollbar-color: var(--td-scrollbar-color) transparent;
-    scrollbar-gutter: stable;
     scrollbar-width: thin;
   }
 

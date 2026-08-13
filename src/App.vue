@@ -87,7 +87,7 @@ async function refreshAllData(): Promise<void> {
         </div>
       </t-header>
       <t-content class="flex-1">
-        <div class="mx-auto w-full max-w-7xl pt-4 pl-0 pr-0 sm:pl-6 sm:pr-4">
+        <div class="app-content">
           <IndexOverviewSection />
           <FundHoldingStatisticsEntry />
           <FundListSection @search-funds="fundSearchEntry?.open()" />
@@ -109,5 +109,9 @@ async function refreshAllData(): Promise<void> {
 
 .app-footer-content {
   @apply mx-auto flex w-full max-w-7xl items-center justify-center;
+}
+
+.app-content {
+  @apply mx-auto w-full max-w-7xl pt-4 pl-0 pr-0 sm:pl-6 sm:pr-4;
 }
 </style>

@@ -26,7 +26,6 @@ const visible = ref(false)
 const draft = ref<SettingsDraft>(appSettingsStore.getSnapshot())
 const initialDraft = ref<SettingsDraft>(appSettingsStore.getSnapshot())
 const importState = ref<SettingsImportState | null>(null)
-const importError = ref('')
 const selection = ref<SettingsImportSelection>({ funds: false, index: false })
 const isDirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(initialDraft.value))
 const overwriteSections = computed(() => {
@@ -130,7 +129,7 @@ async function importFromClipboard(): Promise<void> {
     }
     await importText(await navigator.clipboard.readText())
   } catch {
-    importError.value = '无法读取剪贴板，请检查浏览器权限'
+    MessagePlugin.error('无法读取剪贴板，请检查浏览器权限')
   }
 }
 
@@ -138,7 +137,7 @@ async function importFromFile(file: File): Promise<void> {
   try {
     await importText(await file.text())
   } catch {
-    importError.value = '无法读取配置文件'
+    MessagePlugin.error('无法读取配置文件')
   }
 }
 
@@ -147,11 +146,10 @@ async function importText(text: string): Promise<void> {
   const result = parseConfigurationTransfer(text, knownQuoteCodes)
   if (!result.ok) {
     importState.value = null
-    importError.value = result.message
+    MessagePlugin.error(result.message)
     return
   }
 
-  importError.value = ''
   importState.value = {
     package: result.package,
     sectionErrors: result.sectionErrors,
@@ -165,7 +163,6 @@ async function importText(text: string): Promise<void> {
 
 function clearImport(): void {
   importState.value = null
-  importError.value = ''
   selection.value = { funds: false, index: false }
 }
 
@@ -209,7 +206,6 @@ defineExpose({ open })
     @confirm="save"
   >
     <SettingsContent
-      :import-error="importError"
       :import-state="importState"
       :model-value="draft"
       :overwrite-message="overwriteMessage"
@@ -261,7 +257,6 @@ defineExpose({ open })
 
     <div class="min-h-full overflow-y-auto pb-8">
       <SettingsContent
-        :import-error="importError"
         :import-state="importState"
         :model-value="draft"
         :overwrite-message="overwriteMessage"

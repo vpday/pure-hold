@@ -8,7 +8,6 @@ import type {
 } from '../models/settingsViewModel.ts'
 
 defineProps<{
-  importError: string
   importState: SettingsImportState | null
   modelValue: SettingsDraft
   overwriteMessage: string
@@ -35,7 +34,6 @@ const emit = defineEmits<{
       @update:model-value="emit('update:modelValue', $event)"
     />
     <SettingsTransferPanel
-      :import-error="importError"
       :import-state="importState"
       :overwrite-message="overwriteMessage"
       :requires-overwrite="requiresOverwrite"

@@ -5,7 +5,6 @@ import type { ConfigurationTransferSectionError } from '@/app/settings/transfer/
 import type { SettingsImportSelection, SettingsImportState } from '../models/settingsViewModel.ts'
 
 const props = defineProps<{
-  importError: string
   importState: SettingsImportState | null
   overwriteMessage: string
   requiresOverwrite: boolean
@@ -79,8 +78,6 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
         @change="handleFileChange"
       />
     </div>
-
-    <p v-if="importError" class="mt-3 text-sm text-(--td-error-color)">{{ importError }}</p>
 
     <t-dialog
       v-if="importState"
