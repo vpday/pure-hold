@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, ref } from 'vue'
+import { computed, h } from 'vue'
 import type { DropdownProps, PrimaryTableProps } from 'tdesign-vue-next'
 
 import { formatRowDate } from '@/shared/presenters/formatRowDate'
@@ -26,14 +26,15 @@ const props = defineProps<{
   sort: FundSort | null
 }>()
 const emit = defineEmits<{
+  buy: [code: string]
   comingSoon: []
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
+  plan: [code: string]
+  sell: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
-const pendingDeleteCode = ref<string>()
-
 const returnColumns: readonly { cell: string; colKey: FundReturnField; title: string }[] = [
   { cell: 'one-week-cell', colKey: 'oneWeek', title: '近1周' },
   { cell: 'one-month-cell', colKey: 'oneMonth', title: '近1月' },
@@ -150,9 +151,10 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
 const moreActionOptions = [
   { content: '详情', value: 'detail' },
   { content: '编辑', value: 'edit' },
-  { content: '删除', theme: 'error', value: 'delete' },
+  { content: '定投', value: 'plan' },
   { content: '记录买入', value: 'buy' },
   { content: '记录卖出', value: 'sell' },
+  { content: '删除', theme: 'error', value: 'delete' },
 ] satisfies NonNullable<DropdownProps['options']>
 
 function handleSortChange(value: unknown): void {
@@ -200,22 +202,23 @@ function handleMoreAction(code: string, value: unknown): void {
     emit('edit', code)
     return
   }
+  if (value === 'plan') {
+    emit('plan', code)
+    return
+  }
   if (value === 'delete') {
-    pendingDeleteCode.value = code
+    emit('delete', code)
+    return
+  }
+  if (value === 'buy') {
+    emit('buy', code)
+    return
+  }
+  if (value === 'sell') {
+    emit('sell', code)
     return
   }
   emit('comingSoon')
-}
-
-function confirmDelete(code: string): void {
-  pendingDeleteCode.value = undefined
-  emit('delete', code)
-}
-
-function handleDeleteConfirmVisibleChange(code: string, visible: boolean): void {
-  if (!visible && pendingDeleteCode.value === code) {
-    pendingDeleteCode.value = undefined
-  }
 }
 
 function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
@@ -240,10 +243,10 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
   >
     <template #name-cell="{ row }">
       <div>
-        <button type="button" class="fund-name-button" @click="emit('detail', row.code)">
+        <p class="fund-name-button" @click="emit('detail', row.code)">
           {{ row.name }}
-        </button>
-        <div class="fund-code-tags">
+        </p>
+        <div class="fund-code-tags overflow-x-auto">
           <p class="font-mono tabular-nums text-(--td-text-color-secondary)">
             {{ row.code }}
           </p>
@@ -376,30 +379,13 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
       </span>
     </template>
     <template #actions-cell="{ row }">
-      <div>
-        <t-popconfirm
-          cancel-btn="取消"
-          :confirm-btn="{ content: '删除', theme: 'danger' }"
-          theme="danger"
-          :visible="pendingDeleteCode === row.code"
-          @confirm="confirmDelete(row.code)"
-          @visible-change="handleDeleteConfirmVisibleChange(row.code, $event)"
-        >
-          <template #content>
-            <p class="max-w-64 whitespace-normal wrap-break-word">
-              确认删除“{{ row.name }}”（{{ row.code }}）？<br />
-              将从整个基金列表及所有分组中删除。
-            </p>
-          </template>
-          <t-dropdown
-            :options="moreActionOptions"
-            trigger="hover"
-            @click="handleMoreAction(row.code, $event.value)"
-          >
-            <t-button size="small" variant="text">更多... </t-button>
-          </t-dropdown>
-        </t-popconfirm>
-      </div>
+      <t-dropdown
+        :options="moreActionOptions"
+        trigger="hover"
+        @click="handleMoreAction(row.code, $event.value)"
+      >
+        <t-button size="small" variant="text">更多... </t-button>
+      </t-dropdown>
     </template>
   </t-primary-table>
 </template>
@@ -408,12 +394,10 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 @reference '@/style.css';
 
 .fund-code-tags {
-  @apply mt-1 flex max-w-35 gap-1 overflow-x-auto scrollbar-thumb-transparent
-  hover:scrollbar-thumb-current scrollbar-thin;
+  @apply mt-1 flex max-w-35 gap-1 scrollbar-thumb-transparent hover:scrollbar-thumb-current;
 }
 
 .fund-name-button {
-  @apply cursor-pointer whitespace-normal text-left hover:text-(--td-brand-color)
-  focus-visible:outline;
+  @apply cursor-pointer whitespace-normal text-left hover:text-(--td-brand-color) focus-visible:outline;
 }
 </style>

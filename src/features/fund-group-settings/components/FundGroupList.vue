@@ -256,6 +256,7 @@ function handleDragEnd(event: {
     <t-dialog
       v-model:visible="removalVisible"
       header="删除分组"
+      placement="center"
       :width="isSmUp ? undefined : mobileDialogWidth"
       :confirm-btn="{ content: '删除', theme: 'danger' }"
       @confirm="confirmRemove"

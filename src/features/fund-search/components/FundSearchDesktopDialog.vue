@@ -22,7 +22,7 @@ const emit = defineEmits<{
     :destroy-on-close="true"
     :header="step === 'search' ? '搜索并添加基金' : '录入汇总持仓'"
     width="450px"
-    top="50px"
+    placement="center"
     @close="emit('close')"
   >
     <slot />

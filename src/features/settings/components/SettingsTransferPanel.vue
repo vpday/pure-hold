@@ -31,6 +31,21 @@ function updateFundSelection(value: boolean): void {
   emit('updateSelection', { ...props.selection, funds: value })
 }
 
+function updatePortfolioSelection(value: boolean): void {
+  emit('updateSelection', {
+    ...props.selection,
+    portfolio: value,
+    portfolioMode: props.selection.portfolioMode ?? 'merge',
+  })
+}
+
+function updatePortfolioMode(value: unknown): void {
+  emit('updateSelection', {
+    ...props.selection,
+    portfolioMode: value === 'replace' ? 'replace' : 'merge',
+  })
+}
+
 function openFilePicker(): void {
   fileInput.value?.click()
 }
@@ -44,7 +59,8 @@ function handleFileChange(event: Event): void {
 }
 
 function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
-  return `${error.section === 'index' ? '指数' : '基金'}配置无法导入：${error.message}`
+  const label = error.section === 'index' ? '指数' : error.section === 'funds' ? '基金' : '投资账本'
+  return `${label}配置无法导入：${error.message}`
 }
 </script>
 
@@ -52,7 +68,7 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
   <section aria-labelledby="settings-backup-heading">
     <h3 id="settings-backup-heading" class="text-base font-medium">配置备份</h3>
     <p class="mt-1 text-sm text-(--td-text-color-secondary)">
-      导出指数分组和完整基金配置（含持仓），不包含自动刷新偏好或行情快照。
+      导出指数分组、完整基金配置（含持仓）和投资账本，不包含自动刷新偏好或行情快照。
     </p>
 
     <div class="mt-4 flex flex-wrap gap-2">
@@ -108,6 +124,28 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
         >
           基金配置（含持仓）
         </t-checkbox>
+        <t-checkbox
+          :checked="selection.portfolio"
+          :disabled="!importState.package.portfolio"
+          @change="updatePortfolioSelection"
+        >
+          投资账本（交易、分红、修正、定投）
+        </t-checkbox>
+      </div>
+
+      <div
+        v-if="selection.portfolio"
+        class="mt-3 rounded border border-(--td-component-border) p-3"
+      >
+        <div class="text-sm font-medium">投资账本恢复方式</div>
+        <t-radio-group
+          class="mt-2 flex flex-col gap-2"
+          :value="selection.portfolioMode ?? 'merge'"
+          @change="updatePortfolioMode"
+        >
+          <t-radio value="merge">合并：保留现有记录，相同稳定 ID 内容一致时幂等</t-radio>
+          <t-radio value="replace">显式替换：先备份现有账本，失败时尝试恢复</t-radio>
+        </t-radio-group>
       </div>
 
       <div
@@ -141,7 +179,7 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
             <t-button
               theme="primary"
               variant="base"
-              :disabled="!selection.index && !selection.funds"
+              :disabled="!selection.index && !selection.funds && !selection.portfolio"
             >
               确认
             </t-button>
@@ -150,7 +188,7 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
             v-else
             theme="primary"
             variant="base"
-            :disabled="!selection.index && !selection.funds"
+            :disabled="!selection.index && !selection.funds && !selection.portfolio"
             @click="emit('commitImport')"
           >
             确认

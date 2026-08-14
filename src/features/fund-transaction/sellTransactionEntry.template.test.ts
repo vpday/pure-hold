@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import { test } from 'node:test'
+
+async function readFeatureFile(relativePath: string): Promise<string> {
+  return readFile(new URL(relativePath, import.meta.url), 'utf8')
+}
+
+test('sell entry exposes a separate sell flow without changing the buy form contract', async () => {
+  const source = await readFeatureFile('./FundTransactionEntry.vue')
+
+  assert.match(source, /openSell/)
+  assert.match(source, /saveSellDraft/)
+  assert.match(source, /FundSellForm/)
+  assert.match(source, /记录卖出/)
+})
+
+test('fund list routes sell actions on desktop and mobile', async () => {
+  const [section, actions, desktop, mobile, quoteCard] = await Promise.all([
+    readFeatureFile('../fund-list/FundListSection.vue'),
+    readFeatureFile('../fund-list/components/FundActions.vue'),
+    readFeatureFile('../fund-list/components/FundDesktopTable.vue'),
+    readFeatureFile('../fund-list/components/FundMobileList.vue'),
+    readFeatureFile('../fund-list/components/FundQuoteCard.vue'),
+  ])
+
+  assert.match(section, /@sell="openSell"/)
+  assert.match(actions, /sell: \[code: string\]/)
+  assert.match(actions, /emit\('sell', props\.code\)/)
+  assert.match(actions, /value: 'plan'/)
+  assert.match(desktop, /value === 'sell'/)
+  assert.match(desktop, /emit\('sell', code\)/)
+  assert.match(mobile, /@sell="emit\('sell', \$event\)"/)
+  assert.match(quoteCard, /@sell="emit\('sell', \$event\)"/)
+})
+
+test('fund detail reserves space for sell FIFO facts and remaining batches', async () => {
+  const source = await readFile(
+    new URL('../fund-detail/components/FundDetailDrawer.vue', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /transaction\.kind === 'sell'/)
+  assert.match(source, /remainingBatches/)
+  assert.match(source, /realizedGainStatusText/)
+  assert.match(source, /overflow-x-auto/)
+})

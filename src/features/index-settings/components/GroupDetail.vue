@@ -74,7 +74,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
       :delay-on-touch-only="true"
       data-testid="index-settings-selected-list"
       handle=".drag-handle"
-      class="selected-index-list"
+      class="selected-index-list overflow-y-auto"
       @end="handleDragEnd"
     >
       <t-card
@@ -123,6 +123,6 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
 }
 
 .selected-index-list {
-  @apply flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1;
+  @apply flex min-h-0 flex-1 flex-col gap-2 pr-1;
 }
 </style>

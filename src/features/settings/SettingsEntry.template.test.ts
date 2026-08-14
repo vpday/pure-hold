@@ -22,6 +22,14 @@ test('renders import selection in a dialog and overwrite confirmation as a popco
   assert.doesNotMatch(source, /header="确认覆盖配置"/)
 })
 
+test('exposes portfolio transfer selection and explicit recovery modes', () => {
+  assert.match(transferSource, /投资账本（交易、分红、修正、定投）/)
+  assert.match(transferSource, /合并：保留现有记录，相同稳定 ID 内容一致时幂等/)
+  assert.match(transferSource, /显式替换：先备份现有账本，失败时尝试恢复/)
+  assert.match(source, /portfolio: props\.portfolio\.getPortfolio\(\)/)
+  assert.match(source, /new Set\(fundStore\.fundOrder\)/)
+})
+
 test('uses separate backup and restore sections', () => {
   assert.match(transferSource, /id="settings-backup-heading"[^>]*>配置备份<\/h3>/)
   assert.match(transferSource, /id="settings-restore-heading"[^>]*>配置恢复<\/h3>/)

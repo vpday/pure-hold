@@ -28,7 +28,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="space-y-5">
+  <div class="space-y-4">
     <SettingsRefreshPanel
       :model-value="modelValue"
       @update:model-value="emit('update:modelValue', $event)"

@@ -36,7 +36,21 @@ function changeMode(mode: FundHoldingTimeMode): void {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 pb-3">
+  <div class="flex flex-col gap-4">
+    <template v-if="groupOptions">
+      <label v-if="groupOptions.length > 0" class="flex flex-col gap-1">
+        <span class="text-sm font-medium">自定义分组</span>
+        <t-select
+            v-model="selectedGroupIds"
+            clearable
+            :min-collapsed-num="2"
+            multiple
+            :options="groupOptions"
+            placeholder="请选择自定义分组"
+        />
+      </label>
+      <p v-else class="text-sm text-(--td-text-color-secondary)">暂无自定义分组</p>
+    </template>
     <div class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4">
       <label class="flex min-w-0 flex-col gap-1">
         <span class="text-sm font-medium">持有份额</span>
@@ -116,20 +130,6 @@ function changeMode(mode: FundHoldingTimeMode): void {
         :tips="errors.dividendMode"
       />
     </label>
-    <template v-if="groupOptions">
-      <label v-if="groupOptions.length > 0" class="flex flex-col gap-1">
-        <span class="text-sm font-medium">自定义分组</span>
-        <t-select
-          v-model="selectedGroupIds"
-          clearable
-          :min-collapsed-num="2"
-          multiple
-          :options="groupOptions"
-          placeholder="请选择自定义分组"
-        />
-      </label>
-      <p v-else class="text-sm text-(--td-text-color-secondary)">暂无自定义分组</p>
-    </template>
   </div>
 </template>
 

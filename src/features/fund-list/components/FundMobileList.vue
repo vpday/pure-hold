@@ -15,10 +15,13 @@ const props = defineProps<{
   sort: FundSort | null
 }>()
 const emit = defineEmits<{
+  buy: [code: string]
   comingSoon: []
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
+  plan: [code: string]
+  sell: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
 const sortDrawerVisible = ref(false)
@@ -110,20 +113,40 @@ defineExpose({ openSortDrawer })
       :key="`${row.code}:${row.holding?.currentIncome.source ?? 'quote'}`"
       :holding-mode="holdingMode"
       :row="row"
+      @buy="emit('buy', $event)"
       @coming-soon="emit('comingSoon')"
       @delete="emit('delete', $event)"
       @detail="emit('detail', $event)"
       @edit="emit('edit', $event)"
+      @plan="emit('plan', $event)"
+      @sell="emit('sell', $event)"
     />
 
     <t-drawer
       v-model:visible="sortDrawerVisible"
       attach="body"
+      :close-btn="false"
+      :close-on-esc-keydown="false"
+      :close-on-overlay-click="false"
       :destroy-on-close="true"
-      header="排序"
+      drawer-class-name="fund-sort-drawer"
       placement="bottom"
       size="100dvh"
     >
+      <template #header>
+        <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center">
+          <t-button
+            aria-label="关闭排序"
+            shape="circle"
+            variant="text"
+            @click="sortDrawerVisible = false"
+          >
+            <template #icon><t-icon name="close" /></template>
+          </t-button>
+          <span class="text-lg font-medium">排序</span>
+          <span aria-hidden="true" />
+        </div>
+      </template>
       <div class="mobile-sort-content">
         <section class="mobile-sort-section" aria-labelledby="mobile-sort-direction-title">
           <div class="mobile-sort-section-heading">
@@ -206,10 +229,16 @@ defineExpose({ openSortDrawer })
 }
 
 .mobile-sort-footer {
-  @apply flex items-center justify-between gap-2 pb-[env(safe-area-inset-bottom)];
+  @apply flex items-center justify-between gap-2 border-t border-(--td-component-border) pt-3 pb-[env(safe-area-inset-bottom)];
 }
 
 .mobile-sort-direction {
   @apply grid w-full grid-cols-2;
+}
+
+:deep(.fund-sort-drawer .t-drawer__body) {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 </style>

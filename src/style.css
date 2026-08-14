@@ -31,7 +31,9 @@
   }
 
   :where(.overflow-auto, .overflow-x-auto, .overflow-y-auto) {
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
     scrollbar-width: thin;
+    scrollbar-color: var(--td-scrollbar-color) transparent;
+    overscroll-behavior: contain;
   }
 }

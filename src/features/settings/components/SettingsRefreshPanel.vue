@@ -49,7 +49,7 @@ function updateFundInterval(value: number | number[]): void {
       自动刷新只作用于首页行情；关闭后仍可使用顶部的“刷新全部数据”。
     </p>
 
-    <div class="flex flex-col gap-5 mt-4">
+    <div class="flex flex-col gap-6 mt-4">
       <div>
         <div class="flex items-center justify-between gap-2 sm:justify-start">
           <span>指数行情</span>

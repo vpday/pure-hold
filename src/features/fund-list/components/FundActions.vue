@@ -1,26 +1,35 @@
 <script setup lang="ts">
-defineProps<{ code: string; name: string }>()
-const emit = defineEmits<{ comingSoon: []; delete: [code: string]; edit: [code: string] }>()
+import type { DropdownProps } from 'tdesign-vue-next'
+
+const props = defineProps<{ code: string }>()
+const emit = defineEmits<{
+  buy: [code: string]
+  delete: [code: string]
+  edit: [code: string]
+  plan: [code: string]
+  sell: [code: string]
+}>()
+const actionOptions = [
+  { content: '编辑', value: 'edit' },
+  { content: '定投', value: 'plan' },
+  { content: '记录买入', value: 'buy' },
+  { content: '记录卖出', value: 'sell' },
+  { content: '删除', theme: 'error', value: 'delete' },
+] satisfies NonNullable<DropdownProps['options']>
+
+function handleAction(value: unknown): void {
+  if (value === 'edit') emit('edit', props.code)
+  else if (value === 'plan') emit('plan', props.code)
+  else if (value === 'buy') emit('buy', props.code)
+  else if (value === 'sell') emit('sell', props.code)
+  else if (value === 'delete') emit('delete', props.code)
+}
 </script>
 
 <template>
-  <t-space>
-    <t-button size="small" variant="text" @click="emit('edit', code)">编辑</t-button>
-    <t-popconfirm
-      cancel-btn="取消"
-      :confirm-btn="{ content: '删除', theme: 'danger' }"
-      theme="danger"
-      @confirm="emit('delete', code)"
-    >
-      <template #content>
-        <p class="max-w-64 whitespace-normal wrap-break-word">
-          确认删除“{{ name }}”（{{ code }}）？<br />
-          将从整个基金列表及所有分组中删除。
-        </p>
-      </template>
-      <t-button size="small" variant="text" theme="danger">删除</t-button>
-    </t-popconfirm>
-    <t-button size="small" variant="text" @click="emit('comingSoon')">记录买入</t-button>
-    <t-button size="small" variant="text" @click="emit('comingSoon')">记录卖出</t-button>
-  </t-space>
+  <t-dropdown :options="actionOptions" trigger="click" @click="handleAction($event.value)">
+    <t-button aria-label="更多基金操作" shape="square" size="medium" variant="text">
+      <template #icon><t-icon name="more" /></template>
+    </t-button>
+  </t-dropdown>
 </template>

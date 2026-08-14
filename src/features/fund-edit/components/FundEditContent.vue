@@ -19,7 +19,7 @@ const groupOptions = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div class="flex flex-col gap-4 overflow-y-auto">
     <t-alert v-if="submitError" theme="error" :message="submitError" />
     <header class="flex flex-wrap items-center gap-2">
       <h3 class="min-w-0 flex-1 font-medium">{{ draft.name }}</h3>

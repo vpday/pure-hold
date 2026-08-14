@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-
 import type { FundRowViewModel, FundTrend } from '../models/fundListViewModel'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from '../presenters/formatFundDates'
 import {
@@ -13,12 +11,14 @@ import FundActions from './FundActions.vue'
 
 defineProps<{ holdingMode: boolean; row: FundRowViewModel }>()
 const emit = defineEmits<{
+  buy: [code: string]
   comingSoon: []
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
+  plan: [code: string]
+  sell: [code: string]
 }>()
-const actionsVisible = ref(false)
 
 function trendClass(trend: FundTrend): string {
   if (trend === 'up') return 'text-(--td-error-color)'
@@ -34,7 +34,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
 <template>
   <t-card :bordered="true" class="w-full">
     <div class="flex items-start justify-between gap-3">
-      <button type="button" class="min-w-0 text-left" @click="emit('detail', row.code)">
+      <div @click="emit('detail', row.code)">
         <span class="block font-medium">{{ row.name }}</span>
         <span class="mt-1 flex flex-wrap gap-2 items-center">
           <t-tag color="var(--td-gray-color-8)" size="small" variant="light">{{ row.code }}</t-tag>
@@ -50,15 +50,15 @@ function isPlaceholderPair(first: string, second: string): boolean {
             </t-tag>
           </span>
         </span>
-      </button>
-      <t-button
-        shape="square"
-        variant="text"
-        :aria-label="actionsVisible ? '收起基金操作' : '展开基金操作'"
-        @click.stop="actionsVisible = !actionsVisible"
-      >
-        <template #icon><t-icon :name="actionsVisible ? 'chevron-up' : 'more'" /></template>
-      </t-button>
+      </div>
+      <FundActions
+        :code="row.code"
+        @buy="emit('buy', $event)"
+        @delete="emit('delete', $event)"
+        @edit="emit('edit', $event)"
+        @plan="emit('plan', $event)"
+        @sell="emit('sell', $event)"
+      />
     </div>
 
     <div class="mt-4 grid gap-3 grid-cols-4">
@@ -211,15 +211,6 @@ function isPlaceholderPair(first: string, second: string): boolean {
           </p>
         </div>
       </div>
-    </div>
-    <div v-if="actionsVisible" class="mt-4 border-t border-(--td-component-border) pt-3">
-      <FundActions
-        :code="row.code"
-        :name="row.name"
-        @coming-soon="emit('comingSoon')"
-        @delete="emit('delete', $event)"
-        @edit="emit('edit', $event)"
-      />
     </div>
   </t-card>
 </template>

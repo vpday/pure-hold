@@ -4,6 +4,8 @@ import { MessagePlugin } from 'tdesign-vue-next'
 
 import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
+import type { PortfolioBuyEvent, PortfolioSellEvent } from '@/domains/portfolio/models/index.ts'
+import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
 import FundHoldingsSection from './components/FundHoldingsSection.vue'
@@ -17,11 +19,42 @@ import { useFundMetrics } from './composables/useFundMetrics'
 import type { FundMetricsRequestResult } from './composables/useFundMetrics'
 import { useFundPerformance } from './composables/useFundPerformance'
 import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
+import { toBuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
+import {
+  toRemainingBatchViewModels,
+  toSellTransactionIssueViewModels,
+  toSellTransactionViewModel,
+} from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
+import type {
+  RemainingBatchViewModel,
+  SellTransactionIssueViewModel,
+  SellTransactionViewModel,
+} from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
+import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
+import {
+  toPortfolioPlanViewModel,
+  type PlanExecutionRequest,
+  type PlanInstallmentActionRequest,
+  type PortfolioPlanViewModel,
+} from '@/features/fund-plan/presenters/toPortfolioPlanViewModel.ts'
 
-const emit = defineEmits<{ edit: [code: string] }>()
+const props = defineProps<{
+  enableLedger: (fundCode: string) => boolean
+  portfolio: PortfolioStore
+}>()
+const emit = defineEmits<{
+  cancelPlan: [request: PlanInstallmentActionRequest]
+  edit: [code: string]
+  executePlan: [request: PlanExecutionRequest]
+  skipPlan: [request: PlanInstallmentActionRequest]
+}>()
+type FundTransactionViewModel =
+  | (BuyTransactionViewModel & { readonly kind: 'buy' })
+  | (SellTransactionViewModel & { readonly kind: 'sell' })
 const store = useFundsStore()
 const detail = useFundDetail()
 const activeSection = ref('overview')
+const ledgerEnabled = ref(false)
 const historyDataSource = useFundHistoryDataSource()
 const benchmarkDataSource = useFundBenchmarkDataSource()
 const performance = useFundPerformance(
@@ -52,6 +85,52 @@ const viewModel = computed(() => {
   return currentSnapshot
     ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value, holdingMetrics.value)
     : undefined
+})
+const calculation = computed(() => {
+  const code = detail.currentCode.value
+  return code
+    ? props.portfolio.calculate({ asOfDate: shanghaiDate(), currentNavByFund: {} })
+    : undefined
+})
+const transactions = computed<readonly FundTransactionViewModel[]>(() => {
+  const code = detail.currentCode.value
+  const currentCalculation = calculation.value
+  if (!code || !currentCalculation) return []
+  return props.portfolio
+    .getPortfolio()
+    .events.filter(
+      (event): event is PortfolioBuyEvent | PortfolioSellEvent =>
+        event.fundCode === code && (event.kind === 'buy' || event.kind === 'sell'),
+    )
+    .sort((left, right) => left.confirmedDate.localeCompare(right.confirmedDate))
+    .map((event) => {
+      if (event.kind === 'buy') {
+        return { kind: 'buy' as const, ...toBuyTransactionViewModel(event, currentCalculation) }
+      }
+      return { kind: 'sell' as const, ...toSellTransactionViewModel(event, currentCalculation) }
+    })
+})
+const remainingBatches = computed<readonly RemainingBatchViewModel[]>(() => {
+  const code = detail.currentCode.value
+  const currentCalculation = calculation.value
+  return code && currentCalculation ? toRemainingBatchViewModels(currentCalculation, code) : []
+})
+const sellIssues = computed<readonly SellTransactionIssueViewModel[]>(() => {
+  const code = detail.currentCode.value
+  const currentCalculation = calculation.value
+  return code && currentCalculation
+    ? toSellTransactionIssueViewModels(currentCalculation, code)
+    : []
+})
+const planViewModels = computed<readonly PortfolioPlanViewModel[]>(() => {
+  const code = detail.currentCode.value
+  if (!code) return []
+  const portfolio = props.portfolio.getPortfolio()
+  return portfolio.plans
+    .filter(({ fundCode }) => fundCode === code)
+    .map((plan) =>
+      toPortfolioPlanViewModel(plan, portfolio.installments, portfolio.events, shanghaiDate()),
+    )
 })
 
 watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, basicInfo]) => {
@@ -86,6 +165,7 @@ function open(code: string): void {
     return
   }
   activeSection.value = 'overview'
+  ledgerEnabled.value = props.portfolio.getPortfolio().fundCodes.includes(code)
   performance.open(code)
   metrics.open(code)
   holdings.open(code)
@@ -97,6 +177,12 @@ function close(): void {
   performance.close()
   metrics.close()
   holdings.close()
+}
+
+function handleEnableLedger(): void {
+  const code = detail.currentCode.value
+  if (!code || ledgerEnabled.value) return
+  if (props.enableLedger(code)) ledgerEnabled.value = true
 }
 
 async function refresh(): Promise<void> {
@@ -140,6 +226,21 @@ async function edit(code: string): Promise<void> {
   emit('edit', code)
 }
 
+function executePlan(request: PlanExecutionRequest): void {
+  close()
+  emit('executePlan', request)
+}
+
+function skipPlan(request: PlanInstallmentActionRequest): void {
+  close()
+  emit('skipPlan', request)
+}
+
+function cancelPlan(request: PlanInstallmentActionRequest): void {
+  close()
+  emit('cancelPlan', request)
+}
+
 defineExpose({ open })
 </script>
 
@@ -147,13 +248,22 @@ defineExpose({ open })
   <FundDetailDrawer
     v-if="viewModel"
     :active-section="activeSection"
+    :ledger-enabled="ledgerEnabled"
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
+    :remaining-batches="remainingBatches"
+    :plan-view-models="planViewModels"
+    :sell-issues="sellIssues"
+    :transactions="transactions"
     :size="'100dvh'"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"
+    @enable-ledger="handleEnableLedger"
     @edit="edit"
+    @execute-plan="executePlan"
+    @skip-plan="skipPlan"
+    @cancel-plan="cancelPlan"
     @retry="detail.retry"
     @select-section="activeSection = $event"
   >

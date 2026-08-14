@@ -2,6 +2,8 @@ import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDe
 import { validateIndexGroups } from '@/domains/indices/models/validateIndexGroups.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import { validateAndCloneFundSettings } from '@/domains/funds/services/persistence/validateFundSettings.ts'
+import type { Portfolio } from '@/domains/portfolio/models/index.ts'
+import { validateAndClonePortfolio } from '@/domains/portfolio/services/persistence/index.ts'
 
 export const configurationTransferFormat = 'pure-hold-settings'
 export const configurationTransferVersion = 1
@@ -13,20 +15,22 @@ export interface ConfigurationTransferPackage {
     readonly groups: readonly IndexGroupDefinition[]
   }
   readonly funds?: FundSettings
+  readonly portfolio?: Portfolio
 }
 
 export interface ConfigurationTransferSources {
   readonly indexGroups?: readonly IndexGroupDefinition[]
   readonly fundSettings?: FundSettings
+  readonly portfolio?: Portfolio
 }
 
 export interface ConfigurationTransferWarning {
-  readonly section: 'index' | 'funds'
+  readonly section: 'index' | 'funds' | 'portfolio'
   readonly message: string
 }
 
 export interface ConfigurationTransferSectionError {
-  readonly section: 'index' | 'funds'
+  readonly section: 'index' | 'funds' | 'portfolio'
   readonly message: string
 }
 
@@ -47,6 +51,7 @@ export function createConfigurationTransferPackage(
     version: typeof configurationTransferVersion
     index?: { readonly groups: readonly IndexGroupDefinition[] }
     funds?: FundSettings
+    portfolio?: Portfolio
   } = {
     format: configurationTransferFormat,
     version: configurationTransferVersion,
@@ -58,6 +63,9 @@ export function createConfigurationTransferPackage(
   if (sources.fundSettings !== undefined) {
     result.funds = validateAndCloneFundSettings(sources.fundSettings)
   }
+  if (sources.portfolio !== undefined) {
+    result.portfolio = validateAndClonePortfolio(sources.portfolio)
+  }
   return result
 }
 
@@ -68,6 +76,7 @@ export function serializeConfigurationTransfer(sources: ConfigurationTransferSou
 export function parseConfigurationTransfer(
   text: string,
   knownIndexQuoteCodes: ReadonlySet<string>,
+  knownFundCodes?: ReadonlySet<string>,
 ): ConfigurationTransferParseResult {
   let parsed: unknown
   try {
@@ -89,6 +98,7 @@ export function parseConfigurationTransfer(
     version: typeof configurationTransferVersion
     index?: { readonly groups: readonly IndexGroupDefinition[] }
     funds?: FundSettings
+    portfolio?: Portfolio
   } = {
     format: configurationTransferFormat,
     version: configurationTransferVersion,
@@ -113,11 +123,47 @@ export function parseConfigurationTransfer(
     }
   }
 
-  if (!hasIndex && !hasFunds) {
+  const hasPortfolio = parsed.portfolio !== undefined
+  if (hasPortfolio) {
+    try {
+      result.portfolio = validateAndClonePortfolio(parsed.portfolio)
+    } catch (error) {
+      return { message: getErrorMessage(error, '投资账本结构无效'), ok: false }
+    }
+  }
+
+  if (!hasIndex && !hasFunds && !hasPortfolio) {
     return { message: '配置文件不包含可导入的配置分区', ok: false }
   }
 
-  return { ok: true, package: result, sectionErrors: [], warnings: [] }
+  const warnings =
+    hasPortfolio && knownFundCodes !== undefined
+      ? createPortfolioWarnings(result.portfolio!, knownFundCodes)
+      : []
+
+  return { ok: true, package: result, sectionErrors: [], warnings }
+}
+
+function createPortfolioWarnings(
+  portfolio: Portfolio,
+  knownFundCodes: ReadonlySet<string>,
+): ConfigurationTransferWarning[] {
+  const orphanedFundCodes = new Set<string>(portfolio.fundCodes)
+  for (const event of portfolio.events) orphanedFundCodes.add(event.fundCode)
+  for (const plan of portfolio.plans) orphanedFundCodes.add(plan.fundCode)
+  for (const installment of portfolio.installments) orphanedFundCodes.add(installment.fundCode)
+
+  const missingFundCodes = [...orphanedFundCodes]
+    .filter((fundCode) => !knownFundCodes.has(fundCode))
+    .sort()
+  if (missingFundCodes.length === 0) return []
+
+  return [
+    {
+      message: `投资账本包含未添加基金 ${missingFundCodes.join('、')} 的孤立记录，恢复基金后会按代码重新关联`,
+      section: 'portfolio',
+    },
+  ]
 }
 
 function parseIndexGroups(

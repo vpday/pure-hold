@@ -8,8 +8,10 @@ import {
   serializeConfigurationTransfer,
 } from '@/app/settings/transfer/configurationTransfer.ts'
 import { createConfigurationTransferCoordinator } from '@/app/settings/transfer/configurationTransferCoordinator.ts'
+import { createPortfolioTransferAdapter } from '@/app/settings/transfer/portfolioTransfer.ts'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
 import { useIndexQuotesStore } from '@/domains/indices/stores/useIndexQuotesStore.ts'
+import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints.ts'
 import SettingsContent from './components/SettingsContent.vue'
 import type {
@@ -18,20 +20,38 @@ import type {
   SettingsImportState,
 } from './models/settingsViewModel.ts'
 
+const props = defineProps<{ portfolio: PortfolioStore }>()
 const appSettingsStore = useAppSettingsStore()
 const indexStore = useIndexQuotesStore()
 const fundStore = useFundsStore()
+const portfolioTransfer = createPortfolioTransferAdapter(props.portfolio)
 const { isSmUp } = useBreakpoints()
 const visible = ref(false)
 const draft = ref<SettingsDraft>(appSettingsStore.getSnapshot())
 const initialDraft = ref<SettingsDraft>(appSettingsStore.getSnapshot())
 const importState = ref<SettingsImportState | null>(null)
-const selection = ref<SettingsImportSelection>({ funds: false, index: false })
+const selection = ref<SettingsImportSelection>({
+  funds: false,
+  index: false,
+  portfolio: false,
+  portfolioMode: 'merge',
+})
 const isDirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(initialDraft.value))
 const overwriteSections = computed(() => {
   const sections: string[] = []
   if (selection.value.index && indexStore.groups.length > 0) sections.push('指数分组')
   if (selection.value.funds && fundStore.fundOrder.length > 0) sections.push('基金')
+  if (selection.value.portfolio && selection.value.portfolioMode === 'replace') {
+    const current = props.portfolio.getPortfolio()
+    if (
+      current.events.length > 0 ||
+      current.fundCodes.length > 0 ||
+      current.installments.length > 0 ||
+      current.plans.length > 0
+    ) {
+      sections.push('投资账本')
+    }
+  }
   return sections
 })
 const requiresOverwrite = computed(() => overwriteSections.value.length > 0)
@@ -43,7 +63,10 @@ const transferCoordinator = createConfigurationTransferCoordinator({
   commitIndexGroups: indexStore.commitGroups,
   getFundSettings: fundStore.getSettingsSnapshot,
   getIndexGroups: indexStore.getSettingsSnapshot,
+  getPortfolio: props.portfolio.getPortfolio,
+  mergePortfolio: portfolioTransfer.merge,
   replaceFundSettings: fundStore.replaceSettingsPersisted,
+  replacePortfolio: portfolioTransfer.replace,
 })
 
 function open(): void {
@@ -89,6 +112,7 @@ function exportText(): string {
   return serializeConfigurationTransfer({
     fundSettings: fundStore.getSettingsSnapshot(),
     indexGroups: indexStore.getSettingsSnapshot(),
+    portfolio: props.portfolio.getPortfolio(),
   })
 }
 
@@ -143,7 +167,7 @@ async function importFromFile(file: File): Promise<void> {
 
 async function importText(text: string): Promise<void> {
   const knownQuoteCodes = new Set(indexStore.definitions.map(({ quoteCode }) => quoteCode))
-  const result = parseConfigurationTransfer(text, knownQuoteCodes)
+  const result = parseConfigurationTransfer(text, knownQuoteCodes, new Set(fundStore.fundOrder))
   if (!result.ok) {
     importState.value = null
     MessagePlugin.error(result.message)
@@ -158,12 +182,14 @@ async function importText(text: string): Promise<void> {
   selection.value = {
     funds: result.package.funds !== undefined,
     index: result.package.index !== undefined,
+    portfolio: result.package.portfolio !== undefined,
+    portfolioMode: 'merge',
   }
 }
 
 function clearImport(): void {
   importState.value = null
-  selection.value = { funds: false, index: false }
+  selection.value = { funds: false, index: false, portfolio: false, portfolioMode: 'merge' }
 }
 
 function updateSelection(nextSelection: SettingsImportSelection): void {
@@ -197,10 +223,8 @@ defineExpose({ open })
     :confirm-btn="{ content: '确认', disabled: !isDirty, variant: 'base' }"
     :destroy-on-close="true"
     header="设置"
-    :dialog-style="{ height: 'min(600px, calc(100dvh - 64px))' }"
     placement="center"
     width="550px"
-    top="50px"
     @cancel="close"
     @close="close"
     @confirm="save"
