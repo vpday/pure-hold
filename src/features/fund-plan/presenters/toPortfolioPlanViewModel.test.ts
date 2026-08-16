@@ -65,3 +65,13 @@ test('uses the settled associated buy as the source of executed status', () => {
   assert.equal(historical?.detailText, '关联买入已结算')
   assert.equal(result.nextDateText, '2026-09-01')
 })
+
+test('describes daily plans as trading-day schedules', () => {
+  const result = toPortfolioPlanViewModel(
+    { ...plan, cycle: 'daily', executionDay: 1 },
+    [],
+    [],
+    '2026-08-14',
+  )
+  assert.equal(result.cycleText, '每天（交易日）')
+})

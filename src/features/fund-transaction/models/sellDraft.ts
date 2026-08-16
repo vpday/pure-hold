@@ -27,10 +27,12 @@ export type SellDraftResult =
 export function createSellDraft(input: SellDraftInput, options: SellDraftOptions): SellDraftResult {
   const errors: Record<string, string> = {}
   if (!/^\d{6}$/.test(input.fundCode)) errors.fundCode = '基金代码无效'
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.confirmedDate)) {
+  if (!isValidDate(input.confirmedDate)) {
     errors.confirmedDate = '确认日期无效'
   } else if (input.confirmedDate > options.today) {
     errors.confirmedDate = '确认日期不能晚于今天'
+  } else if (isWeekend(input.confirmedDate)) {
+    errors.confirmedDate = '确认日期不能是周末'
   }
 
   const units = parseUnits(input.units)
@@ -99,4 +101,14 @@ function parseUnitNav(value: string | undefined): number | null {
   if (!/^\d+(?:\.\d{1,4})?$/.test(value.trim())) return null
   const nav = Number(value)
   return Number.isFinite(nav) && nav > 0 ? nav : null
+}
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function isWeekend(value: string): boolean {
+  return [0, 6].includes(new Date(`${value}T00:00:00.000Z`).getUTCDay())
 }

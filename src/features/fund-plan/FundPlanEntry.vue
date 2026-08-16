@@ -65,8 +65,8 @@ function savePlan(planDraft: PortfolioPlanDraft): void {
   MessagePlugin.success('定投计划已保存')
 }
 
-function submitPlan(): void {
-  planForm.value?.submit()
+async function submitPlan(): Promise<void> {
+  await planForm.value?.submit()
 }
 
 function updatePlanStatus(status: PortfolioPlan['status']): void {
@@ -114,13 +114,15 @@ defineExpose({ open })
 <template>
   <FundPlanDesktopDialog v-if="isSmUp" v-model:visible="visible" @close="close">
     <div v-if="fundCode" class="flex flex-col gap-4">
-      <header class="flex flex-wrap items-center gap-2">
-        <h3 class="min-w-0 flex-1 font-medium">{{ fundName }}</h3>
-        <span class="fund-code-badge">{{ fundCode }}</span>
+      <header class="flex flex-col gap-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="min-w-0 flex-1 font-medium text-(--td-text-color-primary)">{{ fundName }}</h3>
+          <t-tag variant="light">{{ fundCode }}</t-tag>
+        </div>
+        <p class="text-xs text-(--td-text-color-secondary)">
+          只记录本地定投计划，不会自动扣款或访问基金平台。
+        </p>
       </header>
-      <p class="text-sm text-(--td-text-color-secondary)">
-        只记录本地定投计划，不会自动扣款或访问基金平台。
-      </p>
       <FundPlanForm
         ref="planForm"
         :error="planError"
@@ -143,13 +145,15 @@ defineExpose({ open })
 
   <FundPlanMobileDrawer v-else v-model:visible="visible" @close="close">
     <div v-if="fundCode" class="fund-plan-mobile-content">
-      <header class="flex flex-wrap items-center gap-2">
-        <h3 class="min-w-0 flex-1 font-medium">{{ fundName }}</h3>
-        <span class="fund-code-badge">{{ fundCode }}</span>
+      <header class="flex flex-col gap-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <h3 class="min-w-0 flex-1 font-medium text-(--td-text-color-primary)">{{ fundName }}</h3>
+          <t-tag variant="light">{{ fundCode }}</t-tag>
+        </div>
+        <p class="text-xs text-(--td-text-color-secondary)">
+          只记录本地定投计划，不会自动扣款或访问基金平台。
+        </p>
       </header>
-      <p class="text-sm text-(--td-text-color-secondary)">
-        只记录本地定投计划，不会自动扣款或访问基金平台。
-      </p>
       <FundPlanForm
         ref="planForm"
         :error="planError"
@@ -173,10 +177,6 @@ defineExpose({ open })
 
 <style scoped>
 @reference '@/style.css';
-
-.fund-code-badge {
-  @apply rounded bg-(--td-bg-color-secondarycontainer) px-2 py-0.5 font-mono text-xs tabular-nums text-(--td-text-color-secondary);
-}
 
 .fund-plan-mobile-content {
   @apply flex min-h-full flex-col gap-4;

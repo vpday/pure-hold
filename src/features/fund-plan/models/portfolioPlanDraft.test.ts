@@ -27,7 +27,7 @@ test('validates a plan draft and preserves its stable ID when edited', () => {
       executionMode: 'local-draft',
       fundCode: '000001',
       id: 'plan-1',
-      startDate: '2026-08-01',
+      startDate: '2026-07-31',
       status: 'paused',
       updatedAt: '2026-08-01T09:00:00.000Z',
     },
@@ -67,4 +67,78 @@ test('rejects invalid amount, execution day, dates, and fee rate', () => {
   assert.ok(result.errors.executionDay)
   assert.ok(result.errors.endDate)
   assert.ok(result.errors.purchaseFeePercent)
+})
+
+test('normalizes a new weekend start date to the previous trading day', () => {
+  assert.equal(createPortfolioPlanDraft(undefined, '000001', '2026-08-16').startDate, '2026-08-14')
+})
+
+test('supports daily plans while keeping the execution day compatibility field', () => {
+  const draft = {
+    amountYuan: '100.00',
+    cycle: 'daily' as const,
+    endDate: '2027-01-01',
+    executionDay: '1',
+    executionMode: 'local-draft' as const,
+    fundCode: '000001',
+    purchaseFeePercent: '100.0000',
+    startDate: '2026-08-14',
+    status: 'active' as const,
+  }
+  const valid = submitPortfolioPlanDraft(draft, {
+    now: '2026-08-14T09:00:00.000Z',
+    today: '2026-08-14',
+  })
+  assert.equal(valid.ok, true)
+  if (!valid.ok) return
+  assert.equal(valid.plan.cycle, 'daily')
+  assert.equal(valid.plan.executionDay, 1)
+
+  const invalidDaily = submitPortfolioPlanDraft(
+    { ...draft, executionDay: '2' },
+    { now: '2026-08-14T09:00:00.000Z', today: '2026-08-14' },
+  )
+  assert.equal(invalidDaily.ok, false)
+  if (invalidDaily.ok) return
+  assert.equal(invalidDaily.errors.executionDay, '每天周期的执行日必须为 1')
+})
+
+test('rejects weekend or future starts, accepts future ends, and rejects weekend ends', () => {
+  const base = {
+    amountYuan: '100.00',
+    cycle: 'weekly' as const,
+    endDate: '2027-01-01',
+    executionDay: '1',
+    executionMode: 'manual' as const,
+    fundCode: '000001',
+    purchaseFeePercent: '',
+    startDate: '2026-08-14',
+    status: 'active' as const,
+  }
+  assert.equal(
+    submitPortfolioPlanDraft(
+      { ...base, startDate: '2026-08-15' },
+      { now: '2026-08-14T09:00:00.000Z', today: '2026-08-14' },
+    ).ok,
+    false,
+  )
+  assert.equal(
+    submitPortfolioPlanDraft(
+      { ...base, startDate: '2026-08-17' },
+      { now: '2026-08-14T09:00:00.000Z', today: '2026-08-14' },
+    ).ok,
+    false,
+  )
+  assert.equal(
+    submitPortfolioPlanDraft(
+      { ...base, endDate: '2026-08-15' },
+      { now: '2026-08-14T09:00:00.000Z', today: '2026-08-14' },
+    ).ok,
+    false,
+  )
+  const futureEnd = submitPortfolioPlanDraft(base, {
+    now: '2026-08-14T09:00:00.000Z',
+    today: '2026-08-14',
+  })
+  assert.equal(futureEnd.ok, true)
 })

@@ -79,7 +79,9 @@ export function toPortfolioPlanViewModel(
     cycleText:
       plan.cycle === 'weekly'
         ? `每周 ${weekdayText(plan.executionDay)}`
-        : `每月 ${plan.executionDay} 日`,
+        : plan.cycle === 'monthly'
+          ? `每月 ${plan.executionDay} 日`
+          : '每天（交易日）',
     executionModeText: plan.executionMode === 'manual' ? '手动执行' : '本地生成草稿',
     feeRateText: plan.purchaseFeeRate === undefined ? '跟随基金资料' : `${plan.purchaseFeeRate}%`,
     id: plan.id,

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FieldValue, Portfolio, PortfolioEvent } from '../../models/index.ts'
+import type { FieldValue, Portfolio, PortfolioEvent, PortfolioPlan } from '../../models/index.ts'
 import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import {
   corruptPortfolioStorageKeyPrefix,
@@ -54,6 +54,22 @@ function portfolio(overrides: Partial<Portfolio> = {}): Portfolio {
   }
 }
 
+function plan(overrides: Partial<PortfolioPlan> = {}): PortfolioPlan {
+  return {
+    amountCents: 10000,
+    createdAt: '2026-08-13T09:00:00.000Z',
+    cycle: 'monthly',
+    executionDay: 1,
+    executionMode: 'manual',
+    fundCode: '000001',
+    id: 'plan-1',
+    startDate: '2026-08-14',
+    status: 'active',
+    updatedAt: '2026-08-13T09:00:00.000Z',
+    ...overrides,
+  }
+}
+
 test('loads an empty portfolio and round trips version one facts as detached objects', () => {
   withStorage((storage) => {
     assert.deepEqual(loadPortfolio(), { events: [], fundCodes: [], installments: [], plans: [] })
@@ -77,6 +93,20 @@ test('exposes one public persistence seam for loading and saving portfolio facts
     assert.deepEqual(persistence.load(), emptyPortfolio())
     persistence.save(portfolio())
     assert.deepEqual(persistence.load(), portfolio())
+  })
+})
+
+test('loads daily plans and keeps old weekly and monthly plan shapes readable', () => {
+  withStorage(() => {
+    const input = portfolio({
+      plans: [
+        plan({ cycle: 'weekly', executionDay: 1 }),
+        plan({ cycle: 'monthly', executionDay: 31, id: 'plan-2' }),
+        plan({ cycle: 'daily', executionDay: 1, id: 'plan-3' }),
+      ],
+    })
+    savePortfolio(input)
+    assert.deepEqual(loadPortfolio(), input)
   })
 })
 

@@ -47,7 +47,7 @@ test('generates weekly dates and clamps monthly dates to month ends including le
   )
   assert.deepEqual(
     getPlanOccurrenceDates(plan(), { fromDate: '2026-01-01', toDate: '2026-04-01' }),
-    ['2026-01-31', '2026-02-28', '2026-03-31'],
+    ['2026-03-31'],
   )
   assert.deepEqual(
     getPlanOccurrenceDates(plan(), { fromDate: '2028-01-01', toDate: '2028-03-01' }),
@@ -56,13 +56,44 @@ test('generates weekly dates and clamps monthly dates to month ends including le
 })
 
 test('does not generate dates outside plan bounds and exposes the next occurrence', () => {
-  const bounded = plan({ endDate: '2026-03-10' })
+  const bounded = plan({ endDate: '2026-04-10' })
   assert.deepEqual(
     getPlanOccurrenceDates(bounded, { fromDate: '2025-01-01', toDate: '2027-01-01' }),
-    ['2026-01-31', '2026-02-28'],
+    ['2026-03-31'],
   )
-  assert.equal(getNextPlanOccurrenceDate(bounded, '2026-02-01'), '2026-02-28')
-  assert.equal(getNextPlanOccurrenceDate(bounded, '2026-03-11'), undefined)
+  assert.equal(getNextPlanOccurrenceDate(bounded, '2026-02-01'), '2026-03-31')
+  assert.equal(getNextPlanOccurrenceDate(bounded, '2026-04-11'), undefined)
+})
+
+test('filters daily, weekly, and monthly candidates without shifting them', () => {
+  assert.deepEqual(
+    getPlanOccurrenceDates(plan({ cycle: 'daily', executionDay: 1, startDate: '2026-01-01' }), {
+      fromDate: '2026-01-01',
+      toDate: '2026-01-05',
+    }),
+    ['2026-01-05'],
+  )
+  assert.deepEqual(
+    getPlanOccurrenceDates(plan({ cycle: 'weekly', executionDay: 5, startDate: '2026-04-24' }), {
+      fromDate: '2026-04-24',
+      toDate: '2026-05-08',
+    }),
+    ['2026-04-24', '2026-05-08'],
+  )
+  assert.deepEqual(
+    getPlanOccurrenceDates(plan({ cycle: 'monthly', executionDay: 1, startDate: '2026-01-01' }), {
+      fromDate: '2026-01-01',
+      toDate: '2026-02-05',
+    }),
+    [],
+  )
+  assert.equal(
+    getNextPlanOccurrenceDate(
+      plan({ cycle: 'daily', executionDay: 1, startDate: '2026-01-01' }),
+      '2026-01-01',
+    ),
+    '2026-01-05',
+  )
 })
 
 test('manual plans do not create a first draft until execution is explicit', () => {
@@ -99,7 +130,7 @@ test('manual plans do not create a first draft until execution is explicit', () 
 
 test('local drafts are idempotent and retain historical executed events', () => {
   const current = store()
-  assert.equal(current.addPlan(plan({ executionMode: 'local-draft' })).ok, true)
+  assert.equal(current.addPlan(plan({ executionDay: 5, executionMode: 'local-draft' })).ok, true)
   const first = syncLocalDraftPlans(current, '2026-03-31', '2026-03-31T09:00:00.000Z')
   assert.equal(first.length, 3)
   assert.equal(current.getPortfolio().events.length, 3)
@@ -135,8 +166,8 @@ test('defer records an actual date while skip and cancel do not create events', 
   const created = executePlanInstallment(
     current,
     currentPlan,
-    '2026-01-31',
-    '2026-01-01T09:00:00.000Z',
+    '2026-03-31',
+    '2026-03-01T09:00:00.000Z',
   )
   if (!created.ok) throw new Error('expected installment')
   assert.equal(
@@ -159,7 +190,7 @@ test('defer records an actual date while skip and cancel do not create events', 
   const skippedOnly = ensurePlanInstallment(
     current,
     currentPlan,
-    '2026-02-28',
+    '2026-04-30',
     '2026-02-03T09:00:00.000Z',
   )
   if (!skippedOnly.ok) throw new Error('expected second installment')
@@ -173,7 +204,7 @@ test('defer records an actual date while skip and cancel do not create events', 
     true,
   )
   assert.equal(current.getPortfolio().events.length, 0)
-  assert.equal(planInstallmentId(currentPlan.id, '2026-01-31'), created.installment.id)
+  assert.equal(planInstallmentId(currentPlan.id, '2026-03-31'), created.installment.id)
   assert.equal(
     createPendingPlanBuyEvent(currentPlan, created.installment, '2026-01-01T09:00:00.000Z').id,
     created.event?.id,
@@ -187,8 +218,8 @@ test('deleting a plan removes pending artifacts but keeps settled buys as standa
   const created = executePlanInstallment(
     current,
     currentPlan,
-    '2026-01-31',
-    '2026-01-01T09:00:00.000Z',
+    '2026-03-31',
+    '2026-03-01T09:00:00.000Z',
   )
   if (!created.ok || created.event === undefined) throw new Error('expected plan buy')
   const settled = current.updateEvent({ ...created.event, settlementStatus: 'settled' })

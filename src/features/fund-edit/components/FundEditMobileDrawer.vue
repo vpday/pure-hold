@@ -31,7 +31,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>()
         </t-button>
       </div>
     </template>
-    <div class="fund-edit-mobile-content">
+    <div class="fund-edit-mobile-content overflow-y-auto">
       <slot />
     </div>
   </t-drawer>
@@ -41,7 +41,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>()
 @reference '@/style.css';
 
 .fund-edit-mobile-content {
-  @apply flex h-full min-h-0 flex-col overflow-y-auto pb-[env(safe-area-inset-bottom)] pr-1;
+  @apply flex h-full min-h-0 flex-col pb-[env(safe-area-inset-bottom)] pr-1;
 }
 </style>
 

@@ -44,6 +44,7 @@ const sellUnits = ref('')
 const actualNetAmountYuan = ref('')
 const actualRedemptionFeeYuan = ref('')
 const errors = ref<Readonly<Record<string, string>>>({})
+const transactionForm = ref<{ validate: () => Promise<boolean> }>()
 interface PlanBuyContext {
   readonly existingEvent?: PortfolioBuyEvent
   readonly installment?: PortfolioInstallment
@@ -79,7 +80,7 @@ function open(code: string, name: string, options: BuyTransactionOpenOptions = {
         }
   const existingEvent = options.existingEvent
   confirmedDate.value =
-    existingEvent?.confirmedDate ?? planBuyContext.value?.plannedDate ?? shanghaiDate()
+    existingEvent?.confirmedDate ?? planBuyContext.value?.plannedDate ?? defaultTransactionDate()
   totalAmountYuan.value = existingEvent
     ? formatCents(existingEvent.totalAmount.value)
     : options.plan
@@ -106,7 +107,7 @@ function openSell(code: string, name: string): void {
   openGeneration += 1
   fundCode.value = code
   fundName.value = name
-  confirmedDate.value = shanghaiDate()
+  confirmedDate.value = defaultTransactionDate()
   sellUnits.value = ''
   actualUnitNav.value = ''
   actualNetAmountYuan.value = ''
@@ -224,7 +225,8 @@ function saveSell(): void {
   emit('saved')
 }
 
-function saveCurrentTransaction(): void {
+async function saveCurrentTransaction(): Promise<void> {
+  if (transactionForm.value === undefined || !(await transactionForm.value.validate())) return
   if (mode.value === 'buy') saveBuy()
   else saveSell()
 }
@@ -273,6 +275,21 @@ function shanghaiDate(now = new Date()): string {
   return `${values.year}-${values.month}-${values.day}`
 }
 
+function defaultTransactionDate(now = new Date()): string {
+  let value = shanghaiDate(now)
+  while (isWeekend(value)) {
+    const date = new Date(`${value}T00:00:00.000Z`)
+    date.setUTCDate(date.getUTCDate() - 1)
+    value = date.toISOString().slice(0, 10)
+  }
+  return value
+}
+
+function isWeekend(value: string): boolean {
+  const day = new Date(`${value}T00:00:00.000Z`).getUTCDay()
+  return day === 0 || day === 6
+}
+
 defineExpose({ open, openBuy: open, openSell })
 </script>
 
@@ -291,6 +308,7 @@ defineExpose({ open, openBuy: open, openSell })
   >
     <FundBuyForm
       v-if="mode === 'buy'"
+      ref="transactionForm"
       :actual-purchase-fee-yuan="actualPurchaseFeeYuan"
       :actual-unit-nav="actualUnitNav"
       :actual-units="actualUnits"
@@ -310,6 +328,7 @@ defineExpose({ open, openBuy: open, openSell })
     />
     <FundSellForm
       v-else
+      ref="transactionForm"
       :actual-net-amount-yuan="actualNetAmountYuan"
       :actual-redemption-fee-yuan="actualRedemptionFeeYuan"
       :actual-unit-nav="actualUnitNav"
@@ -360,6 +379,7 @@ defineExpose({ open, openBuy: open, openSell })
     <div class="fund-transaction-mobile-content">
       <FundBuyForm
         v-if="mode === 'buy'"
+        ref="transactionForm"
         :actual-purchase-fee-yuan="actualPurchaseFeeYuan"
         :actual-unit-nav="actualUnitNav"
         :actual-units="actualUnits"
@@ -379,6 +399,7 @@ defineExpose({ open, openBuy: open, openSell })
       />
       <FundSellForm
         v-else
+        ref="transactionForm"
         :actual-net-amount-yuan="actualNetAmountYuan"
         :actual-redemption-fee-yuan="actualRedemptionFeeYuan"
         :actual-unit-nav="actualUnitNav"

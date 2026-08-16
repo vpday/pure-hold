@@ -35,10 +35,12 @@ export function createBuyDraft(input: BuyDraftInput, options: BuyDraftOptions): 
   if (hasPlanAssociation && (!input.planId || !input.installmentId)) {
     errors.planAssociation = '定投买入必须同时关联计划和期次'
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.confirmedDate)) {
+  if (!isValidDate(input.confirmedDate)) {
     errors.confirmedDate = '确认日期无效'
   } else if (input.confirmedDate > options.today) {
     errors.confirmedDate = '确认日期不能晚于今天'
+  } else if (isWeekend(input.confirmedDate)) {
+    errors.confirmedDate = '确认日期不能是周末'
   }
 
   const totalAmountCents = parseMoneyCents(input.totalAmountYuan)
@@ -48,9 +50,12 @@ export function createBuyDraft(input: BuyDraftInput, options: BuyDraftOptions): 
 
   if (
     input.purchaseFeePercent !== null &&
-    (!Number.isFinite(input.purchaseFeePercent) || input.purchaseFeePercent < 0)
+    (!Number.isFinite(input.purchaseFeePercent) ||
+      input.purchaseFeePercent < 0 ||
+      input.purchaseFeePercent > 100 ||
+      !hasMaxDecimals(input.purchaseFeePercent, 4))
   ) {
-    errors.purchaseFeePercent = '申购费率必须是有效的非负数'
+    errors.purchaseFeePercent = '申购费率必须是 0 至 100 的数字，最多四位小数'
   }
 
   const actualUnits = parseUnits(input.actualUnits)
@@ -135,5 +140,20 @@ function parseUnits(value: string | undefined): number | null {
 
 function parseUnitNav(value: string | undefined): number | null {
   const nav = parseUnits(value)
-  return nav !== null && nav > 0 ? nav : value === undefined ? null : null
+  return nav !== null && nav > 0 ? nav : null
+}
+
+function isValidDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function isWeekend(value: string): boolean {
+  return [0, 6].includes(new Date(`${value}T00:00:00.000Z`).getUTCDay())
+}
+
+function hasMaxDecimals(value: number, maxDecimals: number): boolean {
+  const scale = 10 ** maxDecimals
+  return Math.abs(value * scale - Math.round(value * scale)) <= 1e-8
 }

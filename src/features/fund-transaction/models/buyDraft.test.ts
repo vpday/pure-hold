@@ -106,3 +106,44 @@ test('rejects invalid amount precision, unit precision, dates and non-trustworth
     'totalAmountYuan',
   ])
 })
+
+test('accepts zero optional actual values and the inclusive fee-rate boundary', () => {
+  const result = createBuyDraft(
+    {
+      actualPurchaseFeeYuan: '0.00',
+      actualUnitNav: '0.0001',
+      actualUnits: '0',
+      confirmedDate: '2026-08-14',
+      fundCode: '161725',
+      id: 'buy-zero',
+      purchaseFeePercent: 100,
+      totalAmountYuan: '0.01',
+    },
+    { now: '2026-08-14T12:00:00.000Z', today: '2026-08-14' },
+  )
+
+  assert.equal(result.ok, true)
+  if (!result.ok) return
+  assert.equal(result.draft.units.value, 0)
+  assert.equal(result.draft.purchaseFee.value, 0)
+  assert.equal(result.draft.purchaseFeeRate.value, 100)
+})
+
+test('rejects a weekend fact date and out-of-range or over-precise fee rates', () => {
+  for (const purchaseFeePercent of [100.00001, -0.00001]) {
+    const result = createBuyDraft(
+      {
+        confirmedDate: '2026-08-09',
+        fundCode: '161725',
+        id: `buy-rate-${purchaseFeePercent}`,
+        purchaseFeePercent,
+        totalAmountYuan: '1.00',
+      },
+      { now: '2026-08-14T12:00:00.000Z', today: '2026-08-14' },
+    )
+    assert.equal(result.ok, false)
+    if (result.ok) continue
+    assert.ok(result.errors.confirmedDate)
+    assert.ok(result.errors.purchaseFeePercent)
+  }
+})

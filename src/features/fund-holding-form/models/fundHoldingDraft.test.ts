@@ -51,7 +51,7 @@ test('validates fields and returns a complete holding', () => {
   assert.deepEqual(validateFundHoldingDraft('000001', draft).errors, {
     costPrice: '请输入大于 0、最多 4 位小数的成本价',
     dividendMode: '请选择分红方式',
-    time: '请选择不晚于今天的购买日期',
+    time: '请选择不晚于今天且非周末的购买日期',
     units: '请输入大于 0、最多 4 位小数的份额',
   })
 
@@ -81,10 +81,32 @@ test('rejects excessive precision and invalid or future dates', () => {
     dividendMode: 'reinvest' as const,
     units: '1.23456',
   }
-  for (const purchaseDate of ['2026-07-28', '2026-02-30', '']) {
+  for (const purchaseDate of ['2026-07-28', '2026-07-26', '2026-02-30', '']) {
     draft.purchaseDate = purchaseDate
     assert.equal(
       validateFundHoldingDraft('000001', draft, new Date(2026, 6, 27)).holding,
+      undefined,
+    )
+  }
+})
+
+test('accepts positive four-decimal boundaries and rejects non-positive values', () => {
+  const valid = {
+    ...createEmptyFundHoldingDraft(),
+    costPrice: '0.0001',
+    dividendMode: 'cash' as const,
+    purchaseDate: '2026-07-27',
+    units: '1.2345',
+  }
+  assert.equal(
+    validateFundHoldingDraft('000001', valid, new Date(2026, 6, 27)).holding?.units,
+    1.2345,
+  )
+
+  for (const value of ['0', '0.00001']) {
+    assert.equal(
+      validateFundHoldingDraft('000001', { ...valid, costPrice: value }, new Date(2026, 6, 27))
+        .holding,
       undefined,
     )
   }

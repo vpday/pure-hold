@@ -230,6 +230,12 @@ test('rejects negative values, excessive precision, and invalid calendar or audi
   assert.throws(() => createPortfolioPlan(plan({ amountCents: 100.5 })), /amount/i)
 })
 
+test('accepts daily plans only with the retained execution day value of one', () => {
+  const daily = plan({ cycle: 'daily', executionDay: 1 })
+  assert.deepEqual(createPortfolioPlan(daily), daily)
+  assert.throws(() => createPortfolioPlan({ ...daily, executionDay: 2 }), /execution day/i)
+})
+
 test('rejects duplicate IDs, invalid states, cross-fund references, and kind-incompatible fields', () => {
   assert.throws(
     () =>

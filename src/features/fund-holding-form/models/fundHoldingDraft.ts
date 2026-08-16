@@ -66,7 +66,8 @@ export function validateFundHoldingDraft(
       ? validatePurchaseDate(draft.purchaseDate, today)
       : purchaseDateFromHoldingDays(draft.holdingDays, today)
   if (!purchaseDate) {
-    errors.time = draft.timeMode === 'date' ? '请选择不晚于今天的购买日期' : '请输入正整数持仓天数'
+    errors.time =
+      draft.timeMode === 'date' ? '请选择不晚于今天且非周末的购买日期' : '请输入正整数持仓天数'
   }
 
   if (Object.keys(errors).length > 0) return { errors }
@@ -107,7 +108,8 @@ function validatePurchaseDate(value: string, today: Date): string | undefined {
     return undefined
   }
   const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  return date <= localToday ? value : undefined
+  if (date > localToday || [0, 6].includes(date.getDay())) return undefined
+  return value
 }
 
 function formatLocalDate(date: Date): string {

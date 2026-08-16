@@ -73,12 +73,14 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
       cell: 'estimated-nav-cell',
       colKey: 'estimatedChangePercent',
       sorter: true,
+      width: 120,
       title: () => renderQuoteTitle('净值估算', estimatedAt),
     },
     {
       cell: 'nav-cell',
       colKey: 'dailyChangePercent',
       sorter: true,
+      width: 100,
       title: () => renderQuoteTitle('单位净值', navDate),
     },
   ]
@@ -242,25 +244,23 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
     @sort-change="handleSortChange"
   >
     <template #name-cell="{ row }">
-      <div>
-        <p class="fund-name-button" @click="emit('detail', row.code)">
-          {{ row.name }}
+      <p class="fund-name-button" :title="row.name" @click="emit('detail', row.code)">
+        {{ row.name }}
+      </p>
+      <div class="fund-code-tags overflow-x-auto">
+        <p class="font-mono tabular-nums text-(--td-text-color-secondary)">
+          {{ row.code }}
         </p>
-        <div class="fund-code-tags overflow-x-auto">
-          <p class="font-mono tabular-nums text-(--td-text-color-secondary)">
-            {{ row.code }}
-          </p>
-          <t-tag
-            v-for="tag in row.tags"
-            :key="tag"
-            class="shrink-0"
-            size="small"
-            :theme="fundTagTheme(tag)"
-            variant="light"
-          >
-            {{ tag }}
-          </t-tag>
-        </div>
+        <t-tag
+          v-for="tag in row.tags"
+          :key="tag"
+          class="shrink-0"
+          size="small"
+          :theme="fundTagTheme(tag)"
+          variant="light"
+        >
+          {{ tag }}
+        </t-tag>
       </div>
     </template>
     <template #estimated-nav-cell="{ row }">
@@ -398,6 +398,6 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 }
 
 .fund-name-button {
-  @apply cursor-pointer whitespace-normal text-left hover:text-(--td-brand-color) focus-visible:outline;
+  @apply cursor-pointer hover:text-(--td-brand-color) focus-visible:outline;
 }
 </style>

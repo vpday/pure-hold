@@ -6,6 +6,7 @@ import type {
   PortfolioPlan,
 } from '../models/index.ts'
 import type { PortfolioCommandResult, PortfolioStore } from '../stores/index.ts'
+import { isTradingDay } from './tradingCalendar.ts'
 
 export interface PlanDateRange {
   readonly fromDate: string
@@ -42,9 +43,13 @@ export function getPlanOccurrenceDates(
   const toDate = minDate(plan.endDate ?? range.toDate, range.toDate)
   if (fromDate === undefined || toDate === undefined || fromDate > toDate) return []
 
-  return plan.cycle === 'weekly'
-    ? getWeeklyDates(plan.executionDay, fromDate, toDate)
-    : getMonthlyDates(plan.executionDay, fromDate, toDate)
+  const candidates =
+    plan.cycle === 'daily'
+      ? getDailyDates(fromDate, toDate)
+      : plan.cycle === 'weekly'
+        ? getWeeklyDates(plan.executionDay, fromDate, toDate)
+        : getMonthlyDates(plan.executionDay, fromDate, toDate)
+  return candidates.filter(isTradingDay)
 }
 
 export function getNextPlanOccurrenceDate(
@@ -56,20 +61,18 @@ export function getNextPlanOccurrenceDate(
     return undefined
   }
 
-  if (plan.cycle === 'weekly') {
-    const first = parseDate(firstDate)
-    const currentDay = weekdayNumber(first)
-    const offset = (plan.executionDay - currentDay + 7) % 7
-    const candidate = formatDate(addDays(first, offset))
-    return plan.endDate !== undefined && candidate > plan.endDate ? undefined : candidate
-  }
+  if (plan.cycle === 'weekly' && plan.executionDay > 5) return undefined
 
-  const first = parseDate(firstDate)
-  let candidate = monthlyDate(first.getUTCFullYear(), first.getUTCMonth(), plan.executionDay)
-  if (candidate < firstDate) {
-    candidate = monthlyDate(first.getUTCFullYear(), first.getUTCMonth() + 1, plan.executionDay)
+  let cursor = firstDate
+  while (plan.endDate === undefined || cursor <= plan.endDate) {
+    const candidate = getNextCandidateDate(plan, cursor)
+    if (candidate === undefined || (plan.endDate !== undefined && candidate > plan.endDate)) {
+      return undefined
+    }
+    if (isTradingDay(candidate)) return candidate
+    cursor = formatDate(addDays(parseDate(candidate), 1))
   }
-  return plan.endDate !== undefined && candidate > plan.endDate ? undefined : candidate
+  return undefined
 }
 
 export function createPlanInstallment(
@@ -360,6 +363,34 @@ function getWeeklyDates(executionDay: number, fromDate: string, toDate: string):
     cursor = addDays(cursor, 1)
   }
   return dates
+}
+
+function getDailyDates(fromDate: string, toDate: string): readonly string[] {
+  const dates: string[] = []
+  let cursor = parseDate(fromDate)
+  const end = parseDate(toDate)
+  while (cursor <= end) {
+    dates.push(formatDate(cursor))
+    cursor = addDays(cursor, 1)
+  }
+  return dates
+}
+
+function getNextCandidateDate(plan: PortfolioPlan, fromDate: string): string | undefined {
+  if (plan.cycle === 'daily') return fromDate
+  if (plan.cycle === 'weekly') {
+    const first = parseDate(fromDate)
+    const currentDay = weekdayNumber(first)
+    const offset = (plan.executionDay - currentDay + 7) % 7
+    return formatDate(addDays(first, offset))
+  }
+
+  const first = parseDate(fromDate)
+  let candidate = monthlyDate(first.getUTCFullYear(), first.getUTCMonth(), plan.executionDay)
+  if (candidate < fromDate) {
+    candidate = monthlyDate(first.getUTCFullYear(), first.getUTCMonth() + 1, plan.executionDay)
+  }
+  return candidate
 }
 
 function getMonthlyDates(

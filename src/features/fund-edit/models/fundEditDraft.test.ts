@@ -134,7 +134,7 @@ function fillValidHolding(draft: ReturnType<typeof createFundEditDraft>): void {
   Object.assign(draft.holding, {
     costPrice: '1',
     dividendMode: 'reinvest',
-    purchaseDate: '2026-07-26',
+    purchaseDate: '2026-07-27',
     units: '10',
   })
 }

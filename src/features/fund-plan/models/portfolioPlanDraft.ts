@@ -4,6 +4,7 @@ import type {
   PortfolioPlanCycle,
   PortfolioPlanStatus,
 } from '@/domains/portfolio/models/index.ts'
+import { isTradingDay } from '@/domains/portfolio/services/tradingCalendar.ts'
 
 export interface PortfolioPlanDraft {
   readonly cycle: PortfolioPlanCycle
@@ -46,7 +47,7 @@ export function createPortfolioPlanDraft(
         executionMode: 'manual',
         fundCode,
         purchaseFeePercent: '',
-        startDate: today,
+        startDate: defaultStartDate(today),
         status: 'active',
       }
     : {
@@ -76,23 +77,38 @@ export function submitPortfolioPlanDraft(
   }
 
   const executionDay = parseInteger(draft.executionDay)
-  if (executionDay === null) {
+  if (!['weekly', 'monthly', 'daily'].includes(draft.cycle)) {
+    errors.cycle = '执行周期无效'
+  } else if (executionDay === null) {
     errors.executionDay = '执行日必须是整数'
   } else if (
     (draft.cycle === 'weekly' && (executionDay < 1 || executionDay > 7)) ||
-    (draft.cycle === 'monthly' && (executionDay < 1 || executionDay > 31))
+    (draft.cycle === 'monthly' && (executionDay < 1 || executionDay > 31)) ||
+    (draft.cycle === 'daily' && executionDay !== 1)
   ) {
-    errors.executionDay = draft.cycle === 'weekly' ? '执行星期应为 1 至 7' : '执行日期应为 1 至 31'
+    errors.executionDay =
+      draft.cycle === 'weekly'
+        ? '执行星期应为 1 至 7'
+        : draft.cycle === 'monthly'
+          ? '执行日期应为 1 至 31'
+          : '每天周期的执行日必须为 1'
   }
 
-  if (!isValidDate(draft.startDate)) errors.startDate = '开始日期无效'
-  if (draft.endDate && !isValidDate(draft.endDate)) errors.endDate = '结束日期无效'
-  if (
-    isValidDate(draft.startDate) &&
-    draft.endDate &&
-    isValidDate(draft.endDate) &&
-    draft.endDate < draft.startDate
-  ) {
+  const validStartDate = isValidDate(draft.startDate)
+  if (!validStartDate) {
+    errors.startDate = '开始日期无效'
+  } else if (draft.startDate > options.today) {
+    errors.startDate = '开始日期不能晚于今天'
+  } else if (isWeekend(draft.startDate)) {
+    errors.startDate = '开始日期不能是周末'
+  }
+
+  const validEndDate = !draft.endDate || isValidDate(draft.endDate)
+  if (!validEndDate) {
+    errors.endDate = '结束日期无效'
+  } else if (draft.endDate && isWeekend(draft.endDate)) {
+    errors.endDate = '结束日期不能是周末'
+  } else if (validStartDate && draft.endDate && draft.endDate < draft.startDate) {
     errors.endDate = '结束日期不能早于开始日期'
   }
 
@@ -148,6 +164,21 @@ function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const date = new Date(`${value}T00:00:00.000Z`)
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
+
+function isWeekend(value: string): boolean {
+  return [0, 6].includes(new Date(`${value}T00:00:00.000Z`).getUTCDay())
+}
+
+function defaultStartDate(today: string): string {
+  if (!isValidDate(today)) return today
+  let candidate = today
+  while (!isTradingDay(candidate)) {
+    const date = new Date(`${candidate}T00:00:00.000Z`)
+    date.setUTCDate(date.getUTCDate() - 1)
+    candidate = date.toISOString().slice(0, 10)
+  }
+  return candidate
 }
 
 function formatCents(value: number): string {

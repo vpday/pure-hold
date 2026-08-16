@@ -23,7 +23,7 @@ export type PortfolioEventSource =
   | 'initial-holding'
   | 'adjustment'
 
-export type PortfolioPlanCycle = 'weekly' | 'monthly'
+export type PortfolioPlanCycle = 'weekly' | 'monthly' | 'daily'
 export type PortfolioPlanStatus = 'active' | 'paused'
 export type PortfolioExecutionMode = 'manual' | 'local-draft'
 export type PortfolioInstallmentStatus = 'pending' | 'executed' | 'skipped' | 'cancelled'

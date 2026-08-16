@@ -11,7 +11,7 @@ test('validates every holding before creating atomic additions', () => {
   Object.assign(drafts[0]!.holding, {
     costPrice: '1.2345',
     dividendMode: 'reinvest',
-    purchaseDate: '2026-07-26',
+    purchaseDate: '2026-07-27',
     units: '100',
   })
   Object.assign(drafts[1]!.holding, {
@@ -39,7 +39,7 @@ test('validates every holding before creating atomic additions', () => {
         code: '000001',
         costPrice: 1.2345,
         dividendMode: 'reinvest',
-        purchaseDate: '2026-07-26',
+        purchaseDate: '2026-07-27',
         units: 100,
       },
       {

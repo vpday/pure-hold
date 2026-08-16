@@ -23,9 +23,7 @@ const groupOptions = computed(() =>
     <t-alert v-if="submitError" theme="error" :message="submitError" />
     <header class="flex flex-wrap items-center gap-2">
       <h3 class="min-w-0 flex-1 font-medium">{{ draft.name }}</h3>
-      <span class="fund-code-badge">
-        {{ draft.code }}
-      </span>
+      <t-tag variant="light" size="small">{{ draft.code }}</t-tag>
     </header>
     <div class="border-t border-(--td-component-stroke)" />
     <FundHoldingEditor
@@ -36,11 +34,3 @@ const groupOptions = computed(() =>
     />
   </div>
 </template>
-
-<style scoped>
-@reference '@/style.css';
-
-.fund-code-badge {
-  @apply rounded bg-(--td-bg-color-secondarycontainer) px-2 py-0.5 font-mono text-xs tabular-nums text-(--td-text-color-secondary);
-}
-</style>

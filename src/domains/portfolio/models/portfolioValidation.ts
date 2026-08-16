@@ -139,11 +139,12 @@ export function validatePortfolioPlan(value: unknown): PortfolioPlan {
   validateId(record.id, 'plan ID')
   const fundCode = validateFundCode(record.fundCode)
   const amountCents = validateInteger(record.amountCents, 'plan amount', false)
-  const cycle = requireStringUnion(record.cycle, ['weekly', 'monthly'], 'plan cycle')
+  const cycle = requireStringUnion(record.cycle, ['weekly', 'monthly', 'daily'], 'plan cycle')
   const executionDay = validateInteger(record.executionDay, 'plan execution day', false)
   if (
     (cycle === 'weekly' && (executionDay < 1 || executionDay > 7)) ||
-    (cycle === 'monthly' && (executionDay < 1 || executionDay > 31))
+    (cycle === 'monthly' && (executionDay < 1 || executionDay > 31)) ||
+    (cycle === 'daily' && executionDay !== 1)
   ) {
     throw new TypeError('Plan execution day is out of range')
   }
