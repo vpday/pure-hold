@@ -42,7 +42,6 @@ declare module 'vue' {
     TListItemMeta: typeof import('tdesign-vue-next')['ListItemMeta']
     TLoading: typeof import('tdesign-vue-next')['Loading']
     TNotification: typeof import('tdesign-vue-next')['Notification']
-    TOption: typeof import('tdesign-vue-next')['Option']
     TPopconfirm: typeof import('tdesign-vue-next')['Popconfirm']
     TPrimaryTable: typeof import('tdesign-vue-next')['PrimaryTable']
     TRadio: typeof import('tdesign-vue-next')['Radio']

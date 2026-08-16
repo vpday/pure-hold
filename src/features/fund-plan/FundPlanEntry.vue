@@ -10,7 +10,7 @@ import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import FundPlanForm from './components/FundPlanForm.vue'
 import FundPlanDesktopDialog from './components/FundPlanDesktopDialog.vue'
 import FundPlanMobileDrawer from './components/FundPlanMobileDrawer.vue'
-import { submitPortfolioPlanDraft, type PortfolioPlanDraft } from './models/portfolioPlanDraft.ts'
+import { type PortfolioPlanDraft, submitPortfolioPlanDraft } from './models/portfolioPlanDraft.ts'
 
 const props = defineProps<{ portfolio: PortfolioStore }>()
 const store = useFundsStore()
@@ -117,6 +117,9 @@ defineExpose({ open })
       <header class="flex flex-col gap-1">
         <div class="flex flex-wrap items-center gap-2">
           <h3 class="min-w-0 flex-1 font-medium text-(--td-text-color-primary)">{{ fundName }}</h3>
+          <t-tag v-if="plan" size="small" variant="light">
+            {{ plan.status === 'active' ? '运行中' : '已暂停' }}
+          </t-tag>
           <t-tag variant="light">{{ fundCode }}</t-tag>
         </div>
         <p class="text-xs text-(--td-text-color-secondary)">
@@ -129,16 +132,40 @@ defineExpose({ open })
         :fund-code="fundCode"
         :plan="plan"
         standalone
-        @delete="deletePlan"
-        @pause="updatePlanStatus('paused')"
-        @resume="updatePlanStatus('active')"
         @save="savePlan"
       />
     </div>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <t-button type="button" variant="outline" @click="close">取消</t-button>
-        <t-button type="button" theme="primary" @click="submitPlan">确认</t-button>
+      <div class="fund-plan-footer">
+        <div class="ml-auto flex shrink-0 justify-end gap-2">
+          <t-button
+            v-if="plan && plan.status === 'active'"
+            type="button"
+            variant="outline"
+            theme="warning"
+            @click="updatePlanStatus('paused')"
+          >
+            暂停
+          </t-button>
+          <t-button
+            v-if="plan && plan.status !== 'active'"
+            type="button"
+            variant="outline"
+            theme="success"
+            @click="updatePlanStatus('active')"
+          >
+            恢复
+          </t-button>
+          <t-popconfirm
+            v-if="plan"
+            content="删除计划不会删除历史买入记录，确认继续？"
+            @confirm="deletePlan"
+          >
+            <t-button type="button" theme="danger" variant="outline">删除</t-button>
+          </t-popconfirm>
+          <t-button type="button" variant="outline" @click="close">取消</t-button>
+          <t-button type="button" theme="primary" @click="submitPlan">确认</t-button>
+        </div>
       </div>
     </template>
   </FundPlanDesktopDialog>
@@ -148,6 +175,9 @@ defineExpose({ open })
       <header class="flex flex-col gap-1">
         <div class="flex flex-wrap items-center gap-2">
           <h3 class="min-w-0 flex-1 font-medium text-(--td-text-color-primary)">{{ fundName }}</h3>
+          <t-tag v-if="plan" size="small" variant="light">
+            {{ plan.status === 'active' ? '运行中' : '已暂停' }}
+          </t-tag>
           <t-tag variant="light">{{ fundCode }}</t-tag>
         </div>
         <p class="text-xs text-(--td-text-color-secondary)">
@@ -160,16 +190,40 @@ defineExpose({ open })
         :fund-code="fundCode"
         :plan="plan"
         standalone
-        @delete="deletePlan"
-        @pause="updatePlanStatus('paused')"
-        @resume="updatePlanStatus('active')"
         @save="savePlan"
       />
     </div>
     <template #footer>
-      <div class="flex justify-end gap-2">
-        <t-button type="button" variant="outline" @click="close">取消</t-button>
-        <t-button type="button" theme="primary" @click="submitPlan">确认</t-button>
+      <div class="fund-plan-footer">
+        <div class="ml-auto flex shrink-0 justify-end gap-2">
+          <t-button
+            v-if="plan && plan.status === 'active'"
+            type="button"
+            variant="outline"
+            theme="warning"
+            @click="updatePlanStatus('paused')"
+          >
+            暂停
+          </t-button>
+          <t-button
+            v-if="plan && plan.status !== 'active'"
+            type="button"
+            variant="outline"
+            theme="success"
+            @click="updatePlanStatus('active')"
+          >
+            恢复
+          </t-button>
+          <t-popconfirm
+            v-if="plan"
+            content="删除计划不会删除历史买入记录，确认继续？"
+            @confirm="deletePlan"
+          >
+            <t-button type="button" theme="danger" variant="outline">删除</t-button>
+          </t-popconfirm>
+          <t-button type="button" variant="outline" @click="close">取消</t-button>
+          <t-button type="button" theme="primary" @click="submitPlan">确认</t-button>
+        </div>
       </div>
     </template>
   </FundPlanMobileDrawer>
@@ -180,5 +234,9 @@ defineExpose({ open })
 
 .fund-plan-mobile-content {
   @apply flex min-h-full flex-col gap-4;
+}
+
+.fund-plan-footer {
+  @apply flex w-full flex-wrap items-center justify-between gap-2;
 }
 </style>

@@ -23,9 +23,6 @@ const props = defineProps<{
   standalone?: boolean
 }>()
 const emit = defineEmits<{
-  delete: []
-  pause: []
-  resume: []
   save: [draft: PortfolioPlanDraft]
 }>()
 
@@ -99,10 +96,6 @@ watch(
   },
   { immediate: true },
 )
-
-function startEditing(): void {
-  editing.value = true
-}
 
 function updateDraftValue(
   key: 'amountYuan' | 'executionDay' | 'purchaseFeePercent',
@@ -205,15 +198,6 @@ defineExpose({ submit, validate })
 
 <template>
   <section class="border-t border-(--td-component-stroke) pt-4">
-    <header class="flex flex-wrap items-center justify-end gap-2">
-      <t-tag v-if="plan" size="small" variant="light">
-        {{ plan.status === 'active' ? '运行中' : '已暂停' }}
-      </t-tag>
-      <t-button v-if="!editing" type="button" size="small" variant="outline" @click="startEditing">
-        添加定投计划
-      </t-button>
-    </header>
-
     <t-form
       v-if="editing"
       ref="formRef"
@@ -318,37 +302,12 @@ defineExpose({ submit, validate })
           </div>
         </t-form-item>
       </div>
-
-      <div class="plan-actions">
-        <t-button
-          v-if="plan && plan.status === 'active'"
-          type="button"
-          variant="outline"
-          @click="emit('pause')"
-        >
-          暂停计划
-        </t-button>
-        <t-button v-else-if="plan" type="button" variant="outline" @click="emit('resume')">
-          恢复计划
-        </t-button>
-        <t-popconfirm
-          v-if="plan"
-          content="删除计划不会删除历史买入记录，确认继续？"
-          @confirm="emit('delete')"
-        >
-          <t-button type="button" theme="danger" variant="text">删除计划</t-button>
-        </t-popconfirm>
-      </div>
     </t-form>
   </section>
 </template>
 
 <style scoped>
 @reference '@/style.css';
-
-.plan-actions {
-  @apply flex flex-wrap items-center gap-2 border-t border-(--td-component-stroke) pt-3;
-}
 
 :deep(.t-input-number) {
   width: 100%;
