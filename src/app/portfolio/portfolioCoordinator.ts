@@ -319,7 +319,7 @@ function createInitialHoldingEvent(
   holding: FundHolding | undefined,
   auditedAt: string,
 ): PortfolioEvent {
-  const confirmedDate = holding?.purchaseDate ?? auditedAt.slice(0, 10)
+  const confirmedDate = auditedAt.slice(0, 10)
   const units = holding?.units ?? 0
   const costAmount = holding === undefined ? 0 : Math.round(holding.units * holding.costPrice * 100)
   return {

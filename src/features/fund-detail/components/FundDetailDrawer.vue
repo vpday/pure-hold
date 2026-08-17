@@ -10,6 +10,7 @@ import type {
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
 import FundDetailHeader from './FundDetailHeader.vue'
 import FundTradingRules from './FundTradingRules.vue'
+import FundTransactionsSection from './FundTransactionsSection.vue'
 
 type FundTransactionViewModel =
   | (BuyTransactionViewModel & { readonly kind: 'buy' })
@@ -297,14 +298,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               <t-button v-else size="small" theme="primary" @click="emit('enableLedger')">
                 启用账本
               </t-button>
-              <div v-if="ledgerEnabled" class="flex items-center gap-2">
-                <t-button size="small" variant="outline" @click="emit('recordBuy', viewModel.code)">
-                  记录买入
-                </t-button>
-                <t-button size="small" theme="primary" @click="emit('recordSell', viewModel.code)">
-                  记录卖出
-                </t-button>
-              </div>
             </div>
           </section>
 
@@ -346,236 +339,17 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             <p v-else class="section-placeholder">暂无交易规则</p>
           </section>
 
-          <section
-            id="fund-detail-transactions"
-            aria-labelledby="fund-detail-transactions-title"
-            class="detail-section pt-4"
-          >
-            <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
-            <div v-if="transactions.length" class="mt-4 overflow-x-auto">
-              <table class="w-full min-w-[72rem] text-sm">
-                <thead>
-                  <tr class="text-left text-(--td-text-color-secondary)">
-                    <th class="pb-2 pr-3">类型</th>
-                    <th class="pb-2 pr-3">提交时间</th>
-                    <th class="pb-2 pr-3">净值日期</th>
-                    <th class="pb-2 pr-3">确认/预计确认</th>
-                    <th class="pb-2 pr-3">份额</th>
-                    <th class="pb-2 pr-3">单位净值</th>
-                    <th class="pb-2 pr-3">金额</th>
-                    <th class="pb-2 pr-3">费用</th>
-                    <th class="pb-2 pr-3">收益/状态</th>
-                    <th class="pb-2">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-for="transaction in transactions" :key="transaction.id">
-                    <tr v-if="transaction.kind === 'buy'">
-                      <td class="py-2 pr-3">买入</td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.submittedAtText }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.navDateText }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{
-                          transaction.confirmedDateText !== '--'
-                            ? transaction.confirmedDateText
-                            : transaction.expectedConfirmationDateText
-                        }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.units.text }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        <span>{{ transaction.unitNav.text }}</span>
-                        <span class="ml-1 text-xs text-(--td-text-color-secondary)">
-                          {{ transaction.unitNav.sourceText }}
-                        </span>
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.totalAmount.text }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.purchaseFee.text }}
-                      </td>
-                      <td class="py-2 pr-3">
-                        <t-tag
-                          size="small"
-                          :theme="
-                            transaction.status === 'settled-nav-ready' ? 'success' : 'warning'
-                          "
-                          variant="light"
-                        >
-                          {{ transaction.statusText }}
-                        </t-tag>
-                      </td>
-                      <td class="py-2">
-                        <div class="flex items-center gap-1">
-                          <t-button
-                            size="small"
-                            variant="text"
-                            @click="emit('editTransaction', transaction.id)"
-                          >
-                            编辑
-                          </t-button>
-                          <t-popconfirm
-                            :cancel-btn="{ content: '取消', variant: 'outline' }"
-                            :confirm-btn="{ content: '删除', theme: 'danger' }"
-                            content="删除这条买入记录？删除后会重新计算持仓。"
-                            placement="top-right"
-                            :popup-props="{ attach: 'body' }"
-                            theme="warning"
-                            @confirm="emit('deleteTransaction', transaction.id)"
-                          >
-                            <t-button size="small" theme="danger" variant="text">删除</t-button>
-                          </t-popconfirm>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr v-else>
-                      <td class="py-2 pr-3">卖出</td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.submittedAtText }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.navDateText }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{
-                          transaction.confirmedDateText !== '--'
-                            ? transaction.confirmedDateText
-                            : transaction.expectedConfirmationDateText
-                        }}
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        <span>{{ transaction.units.text }}</span>
-                        <span class="ml-1 text-xs text-(--td-text-color-secondary)">
-                          {{ transaction.units.confidenceText }} ·
-                          {{ transaction.units.sourceText }}
-                        </span>
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        <span>{{ transaction.unitNav.text }}</span>
-                        <span class="ml-1 text-xs text-(--td-text-color-secondary)">
-                          {{ transaction.unitNav.confidenceText }} ·
-                          {{ transaction.unitNav.sourceText }}
-                        </span>
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        <span>毛 {{ transaction.grossAmount.text }}</span>
-                        <span class="ml-1 text-xs text-(--td-text-color-secondary)">
-                          净 {{ transaction.netAmount.text }}
-                        </span>
-                      </td>
-                      <td class="py-2 pr-3 font-mono tabular-nums">
-                        <span>{{ transaction.redemptionFee.text }}</span>
-                        <span class="ml-1 text-xs text-(--td-text-color-secondary)">
-                          {{ transaction.redemptionFee.confidenceText }} ·
-                          {{ transaction.redemptionFee.sourceText }}
-                        </span>
-                      </td>
-                      <td class="py-2 pr-3">
-                        <span class="block">{{ transaction.realizedGain.text }}</span>
-                        <span class="text-xs text-(--td-text-color-secondary)">
-                          {{ transaction.realizedGainStatusText }}
-                        </span>
-                        <t-tag
-                          class="mt-1"
-                          size="small"
-                          :theme="
-                            transaction.status === 'settled-nav-ready' ? 'success' : 'warning'
-                          "
-                          variant="light"
-                        >
-                          {{ transaction.statusText }}
-                        </t-tag>
-                      </td>
-                      <td class="py-2">
-                        <div class="flex items-center gap-1">
-                          <t-button
-                            size="small"
-                            variant="text"
-                            @click="emit('editTransaction', transaction.id)"
-                          >
-                            编辑
-                          </t-button>
-                          <t-popconfirm
-                            :cancel-btn="{ content: '取消', variant: 'outline' }"
-                            :confirm-btn="{ content: '删除', theme: 'danger' }"
-                            content="删除这条卖出记录？删除后会重新计算 FIFO 和收益。"
-                            placement="top-right"
-                            :popup-props="{ attach: 'body' }"
-                            theme="warning"
-                            @confirm="emit('deleteTransaction', transaction.id)"
-                          >
-                            <t-button size="small" theme="danger" variant="text">删除</t-button>
-                          </t-popconfirm>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr v-if="transaction.kind === 'sell' && transaction.allocations.length">
-                      <td colspan="10" class="border-b border-(--td-component-border) pb-3">
-                        <div class="rounded-md bg-(--td-bg-color-secondarycontainer) p-3 text-xs">
-                          <p class="font-medium text-(--td-text-color-primary)">FIFO 分配</p>
-                          <ul class="mt-2 flex flex-col gap-1">
-                            <li
-                              v-for="allocation in transaction.allocations"
-                              :key="allocation.buyEventId"
-                            >
-                              买入事件 {{ allocation.buyEventId }}：{{
-                                allocation.units.text
-                              }}
-                              份，成本 {{ allocation.costAmount.text }}（{{
-                                allocation.costAmount.confidenceText
-                              }}
-                              · {{ allocation.costAmount.sourceText }}）
-                            </li>
-                          </ul>
-                        </div>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
-            <div v-if="remainingBatches.length" class="mt-4 overflow-x-auto">
-              <h3 class="mb-2 text-sm font-medium">剩余批次</h3>
-              <table class="w-full min-w-[30rem] text-sm">
-                <thead>
-                  <tr class="text-left text-(--td-text-color-secondary)">
-                    <th class="pb-2 pr-3">确认日期</th>
-                    <th class="pb-2 pr-3">剩余份额</th>
-                    <th class="pb-2">剩余成本</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="batch in remainingBatches" :key="batch.eventId">
-                    <td class="py-2 pr-3 font-mono tabular-nums">{{ batch.confirmedDateText }}</td>
-                    <td class="py-2 pr-3 font-mono tabular-nums">
-                      {{ batch.units.text }}（{{ batch.units.confidenceText }} ·
-                      {{ batch.units.sourceText }}）
-                    </td>
-                    <td class="py-2 font-mono tabular-nums">
-                      {{ batch.costAmount.text }}（{{ batch.costAmount.confidenceText }} ·
-                      {{ batch.costAmount.sourceText }}）
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div
-              v-if="sellIssues.length"
-              class="mt-4 rounded-md bg-(--td-error-color-light-9) p-3 text-(--td-error-color)"
-            >
-              <p class="font-medium">卖出校验问题</p>
-              <ul class="mt-1 list-disc pl-5">
-                <li v-for="issue in sellIssues" :key="issue.eventId">{{ issue.text }}</li>
-              </ul>
-            </div>
-            <p v-if="!transactions.length" class="section-placeholder">暂无交易记录</p>
-          </section>
+          <FundTransactionsSection
+            :code="viewModel.code"
+            :ledger-enabled="ledgerEnabled"
+            :remaining-batches="remainingBatches"
+            :sell-issues="sellIssues"
+            :transactions="transactions"
+            @delete-transaction="emit('deleteTransaction', $event)"
+            @edit-transaction="emit('editTransaction', $event)"
+            @record-buy="emit('recordBuy', $event)"
+            @record-sell="emit('recordSell', $event)"
+          />
         </main>
       </div>
 

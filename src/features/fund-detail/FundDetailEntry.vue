@@ -115,7 +115,19 @@ const transactions = computed<readonly FundTransactionViewModel[]>(() => {
 const remainingBatches = computed<readonly RemainingBatchViewModel[]>(() => {
   const code = detail.currentCode.value
   const currentCalculation = calculation.value
-  return code && currentCalculation ? toRemainingBatchViewModels(currentCalculation, code) : []
+  if (!code || !currentCalculation) return []
+
+  const initialHoldingDatesByEventId = new Map(
+    props.portfolio
+      .getPortfolio()
+      .events.filter((event) => event.fundCode === code && event.kind === 'initial-holding')
+      .map((event) => [event.id, event.auditedAt.slice(0, 10)] as const),
+  )
+
+  return toRemainingBatchViewModels(currentCalculation, code).map((batch) => {
+    const initialHoldingDate = initialHoldingDatesByEventId.get(batch.eventId)
+    return initialHoldingDate ? { ...batch, confirmedDateText: initialHoldingDate } : batch
+  })
 })
 const sellIssues = computed<readonly SellTransactionIssueViewModel[]>(() => {
   const code = detail.currentCode.value
@@ -217,31 +229,23 @@ async function edit(code: string): Promise<void> {
   emit('edit', code)
 }
 
-async function editTransaction(eventId: string): Promise<void> {
-  close()
-  await nextTick()
+function editTransaction(eventId: string): void {
   emit('editTransaction', eventId)
 }
 
-async function deleteTransaction(eventId: string): Promise<void> {
-  close()
-  await nextTick()
+function deleteTransaction(eventId: string): void {
   emit('deleteTransaction', eventId)
 }
 
-async function recordBuy(): Promise<void> {
+function recordBuy(): void {
   const code = detail.currentCode.value
   if (!code || !ledgerEnabled.value) return
-  close()
-  await nextTick()
   emit('recordBuy', code)
 }
 
-async function recordSell(): Promise<void> {
+function recordSell(): void {
   const code = detail.currentCode.value
   if (!code || !ledgerEnabled.value) return
-  close()
-  await nextTick()
   emit('recordSell', code)
 }
 
@@ -258,7 +262,7 @@ defineExpose({ open })
     :remaining-batches="remainingBatches"
     :sell-issues="sellIssues"
     :transactions="transactions"
-    :size="'100dvh'"
+    size="100dvh"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"

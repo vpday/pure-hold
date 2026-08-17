@@ -12,8 +12,8 @@ const actionsSource = await readFile(
   new URL('../fund-list/components/FundActions.vue', import.meta.url),
   'utf8',
 )
-const drawerSource = await readFile(
-  new URL('../fund-detail/components/FundDetailDrawer.vue', import.meta.url),
+const transactionSectionSource = await readFile(
+  new URL('../fund-detail/components/FundTransactionsSection.vue', import.meta.url),
   'utf8',
 )
 
@@ -21,6 +21,15 @@ test('provides desktop dialog and mobile drawer entry surfaces', () => {
   assert.match(entrySource, /<t-dialog[\s\S]*v-if="isSmUp"/)
   assert.match(entrySource, /<t-drawer[\s\S]*v-else/)
   assert.match(entrySource, /calc\(100vw - 32px\)/)
+  assert.match(
+    entrySource,
+    /fund-transaction-dialog \.t-dialog[\s\S]*max-height: calc\(100dvh - 32px\)/,
+  )
+  assert.match(
+    entrySource,
+    /fund-transaction-dialog \.t-dialog__body[\s\S]*max-height: calc\(100dvh - 176px\)[\s\S]*overflow-y: auto/,
+  )
+  assert.match(entrySource, /fund-transaction-mobile-content[\s\S]*overflow-y-auto/)
   assert.match(formSource, /含费总额/)
   assert.match(formSource, /实际确认日期/)
   assert.match(formSource, /确认份额/)
@@ -67,13 +76,13 @@ test('routes buy and sell actions into the transaction feature', () => {
 })
 
 test('shows transaction provenance and edit/delete operations in details', () => {
-  assert.match(drawerSource, /transactions\.length/)
-  assert.match(drawerSource, /transaction\.submittedAtText/)
-  assert.match(drawerSource, /transaction\.navDateText/)
-  assert.match(drawerSource, /transaction\.units\.sourceText/)
-  assert.match(drawerSource, /transaction\.unitNav\.sourceText/)
-  assert.match(drawerSource, /transaction\.statusText/)
-  assert.match(drawerSource, /<t-popconfirm/)
-  assert.match(drawerSource, /emit\('editTransaction', transaction\.id\)/)
-  assert.match(drawerSource, /emit\('deleteTransaction', transaction\.id\)/)
+  assert.match(transactionSectionSource, /:data="transactions"/)
+  assert.match(transactionSectionSource, /row\.submittedAtText/)
+  assert.match(transactionSectionSource, /row\.navDateText/)
+  assert.match(transactionSectionSource, /row\.units\.sourceText/)
+  assert.match(transactionSectionSource, /row\.unitNav\.sourceText/)
+  assert.match(transactionSectionSource, /row\.statusText/)
+  assert.match(transactionSectionSource, /<t-popconfirm/)
+  assert.match(transactionSectionSource, /emit\('editTransaction', row\.id\)/)
+  assert.match(transactionSectionSource, /emit\('deleteTransaction', row\.id\)/)
 })

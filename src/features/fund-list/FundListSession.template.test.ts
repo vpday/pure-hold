@@ -27,6 +27,10 @@ const detailDrawerSource = await readFile(
   new URL('../fund-detail/components/FundDetailDrawer.vue', import.meta.url),
   'utf8',
 )
+const transactionSectionSource = await readFile(
+  new URL('../fund-detail/components/FundTransactionsSection.vue', import.meta.url),
+  'utf8',
+)
 
 test('feeds the same session-owned rows to desktop and mobile views', () => {
   assert.equal(sectionSource.match(/:rows="model\.rows"/g)?.length, 2)
@@ -94,8 +98,23 @@ test('exposes the existing portfolio coordinator through the fund detail ledger 
   assert.match(detailEntrySource, /ledgerEnabled\.value = props\.portfolio\.getPortfolio\(\)/)
   assert.match(detailDrawerSource, /ledgerEnabled: boolean/)
   assert.match(detailDrawerSource, /启用账本/)
-  assert.match(detailDrawerSource, /submittedAtText/)
-  assert.match(detailDrawerSource, /<t-popconfirm/)
-  assert.match(detailDrawerSource, /记录买入/)
-  assert.match(detailDrawerSource, /记录卖出/)
+  assert.match(detailDrawerSource, /FundTransactionsSection/)
+  assert.match(transactionSectionSource, /<t-table/)
+  assert.doesNotMatch(transactionSectionSource, /<table\b/)
+  assert.match(transactionSectionSource, /submittedAtText/)
+  assert.match(transactionSectionSource, /<t-popconfirm/)
+  assert.match(transactionSectionSource, /记录买入/)
+  assert.match(transactionSectionSource, /记录卖出/)
+  assert.match(detailEntrySource, /event\.kind === 'initial-holding'/)
+  assert.match(detailEntrySource, /event\.auditedAt\.slice\(0, 10\)/)
+})
+
+test('keeps the detail drawer open while launching transaction actions', () => {
+  for (const handler of ['editTransaction', 'deleteTransaction', 'recordBuy', 'recordSell']) {
+    const handlerSource = detailEntrySource.match(
+      new RegExp(`function ${handler}\\([\\s\\S]*?\\n\\}`),
+    )?.[0]
+    assert.ok(handlerSource, `missing ${handler} handler`)
+    assert.doesNotMatch(handlerSource, /close\(\)/)
+  }
 })

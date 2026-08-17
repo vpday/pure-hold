@@ -179,7 +179,7 @@ test('enables an existing holding with one stable initial-holding event', () => 
   assert.deepEqual(first.event, second.event)
   assert.deepEqual(first.event, {
     auditedAt: '2026-08-14T09:00:00.000Z',
-    confirmedDate: '2024-01-01',
+    confirmedDate: '2026-08-14',
     costAmount: actual(12000, 'migration'),
     createdAt: '2026-08-14T09:00:00.000Z',
     fundCode: '000001',

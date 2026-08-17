@@ -355,21 +355,19 @@ defineExpose({ validate })
           <t-tag size="small" :theme="statusTheme" variant="light">{{ statusText }}</t-tag>
         </t-descriptions-item>
       </t-descriptions>
-      <t-alert v-if="navError || navStatus === 'missing'" class="mt-3" theme="warning">
-        <template #message>
-          {{ navError || '指定净值日期暂无精确历史净值，记录仍可保存。' }}
-        </template>
-        <template #operation>
-          <t-button size="small" variant="text" @click="emit('retryNav')">重试</t-button>
-        </template>
-      </t-alert>
-      <t-alert
-        v-for="warning in warnings"
-        :key="warning"
-        class="mt-3"
-        theme="warning"
-        :message="warning"
-      />
+      <div v-if="navError || navStatus === 'missing'" class="mt-4">
+        <t-alert theme="warning">
+          <template #message>
+            {{ navError || '指定净值日期暂无精确历史净值，记录仍可保存。' }}
+          </template>
+          <template #operation>
+            <t-button size="small" variant="text" @click="emit('retryNav')">重试</t-button>
+          </template>
+        </t-alert>
+      </div>
+      <div v-if="warnings.length > 0" class="mt-4">
+        <t-alert v-for="warning in warnings" :key="warning" theme="warning" :message="warning" />
+      </div>
     </section>
   </t-form>
 </template>

@@ -36,11 +36,11 @@ test('fund list routes sell actions on desktop and mobile', async () => {
 
 test('fund detail reserves space for sell FIFO facts and remaining batches', async () => {
   const source = await readFile(
-    new URL('../fund-detail/components/FundDetailDrawer.vue', import.meta.url),
+    new URL('../fund-detail/components/FundTransactionsSection.vue', import.meta.url),
     'utf8',
   )
 
-  assert.match(source, /transaction\.kind === 'sell'/)
+  assert.match(source, /row\.kind === 'sell'/)
   assert.match(source, /remainingBatches/)
   assert.match(source, /realizedGainStatusText/)
   assert.match(source, /overflow-x-auto/)

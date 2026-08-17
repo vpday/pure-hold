@@ -707,18 +707,12 @@ defineExpose({ open, openBuy: open, openEdit, openSell })
 <style scoped>
 @reference '@/style.css';
 
-:global(.fund-transaction-dialog .t-dialog__body),
-:global(.fund-transaction-drawer .t-drawer__body) {
-  min-height: 0;
-  flex: 1;
+:global(.fund-transaction-dialog .t-dialog__body) {
+  max-height: calc(100dvh - 176px);
   overflow-y: auto;
 }
 
 .fund-transaction-mobile-content {
   @apply min-h-0 overflow-y-auto pb-4;
-}
-
-:global(.fund-transaction-drawer .t-drawer__body) {
-  overflow: hidden;
 }
 </style>
