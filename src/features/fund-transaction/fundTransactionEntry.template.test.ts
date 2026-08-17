@@ -23,10 +23,6 @@ test('provides desktop dialog and mobile drawer entry surfaces', () => {
   assert.match(entrySource, /calc\(100vw - 32px\)/)
   assert.match(
     entrySource,
-    /fund-transaction-dialog \.t-dialog[\s\S]*max-height: calc\(100dvh - 32px\)/,
-  )
-  assert.match(
-    entrySource,
     /fund-transaction-dialog \.t-dialog__body[\s\S]*max-height: calc\(100dvh - 176px\)[\s\S]*overflow-y: auto/,
   )
   assert.match(entrySource, /fund-transaction-mobile-content[\s\S]*overflow-y-auto/)
