@@ -8,7 +8,7 @@ import type {
   PortfolioCalculation,
 } from '@/domains/portfolio/services/calculatePortfolio.ts'
 
-export type BuyTransactionDisplayStatus = 'actual' | 'estimated' | 'pending'
+export type BuyTransactionDisplayStatus = 'pending' | 'settled-nav-pending' | 'settled-nav-ready'
 
 export interface BuyTransactionFieldViewModel {
   readonly confidence: PortfolioFieldConfidence
@@ -18,11 +18,15 @@ export interface BuyTransactionFieldViewModel {
 
 export interface BuyTransactionViewModel {
   readonly confirmedDateText: string
+  readonly entryMode: PortfolioBuyEvent['entryMode']
+  readonly expectedConfirmationDateText: string
   readonly id: string
+  readonly navDateText: string
   readonly purchaseFee: BuyTransactionFieldViewModel
   readonly purchaseFeeRate: BuyTransactionFieldViewModel
   readonly status: BuyTransactionDisplayStatus
   readonly statusText: string
+  readonly submittedAtText: string
   readonly totalAmount: BuyTransactionFieldViewModel
   readonly unitNav: BuyTransactionFieldViewModel
   readonly units: BuyTransactionFieldViewModel
@@ -34,45 +38,46 @@ export function toBuyTransactionViewModel(
 ): BuyTransactionViewModel {
   const calculated = calculation.events.find(({ eventId }) => eventId === event.id)
   const result = calculated ?? fallbackCalculation(event)
-  const status = resolveStatus(event, result)
+  const status = resolveStatus(result)
   return {
-    confirmedDateText: event.confirmedDate,
+    confirmedDateText: event.confirmedDate ?? '--',
+    entryMode: event.entryMode,
+    expectedConfirmationDateText: event.expectedConfirmationDate ?? '--',
     id: event.id,
-    purchaseFee: toMoneyField(result.purchaseFee),
+    navDateText: event.navDate,
+    purchaseFee: toMoneyField(result.purchaseFee, true),
     purchaseFeeRate: toRateField(result.purchaseFeeRate),
     status,
-    statusText: status === 'pending' ? '待结算' : status === 'estimated' ? '估算' : '实际',
+    statusText: statusText(status),
+    submittedAtText: event.submittedAt,
     totalAmount: toMoneyField(result.totalAmount),
     unitNav: toNavField(result.unitNav),
     units: toUnitsField(result.units),
   }
 }
 
-function resolveStatus(
-  event: PortfolioBuyEvent,
-  calculation: PortfolioBuyCalculation,
-): BuyTransactionDisplayStatus {
-  if (event.settlementStatus === 'pending-settlement') return 'pending'
-  if (
-    [
-      calculation.purchaseFee,
-      calculation.purchaseFeeRate,
-      calculation.unitNav,
-      calculation.units,
-    ].some(({ confidence }) => confidence === 'estimated' || confidence === 'unknown')
-  ) {
-    return 'estimated'
-  }
-  return 'actual'
+function resolveStatus(calculation: PortfolioBuyCalculation): BuyTransactionDisplayStatus {
+  if (calculation.settlementStatus === 'pending-settlement') return 'pending'
+  return calculation.unitNav.value === null ? 'settled-nav-pending' : 'settled-nav-ready'
+}
+
+function statusText(status: BuyTransactionDisplayStatus): string {
+  if (status === 'pending') return '待确认'
+  if (status === 'settled-nav-pending') return '已确认，净值待补全'
+  return '已确认，净值已获取'
 }
 
 function toMoneyField(
   field: PortfolioBuyCalculation['purchaseFee'] | PortfolioBuyEvent['totalAmount'],
+  hideEstimated = false,
 ) {
   return {
     confidence: field.confidence,
     sourceText: sourceText(field.source),
-    text: field.value === null ? '--' : `¥${(field.value / 100).toFixed(2)}`,
+    text:
+      field.value === null || (hideEstimated && field.confidence === 'estimated')
+        ? '--'
+        : `¥${(field.value / 100).toFixed(2)}`,
   }
 }
 

@@ -15,6 +15,8 @@ export type {
   PortfolioInitialHoldingEvent,
   PortfolioSettlementStatus,
   PortfolioSellEvent,
+  PortfolioTransactionEntryMode,
+  PortfolioTransactionFields,
   PortfolioValueSource,
   UnitsFieldValue,
 } from './portfolio.ts'

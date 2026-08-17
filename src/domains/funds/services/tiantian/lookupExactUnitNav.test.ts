@@ -64,6 +64,35 @@ test('keeps an invalid or missing exact-date unit NAV pending', async (context) 
   assert.equal(result, null)
 })
 
+test('does not query current-day or future NAV dates', async (context) => {
+  const originalFetch = globalThis.fetch
+  context.after(() => {
+    globalThis.fetch = originalFetch
+  })
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    return Response.json(successful([]))
+  }
+
+  const today = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((values, part) => {
+      values[part.type] = part.value
+      return values
+    }, {})
+  const currentDate = `${today.year}-${today.month}-${today.day}`
+
+  assert.equal(await lookupExactUnitNav('161725', currentDate), null)
+  assert.equal(await lookupExactUnitNav('161725', '2099-01-01'), null)
+  assert.equal(calls, 0)
+})
+
 test('uses the history adapter duplicate-date rule deterministically', async (context) => {
   const originalFetch = globalThis.fetch
   context.after(() => {

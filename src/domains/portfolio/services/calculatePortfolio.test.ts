@@ -23,13 +23,15 @@ const actual = (value: number, source: FieldValue<number>['source'] = 'manual') 
   field(value, 'actual', source)
 
 function buyEvent(overrides: Partial<PortfolioBuyEvent> = {}): PortfolioBuyEvent {
-  return {
+  const event = {
     auditedAt: '2026-08-13T09:00:00.000Z',
     confirmedDate: '2026-08-12',
     createdAt: '2026-08-13T09:00:00.000Z',
+    entryMode: 'pending' as const,
     fundCode: '000001',
     id: 'event-1',
     kind: 'buy',
+    navDate: '2026-08-12',
     purchaseFee: field(null, 'unknown', 'formula'),
     purchaseFeeRate: actual(1, 'fund-basic-info'),
     settlementStatus: 'pending-settlement',
@@ -40,22 +42,39 @@ function buyEvent(overrides: Partial<PortfolioBuyEvent> = {}): PortfolioBuyEvent
     updatedAt: '2026-08-13T09:00:00.000Z',
     ...overrides,
   }
+  return {
+    ...event,
+    navDate: overrides.navDate ?? event.confirmedDate,
+  } as PortfolioBuyEvent
 }
 
 function sellEvent(overrides: Partial<PortfolioSellEvent> = {}): PortfolioSellEvent {
-  return {
+  const event = {
     auditedAt: '2026-08-13T09:00:00.000Z',
     confirmedDate: '2026-08-13',
     createdAt: '2026-08-13T09:00:00.000Z',
+    entryMode: 'pending' as const,
     fundCode: '000001',
     id: 'sell-1',
     kind: 'sell',
+    navDate: '2026-08-13',
+    grossAmount: field(null, 'unknown', 'formula'),
+    netAmount: field(null, 'unknown', 'manual'),
+    redemptionFee: field(null, 'unknown', 'manual'),
+    requestedUnits: actual(120),
     settlementStatus: 'settled',
     source: 'manual',
+    submittedAt: '2026-08-13 12:00',
+    unitNav: field(null, 'unknown', 'nav-history'),
     units: actual(120),
     updatedAt: '2026-08-13T09:00:00.000Z',
     ...overrides,
   }
+  return {
+    ...event,
+    navDate: overrides.navDate ?? event.confirmedDate,
+    requestedUnits: overrides.requestedUnits ?? event.units,
+  } as PortfolioSellEvent
 }
 
 function initialHoldingEvent(
@@ -496,7 +515,7 @@ test('keeps explicitly pending dividend and adjustment facts out of both summari
   assert.deepEqual(result.pendingSettlement[0].missingFacts, [])
 })
 
-test('keeps complete explicitly pending buys out of both summaries and batches', () => {
+test('keeps buys without confirmation facts out of both summaries and batches', () => {
   const result = calculatePortfolio({
     asOfDate: '2026-08-13',
     currentNavByFund: {},
@@ -505,8 +524,9 @@ test('keeps complete explicitly pending buys out of both summaries and batches',
         id: 'pending-buy-complete',
         purchaseFee: actual(100, 'platform'),
         settlementStatus: 'pending-settlement',
-        unitNav: actual(1.5, 'platform'),
-        units: actual(66, 'platform'),
+        confirmedDate: undefined,
+        unitNav: field(null, 'unknown', 'nav-history'),
+        units: field(null, 'unknown', 'manual'),
       }),
     ],
   })
@@ -519,13 +539,38 @@ test('keeps complete explicitly pending buys out of both summaries and batches',
     {
       eventId: 'pending-buy-complete',
       fundCode: '000001',
-      missingFacts: [],
+      missingFacts: ['confirmed-date', 'unit-nav', 'units'],
       totalAmount: actual(10000),
     },
   ])
 })
 
-test('keeps complete explicitly pending sells out of FIFO and summaries', () => {
+test('reports estimated sell units as a missing confirmation fact', () => {
+  const result = calculatePortfolio({
+    asOfDate: '2026-08-13',
+    currentNavByFund: {},
+    events: [
+      sellEvent({
+        confirmedDate: undefined,
+        id: 'pending-sell-estimated-units',
+        navDate: '2026-08-13',
+        settlementStatus: 'pending-settlement',
+        units: field(120, 'estimated', 'formula'),
+      }),
+    ],
+  })
+
+  assert.equal(result.sellEvents[0]?.settlementStatus, 'pending-settlement')
+  assert.deepEqual(result.pendingSettlement, [
+    {
+      eventId: 'pending-sell-estimated-units',
+      fundCode: '000001',
+      missingFacts: ['confirmed-date', 'units'],
+    },
+  ])
+})
+
+test('keeps sells without confirmation facts out of FIFO and summaries', () => {
   const result = calculatePortfolio({
     asOfDate: '2026-08-13',
     currentNavByFund: {},
@@ -537,11 +582,13 @@ test('keeps complete explicitly pending sells out of FIFO and summaries', () => 
         units: actual(10),
       }),
       sellEvent({
+        navDate: '2026-08-13',
         id: 'pending-sell-complete',
         netAmount: actual(2000, 'platform'),
         settlementStatus: 'pending-settlement',
+        confirmedDate: undefined,
         unitNav: actual(2, 'platform'),
-        units: actual(10),
+        units: field(null, 'unknown', 'manual'),
       }),
     ],
   })
@@ -565,7 +612,7 @@ test('keeps complete explicitly pending sells out of FIFO and summaries', () => 
     {
       eventId: 'pending-sell-complete',
       fundCode: '000001',
-      missingFacts: [],
+      missingFacts: ['confirmed-date', 'units'],
     },
   ])
 })
@@ -633,6 +680,7 @@ test('derives current value and income totals from settled facts and FIFO result
       sellEvent({
         id: 'sell-for-summary',
         netAmount: actual(5000, 'platform'),
+        redemptionFee: actual(0, 'platform'),
         settlementStatus: 'settled',
         units: actual(4),
       }),
@@ -681,7 +729,7 @@ test('keeps incomplete redemption facts visible without inventing realized or to
   assert.equal(summary.totalGain.value, null)
 })
 
-test('calculates a settled buy from gross cents, fee percent, and an exact-date NAV', () => {
+test('does not estimate buy units from gross cents, fee percent, and an exact-date NAV', () => {
   const result = calculatePortfolio({
     asOfDate: '2026-08-13',
     currentNavByFund: {
@@ -690,7 +738,7 @@ test('calculates a settled buy from gross cents, fee percent, and an exact-date 
     events: [buyEvent({ settlementStatus: 'settled' })],
   })
 
-  assert.equal(result.events[0].settlementStatus, 'settled')
+  assert.equal(result.events[0].settlementStatus, 'pending-settlement')
   assert.deepEqual(result.events[0].netPurchaseAmount, {
     confidence: 'estimated',
     source: 'formula',
@@ -701,18 +749,10 @@ test('calculates a settled buy from gross cents, fee percent, and an exact-date 
     source: 'formula',
     value: 99,
   })
-  assert.deepEqual(result.events[0].units, {
-    confidence: 'estimated',
-    source: 'formula',
-    value: 49.505,
-  })
+  assert.deepEqual(result.events[0].units, field(null, 'unknown', 'formula'))
   assert.equal(result.confirmedSummary.byFund['000001'], undefined)
-  assert.deepEqual(result.estimatedSummary.byFund['000001'].units, {
-    confidence: 'estimated',
-    source: 'formula',
-    value: 49.505,
-  })
-  assert.deepEqual(result.pendingSettlement, [])
+  assert.equal(result.estimatedSummary.byFund['000001'], undefined)
+  assert.deepEqual(result.pendingSettlement[0]?.missingFacts, ['units'])
 })
 
 test('calculates zero-fee buys without changing the gross amount', () => {
@@ -736,11 +776,7 @@ test('calculates zero-fee buys without changing the gross amount', () => {
     source: 'formula',
     value: 0,
   })
-  assert.deepEqual(result.events[0].units, {
-    confidence: 'estimated',
-    source: 'formula',
-    value: 61.725,
-  })
+  assert.deepEqual(result.events[0].units, field(null, 'unknown', 'formula'))
 })
 
 test('keeps buys pending when the fee rate or exact same-day NAV is unavailable', () => {
@@ -859,11 +895,8 @@ test('covers actual fee or units independently and keeps the other fields estima
     source: 'formula',
     value: 9899,
   })
-  assert.deepEqual(actualFee.units, {
-    confidence: 'estimated',
-    source: 'formula',
-    value: 49.495,
-  })
+  assert.deepEqual(actualFee.units, field(null, 'unknown', 'formula'))
+  assert.equal(actualFee.settlementStatus, 'pending-settlement')
 
   const actualUnits = result.events[1]
   assert.deepEqual(actualUnits.units, actual(47.1234, 'platform'))
@@ -1019,8 +1052,9 @@ test('uses input order for same-day FIFO and excludes pending-settlement buys', 
       buyEvent({
         confirmedDate: '2026-08-12',
         id: 'buy-pending',
+        navDate: '2026-08-12',
         totalAmount: actual(30000),
-        units: actual(30),
+        units: field(null, 'unknown', 'manual'),
       }),
       sellEvent({ id: 'sell-same-day', units: actual(15) }),
     ],
@@ -1054,7 +1088,7 @@ test('rejects a sell that exceeds available settled units without changing batch
     ],
   })
 
-  assert.equal(result.sellEvents[0].settlementStatus, 'pending-settlement')
+  assert.equal(result.sellEvents[0].settlementStatus, 'settled')
   assert.deepEqual(result.sellAllocations, [])
   assert.deepEqual(result.batches[0].units, actual(10))
   assert.deepEqual(result.issues, [
@@ -1079,7 +1113,12 @@ test('calculates gross redemption but keeps realized gain incomplete when redemp
         totalAmount: actual(10000),
         units: actual(10),
       }),
-      sellEvent({ id: 'sell-unknown-fee', unitNav: actual(2, 'manual'), units: actual(10) }),
+      sellEvent({
+        id: 'sell-unknown-fee',
+        redemptionFee: field(null, 'unknown', 'manual'),
+        unitNav: actual(2, 'manual'),
+        units: actual(10),
+      }),
     ],
   })
 
@@ -1088,8 +1127,8 @@ test('calculates gross redemption but keeps realized gain incomplete when redemp
     source: 'formula',
     value: 2000,
   })
-  assert.deepEqual(result.sellEvents[0].redemptionFee, field(null, 'unknown', 'formula'))
-  assert.deepEqual(result.sellEvents[0].netAmount, field(null, 'unknown', 'formula'))
+  assert.deepEqual(result.sellEvents[0].redemptionFee, field(null, 'unknown', 'manual'))
+  assert.deepEqual(result.sellEvents[0].netAmount, field(null, 'unknown', 'manual'))
   assert.deepEqual(result.sellEvents[0].realizedGain, field(null, 'unknown', 'formula'))
   assert.equal(result.sellEvents[0].realizedGainStatus, 'incomplete')
 })
@@ -1138,7 +1177,12 @@ test('treats an actual zero net redemption as known and calculates the loss', ()
         totalAmount: actual(10000),
         units: actual(10),
       }),
-      sellEvent({ id: 'sell-zero-proceeds', netAmount: actual(0, 'platform'), units: actual(10) }),
+      sellEvent({
+        id: 'sell-zero-proceeds',
+        netAmount: actual(0, 'platform'),
+        redemptionFee: actual(0, 'platform'),
+        units: actual(10),
+      }),
     ],
   })
 

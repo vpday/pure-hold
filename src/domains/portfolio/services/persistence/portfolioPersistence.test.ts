@@ -29,9 +29,11 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     auditedAt: '2026-08-13T09:00:00.000Z',
     confirmedDate: '2026-08-12',
     createdAt: '2026-08-13T09:00:00.000Z',
+    entryMode: 'pending',
     fundCode: '000001',
     id: 'event-1',
     kind: 'buy',
+    navDate: '2026-08-12',
     purchaseFee: unknown(),
     purchaseFeeRate: actual(1),
     settlementStatus: 'pending-settlement',
@@ -40,6 +42,7 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     unitNav: unknown(),
     units: unknown(),
     updatedAt: '2026-08-13T09:00:00.000Z',
+    submittedAt: '2026-08-12 12:00',
     ...overrides,
   } as PortfolioEvent
 }

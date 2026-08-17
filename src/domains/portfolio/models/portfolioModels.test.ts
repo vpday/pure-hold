@@ -40,7 +40,20 @@ function event(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
   }
   switch (overrides.kind) {
     case 'sell':
-      return { ...common, kind: 'sell', units: unknown(), ...overrides } as PortfolioEvent
+      return {
+        ...common,
+        entryMode: 'pending',
+        grossAmount: unknown(),
+        kind: 'sell',
+        navDate: '2026-08-12',
+        netAmount: unknown(),
+        redemptionFee: unknown(),
+        requestedUnits: actual(1),
+        submittedAt: '2026-08-12 12:00',
+        unitNav: unknown(),
+        units: unknown(),
+        ...overrides,
+      } as PortfolioEvent
     case 'cash-dividend':
       return {
         ...common,
@@ -77,9 +90,12 @@ function event(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     default:
       return {
         ...common,
+        entryMode: 'pending',
         kind: 'buy',
+        navDate: '2026-08-12',
         purchaseFee: unknown(),
         purchaseFeeRate: actual(1),
+        submittedAt: '2026-08-12 12:00',
         totalAmount: actual(10000),
         unitNav: unknown(),
         units: unknown(),
@@ -97,6 +113,7 @@ test('constructs a portfolio with every event kind and independent batch objects
       kind: 'sell',
       netAmount: actual(11000),
       redemptionFee: actual(100),
+      settlementStatus: 'settled',
       source: 'manual',
       units: actual(10),
     }),
@@ -162,6 +179,7 @@ test('preserves field-level actual, estimated, and unknown confidence', () => {
   const result = createPortfolioEvent(
     event({
       purchaseFee: estimated(99),
+      settlementStatus: 'settled',
       unitNav: unknown(),
       units: actual(10),
     }),
@@ -172,6 +190,55 @@ test('preserves field-level actual, estimated, and unknown confidence', () => {
   assert.equal(result.purchaseFee.confidence, 'estimated')
   assert.equal(result.unitNav.confidence, 'unknown')
   assert.equal(result.unitNav.value, null)
+})
+
+test('separates pending facts from settlement and does not require fees or NAV to settle', () => {
+  const pending = createPortfolioEvent(
+    event({ confirmedDate: undefined, units: unknown(), settlementStatus: 'pending-settlement' }),
+  )
+  assert.equal(pending.kind, 'buy')
+  if (pending.kind !== 'buy') return
+  assert.equal(pending.confirmedDate, undefined)
+  assert.equal(pending.settlementStatus, 'pending-settlement')
+
+  const settled = createPortfolioEvent(
+    event({
+      confirmedDate: '2026-08-13',
+      purchaseFee: unknown(),
+      settlementStatus: 'settled',
+      unitNav: unknown(),
+      units: actual(10),
+    }),
+  )
+  assert.equal(settled.kind, 'buy')
+  assert.equal(settled.settlementStatus, 'settled')
+})
+
+test('rejects inconsistent transaction modes, dates and statuses', () => {
+  assert.throws(
+    () =>
+      createPortfolioEvent(
+        event({ entryMode: 'historical', confirmedDate: undefined, units: unknown() }),
+      ),
+    /historical.*confirmation/i,
+  )
+  assert.throws(
+    () => createPortfolioEvent(event({ confirmedDate: '2026-08-13', settlementStatus: 'settled' })),
+    /settlement/i,
+  )
+  assert.throws(
+    () =>
+      createPortfolioEvent(
+        event({
+          confirmedDate: '2026-08-13',
+          expectedConfirmationDate: '2026-08-17',
+          settlementStatus: 'pending-settlement',
+          units: actual(10),
+        }),
+      ),
+    /expected confirmation/i,
+  )
+  assert.throws(() => createPortfolioEvent(event({ navDate: '2026-08-13' })), /NAV date/i)
 })
 
 test('rejects negative values, excessive precision, and invalid calendar or audit dates', () => {

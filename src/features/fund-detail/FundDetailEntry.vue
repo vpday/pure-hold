@@ -93,7 +93,11 @@ const transactions = computed<readonly FundTransactionViewModel[]>(() => {
       (event): event is PortfolioBuyEvent | PortfolioSellEvent =>
         event.fundCode === code && (event.kind === 'buy' || event.kind === 'sell'),
     )
-    .sort((left, right) => left.confirmedDate.localeCompare(right.confirmedDate))
+    .sort((left, right) => {
+      const leftDate = left.confirmedDate ?? left.navDate
+      const rightDate = right.confirmedDate ?? right.navDate
+      return leftDate.localeCompare(rightDate)
+    })
     .map((event) => {
       if (event.kind === 'buy') {
         return { kind: 'buy' as const, ...toBuyTransactionViewModel(event, currentCalculation) }

@@ -10,12 +10,18 @@ import type {
   PortfolioInitialHoldingEvent,
   PortfolioSellEvent,
 } from './portfolio.ts'
+import {
+  deriveTransactionSchedule,
+  getShanghaiDate,
+  getShanghaiMinute,
+  isShanghaiMinuteAtOrBefore,
+  isTradingDay,
+  isValidShanghaiMinute,
+} from '../services/tradingCalendar.ts'
 
 const EVENT_COMMON_KEYS = new Set([
   'id',
   'fundCode',
-  'confirmedDate',
-  'submittedDate',
   'settlementStatus',
   'source',
   'auditedAt',
@@ -100,9 +106,6 @@ export function validatePortfolioBatch(value: unknown): PortfolioBatch {
 function validateEventCommon(record: Record<string, unknown>): void {
   validateId(record.id, 'event ID')
   validateFundCode(record.fundCode)
-  validateDate(record.confirmedDate, 'event confirmation date')
-  if (record.submittedDate !== undefined)
-    validateDate(record.submittedDate, 'event submission date')
   requireStringUnion(record.settlementStatus, ['pending-settlement', 'settled'], 'event status')
   validateDateTime(record.auditedAt, 'event audit time')
   validateDateTime(record.createdAt, 'event created audit time')
@@ -129,6 +132,11 @@ function validateBuyEvent(record: Record<string, unknown>): PortfolioBuyEvent {
     new Set([
       ...EVENT_COMMON_KEYS,
       'kind',
+      'entryMode',
+      'submittedAt',
+      'navDate',
+      'expectedConfirmationDate',
+      'confirmedDate',
       'totalAmount',
       'units',
       'unitNav',
@@ -136,20 +144,24 @@ function validateBuyEvent(record: Record<string, unknown>): PortfolioBuyEvent {
       'purchaseFeeRate',
     ]),
   )
+  const totalAmount = validateField(record.totalAmount, 'total amount', {
+    allowNegative: false,
+    maxDecimals: 0,
+  })
+  requirePositiveField(totalAmount, 'total amount')
+  const units = validateField(record.units, 'units', { allowNegative: false, maxDecimals: 4 })
+  const transaction = validateTransactionBase(record, units)
   return {
-    ...eventBase(record, 'buy'),
+    ...transaction,
     kind: 'buy',
     purchaseFee: validateField(record.purchaseFee, 'purchase fee', {
       allowNegative: false,
       maxDecimals: 0,
     }),
     purchaseFeeRate: validateRateField(record.purchaseFeeRate, 'purchase fee rate'),
-    totalAmount: validateField(record.totalAmount, 'total amount', {
-      allowNegative: false,
-      maxDecimals: 0,
-    }),
+    totalAmount,
     unitNav: validateField(record.unitNav, 'unit NAV', { allowNegative: false, maxDecimals: 4 }),
-    units: validateField(record.units, 'units', { allowNegative: false, maxDecimals: 4 }),
+    units,
   } as unknown as PortfolioBuyEvent
 }
 
@@ -159,6 +171,12 @@ function validateSellEvent(record: Record<string, unknown>): PortfolioSellEvent 
     new Set([
       ...EVENT_COMMON_KEYS,
       'kind',
+      'entryMode',
+      'submittedAt',
+      'navDate',
+      'expectedConfirmationDate',
+      'confirmedDate',
+      'requestedUnits',
       'units',
       'unitNav',
       'grossAmount',
@@ -166,24 +184,43 @@ function validateSellEvent(record: Record<string, unknown>): PortfolioSellEvent 
       'redemptionFee',
     ]),
   )
+  const requestedUnits = validateField(record.requestedUnits, 'requested units', {
+    allowNegative: false,
+    maxDecimals: 4,
+  })
+  requirePositiveField(requestedUnits, 'requested units')
+  const units = validateField(record.units, 'units', { allowNegative: false, maxDecimals: 4 })
+  const transaction = validateTransactionBase(record, units)
   const result: Record<string, unknown> = {
-    ...eventBase(record, 'sell'),
+    ...transaction,
     kind: 'sell',
-    units: validateField(record.units, 'units', { allowNegative: false, maxDecimals: 4 }),
+    requestedUnits,
+    units,
   }
-  const unitNav = optionalField(record.unitNav, 'unit NAV', 4)
-  const grossAmount = optionalField(record.grossAmount, 'gross redemption amount', 0)
-  const netAmount = optionalField(record.netAmount, 'net redemption amount', 0)
-  const redemptionFee = optionalField(record.redemptionFee, 'redemption fee', 0)
-  if (unitNav !== undefined) result.unitNav = unitNav
-  if (grossAmount !== undefined) result.grossAmount = grossAmount
-  if (netAmount !== undefined) result.netAmount = netAmount
-  if (redemptionFee !== undefined) result.redemptionFee = redemptionFee
+  result.unitNav = validateField(record.unitNav, 'unit NAV', {
+    allowNegative: false,
+    maxDecimals: 4,
+  })
+  result.grossAmount = validateField(record.grossAmount, 'gross redemption amount', {
+    allowNegative: false,
+    maxDecimals: 0,
+  })
+  result.netAmount = validateField(record.netAmount, 'net redemption amount', {
+    allowNegative: false,
+    maxDecimals: 0,
+  })
+  result.redemptionFee = validateField(record.redemptionFee, 'redemption fee', {
+    allowNegative: false,
+    maxDecimals: 0,
+  })
   return result as unknown as PortfolioSellEvent
 }
 
 function validateCashDividendEvent(record: Record<string, unknown>): PortfolioCashDividendEvent {
-  rejectUnexpectedKeys(record, new Set([...EVENT_COMMON_KEYS, 'kind', 'cashAmount']))
+  rejectUnexpectedKeys(
+    record,
+    new Set([...EVENT_COMMON_KEYS, 'confirmedDate', 'kind', 'cashAmount']),
+  )
   return {
     ...eventBase(record, 'cash-dividend'),
     cashAmount: validateField(record.cashAmount, 'cash dividend amount', {
@@ -199,7 +236,7 @@ function validateDividendReinvestmentEvent(
 ): PortfolioDividendReinvestmentEvent {
   rejectUnexpectedKeys(
     record,
-    new Set([...EVENT_COMMON_KEYS, 'kind', 'dividendAmount', 'units', 'unitNav']),
+    new Set([...EVENT_COMMON_KEYS, 'confirmedDate', 'kind', 'dividendAmount', 'units', 'unitNav']),
   )
   return {
     ...eventBase(record, 'dividend-reinvestment'),
@@ -216,7 +253,10 @@ function validateDividendReinvestmentEvent(
 function validateInitialHoldingEvent(
   record: Record<string, unknown>,
 ): PortfolioInitialHoldingEvent {
-  rejectUnexpectedKeys(record, new Set([...EVENT_COMMON_KEYS, 'kind', 'units', 'costAmount']))
+  rejectUnexpectedKeys(
+    record,
+    new Set([...EVENT_COMMON_KEYS, 'confirmedDate', 'kind', 'units', 'costAmount']),
+  )
   return {
     ...eventBase(record, 'initial-holding'),
     costAmount: validateField(record.costAmount, 'initial holding cost amount', {
@@ -231,7 +271,14 @@ function validateInitialHoldingEvent(
 function validateAdjustmentEvent(record: Record<string, unknown>): PortfolioAdjustmentEvent {
   rejectUnexpectedKeys(
     record,
-    new Set([...EVENT_COMMON_KEYS, 'kind', 'unitsDelta', 'costAmountDelta', 'reason']),
+    new Set([
+      ...EVENT_COMMON_KEYS,
+      'confirmedDate',
+      'kind',
+      'unitsDelta',
+      'costAmountDelta',
+      'reason',
+    ]),
   )
   const reason = requireString(record.reason, 'adjustment reason').trim()
   if (reason.length === 0) throw new TypeError('Adjustment reason must not be empty')
@@ -256,7 +303,6 @@ function eventBase(
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {
     auditedAt: validateDateTime(record.auditedAt, 'event audit time'),
-    confirmedDate: validateDate(record.confirmedDate, 'event confirmation date'),
     createdAt: validateDateTime(record.createdAt, 'event created audit time'),
     fundCode: validateFundCode(record.fundCode),
     id: validateId(record.id, 'event ID'),
@@ -269,10 +315,74 @@ function eventBase(
     source: requireString(record.source, 'event source') as PortfolioEvent['source'],
     updatedAt: validateDateTime(record.updatedAt, 'event updated audit time'),
   }
-  if (record.submittedDate !== undefined) {
-    result.submittedDate = validateDate(record.submittedDate, 'event submission date')
+  if (kind !== 'buy' && kind !== 'sell') {
+    result.confirmedDate = validateDate(record.confirmedDate, 'event confirmation date')
   }
   return result
+}
+
+function validateTransactionBase(
+  record: Record<string, unknown>,
+  units: FieldValue<number>,
+): Record<string, unknown> {
+  const entryMode = requireStringUnion(record.entryMode, ['pending', 'historical'], 'entry mode')
+  const submittedAt = requireString(record.submittedAt, 'transaction submission time')
+  if (!isValidShanghaiMinute(submittedAt)) {
+    throw new TypeError('Transaction submission time is invalid')
+  }
+  if (!isShanghaiMinuteAtOrBefore(submittedAt, getShanghaiMinute())) {
+    throw new TypeError('Transaction submission time cannot be in the future')
+  }
+  const navDate = validateDate(record.navDate, 'transaction NAV date')
+  const schedule = deriveTransactionSchedule({ submittedAt, confirmationDays: null })
+  if (navDate !== schedule.navDate) throw new TypeError('Transaction NAV date is inconsistent')
+
+  const expectedConfirmationDate = optionalDate(
+    record.expectedConfirmationDate,
+    'expected confirmation date',
+  )
+  if (entryMode === 'historical' && expectedConfirmationDate !== undefined) {
+    throw new TypeError('Historical transaction cannot have an expected confirmation date')
+  }
+  if (
+    expectedConfirmationDate !== undefined &&
+    (!isTradingDay(expectedConfirmationDate) || expectedConfirmationDate < navDate)
+  ) {
+    throw new TypeError('Expected confirmation date is invalid')
+  }
+
+  const confirmedDate = optionalDate(record.confirmedDate, 'event confirmation date')
+  if (confirmedDate !== undefined) {
+    const today = getShanghaiDate()
+    if (!isTradingDay(confirmedDate) || confirmedDate < navDate || confirmedDate > today) {
+      throw new TypeError('Event confirmation date is invalid')
+    }
+  }
+  if (confirmedDate !== undefined && expectedConfirmationDate !== undefined) {
+    throw new TypeError('Settled transaction cannot have an expected confirmation date')
+  }
+  const hasConfirmedUnits = units.value !== null && units.confidence === 'actual'
+  if (entryMode === 'historical' && (confirmedDate === undefined || !hasConfirmedUnits)) {
+    throw new TypeError('Historical transaction requires confirmation facts')
+  }
+  const isSettled = confirmedDate !== undefined && hasConfirmedUnits
+  const status = requireStringUnion(
+    record.settlementStatus,
+    ['pending-settlement', 'settled'],
+    'event status',
+  )
+  if ((status === 'settled') !== isSettled) {
+    throw new TypeError('Transaction settlement status does not match confirmation facts')
+  }
+
+  return {
+    ...eventBase(record, 'buy'),
+    entryMode,
+    navDate,
+    ...(expectedConfirmationDate === undefined ? {} : { expectedConfirmationDate }),
+    ...(confirmedDate === undefined ? {} : { confirmedDate }),
+    submittedAt,
+  }
 }
 
 function validateField(
@@ -305,14 +415,12 @@ function validateRateField(value: unknown, label: string): FieldValue<number> {
   return field
 }
 
-function optionalField(
-  value: unknown,
-  label: string,
-  maxDecimals: number,
-): FieldValue<number> | undefined {
-  return value === undefined
-    ? undefined
-    : validateField(value, label, { allowNegative: false, maxDecimals })
+function optionalDate(value: unknown, label: string): string | undefined {
+  return value === undefined ? undefined : validateDate(value, label)
+}
+
+function requirePositiveField(field: FieldValue<number>, label: string): void {
+  if (field.value === null || field.value <= 0) throw new TypeError(`${label} must be positive`)
 }
 
 function validateFundCodes(value: unknown): string[] {

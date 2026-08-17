@@ -21,9 +21,11 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     auditedAt: '2026-08-13T09:00:00.000Z',
     confirmedDate: '2026-08-12',
     createdAt: '2026-08-13T09:00:00.000Z',
+    entryMode: 'pending',
     fundCode: '000001',
     id: 'event-1',
     kind: 'buy',
+    navDate: '2026-08-12',
     purchaseFee: unknown(),
     purchaseFeeRate: actual(1),
     settlementStatus: 'pending-settlement',
@@ -32,6 +34,7 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     unitNav: unknown(),
     units: unknown(),
     updatedAt: '2026-08-13T09:00:00.000Z',
+    submittedAt: '2026-08-12 12:00',
     ...overrides,
   } as PortfolioEvent
 }
@@ -51,7 +54,13 @@ test('enables funds and executes idempotent event add, edit, settle, and delete 
   assert.equal(store.addEvent(buyEvent()).ok, true)
   assert.equal(store.addEvent(buyEvent({ totalAmount: actual(20000) })).reason, 'conflict')
 
-  const settled = store.settleEvent(buyEvent({ settlementStatus: 'settled' }))
+  const settled = store.settleEvent(
+    buyEvent({
+      confirmedDate: '2026-08-14',
+      settlementStatus: 'settled',
+      units: actual(5),
+    }),
+  )
   assert.equal(settled.ok, true)
   assert.equal(store.updateEvent(buyEvent({ confirmedDate: '2026-08-14' })).ok, true)
   assert.equal(store.deleteEvent('event-1').ok, true)

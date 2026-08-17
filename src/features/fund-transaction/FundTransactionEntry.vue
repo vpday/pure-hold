@@ -28,6 +28,8 @@ const actualUnitNav = ref('')
 const sellUnits = ref('')
 const actualNetAmountYuan = ref('')
 const actualRedemptionFeeYuan = ref('')
+const purchaseConfirmationDays = ref<number | null>(null)
+const redemptionConfirmationDays = ref<number | null>(null)
 const errors = ref<Readonly<Record<string, string>>>({})
 const transactionForm = ref<{ validate: () => Promise<boolean> }>()
 let openGeneration = 0
@@ -49,6 +51,8 @@ function open(code: string, name: string): void {
   sellUnits.value = ''
   actualNetAmountYuan.value = ''
   actualRedemptionFeeYuan.value = ''
+  purchaseConfirmationDays.value = null
+  redemptionConfirmationDays.value = null
   errors.value = {}
   visible.value = true
   void loadPurchaseFee(code, generation)
@@ -57,6 +61,7 @@ function open(code: string, name: string): void {
 function openSell(code: string, name: string): void {
   mode.value = 'sell'
   openGeneration += 1
+  const generation = openGeneration
   fundCode.value = code
   fundName.value = name
   confirmedDate.value = defaultTransactionDate()
@@ -64,8 +69,11 @@ function openSell(code: string, name: string): void {
   actualUnitNav.value = ''
   actualNetAmountYuan.value = ''
   actualRedemptionFeeYuan.value = ''
+  purchaseConfirmationDays.value = null
+  redemptionConfirmationDays.value = null
   errors.value = {}
   visible.value = true
+  void loadPurchaseFee(code, generation)
 }
 
 function close(): void {
@@ -75,9 +83,13 @@ function close(): void {
 async function loadPurchaseFee(code: string, generation: number): Promise<void> {
   try {
     const basicInfo = await fetchTiantianFundBasicInfo(code)
-    if (generation === openGeneration && basicInfo.purchaseFeePercent !== null) {
-      purchaseFeePercent.value = String(basicInfo.purchaseFeePercent)
-      purchaseFeePercentSource.value = 'fund-basic-info'
+    if (generation === openGeneration) {
+      purchaseConfirmationDays.value = basicInfo.purchaseConfirmationDays
+      redemptionConfirmationDays.value = basicInfo.redemptionConfirmationDays
+      if (basicInfo.purchaseFeePercent !== null) {
+        purchaseFeePercent.value = String(basicInfo.purchaseFeePercent)
+        purchaseFeePercentSource.value = 'fund-basic-info'
+      }
     }
   } catch {
     // The fee rate stays blank and the draft remains explicitly pending.
@@ -89,16 +101,18 @@ function saveBuy(): void {
   const draft = createBuyDraft(
     {
       actualPurchaseFeeYuan: actualPurchaseFeeYuan.value || undefined,
-      actualUnitNav: actualUnitNav.value || undefined,
       actualUnits: actualUnits.value || undefined,
-      confirmedDate: confirmedDate.value,
+      confirmedDate: actualUnits.value.trim() ? confirmedDate.value : undefined,
+      entryMode: 'pending',
       fundCode: fundCode.value,
       id: createEventId(fundCode.value),
-      purchaseFeePercent: purchaseFeePercent.value ? Number(purchaseFeePercent.value) : null,
+      purchaseFeePercent:
+        purchaseFeePercent.value.trim() === '' ? null : Number(purchaseFeePercent.value),
       purchaseFeePercentSource: purchaseFeePercentSource.value,
+      submittedAt: `${confirmedDate.value} 00:00`,
       totalAmountYuan: totalAmountYuan.value,
     },
-    { now, today: shanghaiDate() },
+    { confirmationDays: purchaseConfirmationDays.value, now },
   )
   if (!draft.ok) {
     errors.value = draft.errors
@@ -122,13 +136,14 @@ function saveSell(): void {
     {
       actualNetAmountYuan: actualNetAmountYuan.value || undefined,
       actualRedemptionFeeYuan: actualRedemptionFeeYuan.value || undefined,
-      actualUnitNav: actualUnitNav.value || undefined,
-      confirmedDate: confirmedDate.value,
+      confirmedDate: undefined,
+      entryMode: 'pending',
       fundCode: fundCode.value,
       id: createEventId(fundCode.value, 'sell'),
-      units: sellUnits.value,
+      requestedUnits: sellUnits.value,
+      submittedAt: `${confirmedDate.value} 00:00`,
     },
-    { now, today: shanghaiDate() },
+    { confirmationDays: redemptionConfirmationDays.value, now },
   )
   if (!draft.ok) {
     errors.value = draft.errors
@@ -158,7 +173,7 @@ function updatePurchaseFeePercent(value: string): void {
 
 async function completePendingBuy(event: Parameters<typeof completeBuyEventWithExactNav>[1]) {
   try {
-    const value = await lookupExactUnitNav(event.fundCode, event.confirmedDate)
+    const value = await lookupExactUnitNav(event.fundCode, event.navDate)
     if (value) {
       const now = new Date().toISOString()
       completeBuyEventWithExactNav(props.portfolio, event, value, now)

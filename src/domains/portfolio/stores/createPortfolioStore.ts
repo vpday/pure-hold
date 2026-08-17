@@ -67,7 +67,17 @@ export function createPortfolioStore(
   }
 
   function settleEvent(event: PortfolioEvent): PortfolioCommandResult {
-    return updateEvent({ ...event, settlementStatus: 'settled' })
+    if (event.kind !== 'buy' && event.kind !== 'sell') {
+      return updateEvent({ ...event, settlementStatus: 'settled' })
+    }
+    const isSettled =
+      event.confirmedDate !== undefined &&
+      event.units.value !== null &&
+      event.units.confidence === 'actual'
+    return updateEvent({
+      ...event,
+      settlementStatus: isSettled ? 'settled' : 'pending-settlement',
+    })
   }
 
   function deleteEvent(eventId: string): PortfolioCommandResult {

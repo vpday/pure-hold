@@ -8,6 +8,7 @@ export type PortfolioEventKind =
 
 export type PortfolioSettlementStatus = 'pending-settlement' | 'settled'
 export type PortfolioFieldConfidence = 'actual' | 'estimated' | 'unknown'
+export type PortfolioTransactionEntryMode = 'pending' | 'historical'
 export type PortfolioValueSource =
   | 'manual'
   | 'platform'
@@ -35,8 +36,6 @@ export type NavFieldValue = FieldValue<number>
 interface PortfolioEventBase {
   readonly id: string
   readonly fundCode: string
-  readonly confirmedDate: string
-  readonly submittedDate?: string
   readonly settlementStatus: PortfolioSettlementStatus
   readonly source: PortfolioEventSource
   readonly auditedAt: string
@@ -44,7 +43,19 @@ interface PortfolioEventBase {
   readonly updatedAt: string
 }
 
-export interface PortfolioBuyEvent extends PortfolioEventBase {
+interface PortfolioConfirmedEventBase extends PortfolioEventBase {
+  readonly confirmedDate: string
+}
+
+export interface PortfolioTransactionFields {
+  readonly entryMode: PortfolioTransactionEntryMode
+  readonly submittedAt: string
+  readonly navDate: string
+  readonly expectedConfirmationDate?: string
+  readonly confirmedDate?: string
+}
+
+export interface PortfolioBuyEvent extends PortfolioEventBase, PortfolioTransactionFields {
   readonly kind: 'buy'
   readonly totalAmount: MoneyFieldValue
   readonly units: UnitsFieldValue
@@ -53,34 +64,35 @@ export interface PortfolioBuyEvent extends PortfolioEventBase {
   readonly purchaseFeeRate: FieldValue<number>
 }
 
-export interface PortfolioSellEvent extends PortfolioEventBase {
+export interface PortfolioSellEvent extends PortfolioEventBase, PortfolioTransactionFields {
   readonly kind: 'sell'
+  readonly requestedUnits: UnitsFieldValue
   readonly units: UnitsFieldValue
-  readonly unitNav?: NavFieldValue
-  readonly grossAmount?: MoneyFieldValue
-  readonly netAmount?: MoneyFieldValue
-  readonly redemptionFee?: MoneyFieldValue
+  readonly unitNav: NavFieldValue
+  readonly grossAmount: MoneyFieldValue
+  readonly netAmount: MoneyFieldValue
+  readonly redemptionFee: MoneyFieldValue
 }
 
-export interface PortfolioCashDividendEvent extends PortfolioEventBase {
+export interface PortfolioCashDividendEvent extends PortfolioConfirmedEventBase {
   readonly kind: 'cash-dividend'
   readonly cashAmount: MoneyFieldValue
 }
 
-export interface PortfolioDividendReinvestmentEvent extends PortfolioEventBase {
+export interface PortfolioDividendReinvestmentEvent extends PortfolioConfirmedEventBase {
   readonly kind: 'dividend-reinvestment'
   readonly dividendAmount: MoneyFieldValue
   readonly units: UnitsFieldValue
   readonly unitNav: NavFieldValue
 }
 
-export interface PortfolioInitialHoldingEvent extends PortfolioEventBase {
+export interface PortfolioInitialHoldingEvent extends PortfolioConfirmedEventBase {
   readonly kind: 'initial-holding'
   readonly units: UnitsFieldValue
   readonly costAmount: MoneyFieldValue
 }
 
-export interface PortfolioAdjustmentEvent extends PortfolioEventBase {
+export interface PortfolioAdjustmentEvent extends PortfolioConfirmedEventBase {
   readonly kind: 'adjustment'
   readonly unitsDelta: UnitsFieldValue
   readonly costAmountDelta: MoneyFieldValue

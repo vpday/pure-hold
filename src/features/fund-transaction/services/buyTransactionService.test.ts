@@ -6,17 +6,30 @@ import { createPortfolioStore } from '@/domains/portfolio/stores/createPortfolio
 import { createBuyDraft } from '../models/buyDraft.ts'
 import { completeBuyEventWithExactNav, saveBuyDraft } from './buyTransactionService.ts'
 
+const options = { confirmationDays: 1, now: '2026-08-14T12:00:00.000Z' }
+
+function input(overrides: Record<string, unknown> = {}) {
+  return {
+    entryMode: 'pending' as const,
+    fundCode: '161725',
+    id: 'buy-same-event',
+    purchaseFeePercent: 1,
+    submittedAt: '2026-08-14 12:00',
+    totalAmountYuan: '100.00',
+    ...overrides,
+  }
+}
+
 test('saves and completes the same buy event with an exact same-day NAV', () => {
   const store = createPortfolioStore(createEmptyPortfolio(), () => undefined)
   const draftResult = createBuyDraft(
     {
-      confirmedDate: '2026-08-14',
-      fundCode: '161725',
-      id: 'buy-same-event',
-      purchaseFeePercent: 1,
-      totalAmountYuan: '100.00',
+      ...input({
+        actualUnits: '49.5',
+        confirmedDate: '2026-08-14',
+      }),
     },
-    { now: '2026-08-14T12:00:00.000Z', today: '2026-08-14' },
+    options,
   )
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
@@ -50,13 +63,9 @@ test('does not update a saved event when exact NAV completion fails', () => {
   const store = createPortfolioStore(createEmptyPortfolio(), () => undefined)
   const draftResult = createBuyDraft(
     {
-      confirmedDate: '2026-08-14',
-      fundCode: '161725',
-      id: 'buy-pending',
-      purchaseFeePercent: 1,
-      totalAmountYuan: '100',
+      ...input({ id: 'buy-pending', totalAmountYuan: '100' }),
     },
-    { now: '2026-08-14T12:00:00.000Z', today: '2026-08-14' },
+    options,
   )
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
@@ -79,13 +88,9 @@ test('keeps the draft and old portfolio state when persistence fails', () => {
   })
   const draftResult = createBuyDraft(
     {
-      confirmedDate: '2026-08-14',
-      fundCode: '161725',
-      id: 'buy-write-failure',
-      purchaseFeePercent: 1,
-      totalAmountYuan: '100',
+      ...input({ id: 'buy-write-failure', totalAmountYuan: '100' }),
     },
-    { now: '2026-08-14T12:00:00.000Z', today: '2026-08-14' },
+    options,
   )
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return

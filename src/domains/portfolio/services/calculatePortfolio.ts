@@ -23,6 +23,7 @@ export type PortfolioPendingFact =
   | 'adjustment-cost-amount'
   | 'adjustment-units'
   | 'cash-amount'
+  | 'confirmed-date'
   | 'dividend-amount'
   | 'purchase-fee-rate'
   | 'reinvestment-units'
@@ -98,6 +99,7 @@ export interface PortfolioSellCalculation {
   readonly eventId: string
   readonly fundCode: string
   readonly settlementStatus: 'pending-settlement' | 'settled'
+  readonly requestedUnits: UnitsFieldValue
   readonly units: UnitsFieldValue
   readonly unitNav: NavFieldValue
   readonly grossAmount: MoneyFieldValue
@@ -226,7 +228,7 @@ export function calculatePortfolio({
   for (const { event } of orderEvents(events)) {
     if (isBuyEvent(event)) {
       const calculated = buysById.get(event.id)
-      if (calculated?.settlementStatus === 'settled' && event.settlementStatus === 'settled') {
+      if (calculated?.settlementStatus === 'settled') {
         workingBatches.push(toWorkingBatch(calculated))
       }
       continue
@@ -281,7 +283,7 @@ export function calculatePortfolio({
     if (!isSellEvent(event)) continue
 
     const calculated = calculateSell(event, currentNavByFund[event.fundCode])
-    if (event.settlementStatus !== 'settled') {
+    if (calculated.settlementStatus !== 'settled') {
       sellCalculations.set(event.id, calculated)
       continue
     }
@@ -291,7 +293,7 @@ export function calculatePortfolio({
         code: 'missing-sell-units',
         eventId: calculated.eventId,
         fundCode: calculated.fundCode,
-        requestedUnits: cloneField(calculated.units),
+        requestedUnits: cloneField(calculated.requestedUnits),
       })
       sellCalculations.set(event.id, { ...calculated, settlementStatus: 'pending-settlement' })
       continue
@@ -304,9 +306,9 @@ export function calculatePortfolio({
         code: 'insufficient-units',
         eventId: calculated.eventId,
         fundCode: calculated.fundCode,
-        requestedUnits: cloneField(calculated.units),
+        requestedUnits: cloneField(calculated.requestedUnits),
       })
-      sellCalculations.set(event.id, { ...calculated, settlementStatus: 'pending-settlement' })
+      sellCalculations.set(event.id, calculated)
       continue
     }
 
@@ -411,9 +413,16 @@ function orderEvents(events: readonly PortfolioEvent[]) {
     .map((event, index) => ({ event, index }))
     .sort(
       (left, right) =>
-        left.event.confirmedDate.localeCompare(right.event.confirmedDate) ||
+        eventOrderDate(left.event).localeCompare(eventOrderDate(right.event)) ||
         left.index - right.index,
     )
+}
+
+function eventOrderDate(event: PortfolioEvent): string {
+  if (event.kind === 'buy' || event.kind === 'sell') {
+    return event.confirmedDate ?? event.navDate
+  }
+  return event.confirmedDate
 }
 
 function calculateBuy(
@@ -425,11 +434,10 @@ function calculateBuy(
   const unitNav = resolveUnitNav(event, navPoint)
   const purchaseFee = resolvePurchaseFee(event, totalAmount, purchaseFeeRate)
   const netPurchaseAmount = resolveNetPurchaseAmount(totalAmount, purchaseFee)
-  const units = resolveUnits(event, netPurchaseAmount, unitNav)
-  const settlementStatus =
-    event.settlementStatus === 'settled' && totalAmount.value !== null && units.value !== null
-      ? 'settled'
-      : 'pending-settlement'
+  const units = resolveUnits(event)
+  const settlementStatus = isTransactionSettled(event.confirmedDate, units)
+    ? 'settled'
+    : 'pending-settlement'
 
   return {
     event,
@@ -497,13 +505,15 @@ function calculateSell(
   event: PortfolioSellEvent,
   navPoint: PortfolioNavPoint | undefined,
 ): CalculatedSell {
+  const requestedUnits = cloneField(event.requestedUnits)
   const units = cloneField(event.units)
   const unitNav = resolveUnitNav(event, navPoint)
   const grossAmount = resolveGrossAmount(event, units, unitNav)
   const redemptionFee = resolveRedemptionFee(event)
   const netAmount = resolveNetAmount(event, grossAmount, redemptionFee)
-  const settlementStatus =
-    event.settlementStatus === 'settled' && units.value !== null ? 'settled' : 'pending-settlement'
+  const settlementStatus = isTransactionSettled(event.confirmedDate, units)
+    ? 'settled'
+    : 'pending-settlement'
   return {
     allocatedCostAmount: unknownField(FORMULA_SOURCE),
     allocations: [],
@@ -515,6 +525,7 @@ function calculateSell(
     realizedGain: unknownField(FORMULA_SOURCE),
     realizedGainStatus: 'incomplete',
     redemptionFee,
+    requestedUnits,
     settlementStatus,
     unitNav,
     units,
@@ -527,9 +538,7 @@ function completeSellCalculation(
   allocatedCostAmount: MoneyFieldValue,
 ): CalculatedSell {
   const gainIsComplete =
-    calculation.netAmount.value !== null &&
-    (calculation.netAmount.confidence === 'actual' ||
-      calculation.redemptionFee.confidence === 'actual')
+    calculation.netAmount.value !== null && calculation.redemptionFee.confidence === 'actual'
   return {
     ...calculation,
     allocatedCostAmount,
@@ -550,19 +559,14 @@ function resolveGrossAmount(
   units: UnitsFieldValue,
   unitNav: NavFieldValue,
 ): MoneyFieldValue {
-  if (event.grossAmount !== undefined) {
-    return isUsableAmount(event.grossAmount)
-      ? cloneField(event.grossAmount)
-      : unknownField(event.grossAmount.source)
-  }
+  if (isUsableAmount(event.grossAmount)) return cloneField(event.grossAmount)
   if (units.value !== null && isValidNav(unitNav.value)) {
     return valueField(roundMoney(units.value * unitNav.value * 100), 'estimated', FORMULA_SOURCE)
   }
-  return unknownField(FORMULA_SOURCE)
+  return unknownField(event.grossAmount.source)
 }
 
 function resolveRedemptionFee(event: PortfolioSellEvent): MoneyFieldValue {
-  if (event.redemptionFee === undefined) return unknownField(FORMULA_SOURCE)
   return isUsableAmount(event.redemptionFee)
     ? cloneField(event.redemptionFee)
     : unknownField(event.redemptionFee.source)
@@ -573,11 +577,7 @@ function resolveNetAmount(
   grossAmount: MoneyFieldValue,
   redemptionFee: MoneyFieldValue,
 ): MoneyFieldValue {
-  if (event.netAmount !== undefined) {
-    return isUsableAmount(event.netAmount)
-      ? cloneField(event.netAmount)
-      : unknownField(event.netAmount.source)
-  }
+  if (isUsableAmount(event.netAmount)) return cloneField(event.netAmount)
   if (
     grossAmount.value !== null &&
     redemptionFee.value !== null &&
@@ -585,12 +585,12 @@ function resolveNetAmount(
   ) {
     return valueField(grossAmount.value - redemptionFee.value, 'estimated', FORMULA_SOURCE)
   }
-  return unknownField(FORMULA_SOURCE)
+  return unknownField(event.netAmount.source)
 }
 
 function toWorkingBatch(event: CalculatedBuy): WorkingBatch {
   return {
-    confirmedDate: event.event.confirmedDate,
+    confirmedDate: event.event.confirmedDate as string,
     costAmount: event.totalAmount.value as number,
     costConfidence: event.totalAmount.confidence,
     costSource: event.totalAmount.source,
@@ -754,7 +754,7 @@ function resolveUnitNav(
   }
   if (
     navPoint !== undefined &&
-    navPoint.date === event.confirmedDate &&
+    navPoint.date === event.navDate &&
     isValidNav(navPoint.unitNav.value)
   ) {
     return cloneField(navPoint.unitNav)
@@ -795,26 +795,16 @@ function resolveNetPurchaseAmount(
   return unknownField(FORMULA_SOURCE)
 }
 
-function resolveUnits(
-  event: PortfolioBuyEvent,
-  netPurchaseAmount: MoneyFieldValue,
-  unitNav: NavFieldValue,
-): UnitsFieldValue {
+function resolveUnits(event: PortfolioBuyEvent): UnitsFieldValue {
   if (event.units.confidence === 'actual' && isNonNegativeFinite(event.units.value)) {
     return cloneField(event.units)
-  }
-  if (netPurchaseAmount.value !== null && isValidNav(unitNav.value)) {
-    return valueField(
-      roundUnits(netPurchaseAmount.value / 100 / unitNav.value),
-      'estimated',
-      FORMULA_SOURCE,
-    )
   }
   return unknownField(FORMULA_SOURCE)
 }
 
 function toPendingSettlement(event: CalculatedBuy): PortfolioPendingSettlement {
   const missingFacts: PortfolioPendingFact[] = []
+  if (event.event.confirmedDate === undefined) missingFacts.push('confirmed-date')
   if (event.totalAmount.value === null) missingFacts.push('total-amount')
   if (event.purchaseFee.value === null) missingFacts.push('purchase-fee-rate')
   if (event.unitNav.value === null) missingFacts.push('unit-nav')
@@ -866,10 +856,15 @@ function toPendingAdjustmentSettlement(
 }
 
 function toPendingSellSettlement(event: CalculatedSell): PortfolioPendingSettlement {
+  const missingFacts: PortfolioPendingFact[] = []
+  if (event.event.confirmedDate === undefined) missingFacts.push('confirmed-date')
+  if (event.units.value === null || event.units.confidence !== 'actual') {
+    missingFacts.push('units')
+  }
   return {
     eventId: event.eventId,
     fundCode: event.fundCode,
-    missingFacts: event.units.value === null ? ['units'] : [],
+    missingFacts,
   }
 }
 
@@ -1066,6 +1061,10 @@ function isSellEvent(event: PortfolioEvent): event is PortfolioSellEvent {
   return event.kind === 'sell'
 }
 
+function isTransactionSettled(confirmedDate: string | undefined, units: UnitsFieldValue): boolean {
+  return confirmedDate !== undefined && units.value !== null && units.confidence === 'actual'
+}
+
 function isNonNegativeFinite(value: number | null): value is number {
   return value !== null && Number.isFinite(value) && value >= 0
 }
@@ -1080,10 +1079,6 @@ function isValidNav(value: number | null): value is number {
 
 function roundMoney(value: number): number {
   return Math.round(value)
-}
-
-function roundUnits(value: number): number {
-  return Math.round(value * 10000) / 10000
 }
 
 const UNIT_EPSILON = 1e-8
