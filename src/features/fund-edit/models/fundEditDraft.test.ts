@@ -90,6 +90,29 @@ test('partial holding validates first and stops after holding failure', () => {
   assert.deepEqual(calls, ['holding'])
 })
 
+test('reports a retryable ledger failure after the holding is persisted', () => {
+  const draft = createFundEditDraft('000001', '测试基金', undefined, [])
+  fillValidHolding(draft)
+  const calls: string[] = []
+  const submitters = createSubmitters(calls)
+  submitters.ensureFundLedger = (code) => {
+    calls.push(`ledger:${code}`)
+    return { error: new Error('quota exceeded'), ok: false, retryable: true }
+  }
+
+  const result = submitFundEditDraft(draft, submitters, new Date(2026, 6, 27))
+
+  assert.deepEqual(result, {
+    error: '持仓信息已保存，但投资账本自动建立失败，请重试',
+    fieldErrors: {},
+    holdingSaved: true,
+    reason: 'ledger-persistence-failed',
+    retryable: true,
+    success: false,
+  })
+  assert.deepEqual(calls, ['holding', 'ledger:000001'])
+})
+
 test('group failure reports partial success and every retry restarts from holding', () => {
   const draft = createFundEditDraft('000001', '测试基金', undefined, [])
   fillValidHolding(draft)
@@ -108,9 +131,14 @@ test('successful submit preserves holding then group call order', () => {
   const draft = createFundEditDraft('000001', '测试基金', undefined, [])
   fillValidHolding(draft)
   const calls: string[] = []
-  const result = submitFundEditDraft(draft, createSubmitters(calls), new Date(2026, 6, 27))
+  const submitters = createSubmitters(calls)
+  submitters.ensureFundLedger = (code) => {
+    calls.push(`ledger:${code}`)
+    return { ok: true }
+  }
+  const result = submitFundEditDraft(draft, submitters, new Date(2026, 6, 27))
   assert.deepEqual(result, { fieldErrors: {}, success: true })
-  assert.deepEqual(calls, ['holding', 'groups:'])
+  assert.deepEqual(calls, ['holding', 'ledger:000001', 'groups:'])
 })
 
 test('submits numeric values emitted by the holding number inputs', () => {

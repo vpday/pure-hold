@@ -4,7 +4,7 @@ import type {
   FieldValue,
   MoneyFieldValue,
   Portfolio,
-  PortfolioEvent,
+  PortfolioInitialHoldingEvent,
 } from '@/domains/portfolio/models/index.ts'
 import type {
   CurrentNavByFund,
@@ -29,6 +29,7 @@ export type PortfolioCoordinationFacade = Pick<
   | 'enableFund'
   | 'getPortfolio'
   | 'mergeCandidate'
+  | 'updateEvent'
 >
 
 export interface PortfolioCoordinatorDependencies {
@@ -37,23 +38,29 @@ export interface PortfolioCoordinatorDependencies {
   readonly now?: () => string
 }
 
-export interface EnableFundInput {
+export interface EnsureFundLedgerInput {
   readonly fundCode: string
-  readonly holding?: FundHolding
 }
 
-export type EnableFundResult =
+export type EnsureFundLedgerStatus = 'created' | 'locked' | 'updated-initial-holding'
+
+export type EnsureFundLedgerResult =
   | {
       readonly ok: true
-      readonly event: PortfolioEvent
+      readonly event: PortfolioInitialHoldingEvent
+      readonly fundCode: string
+      readonly reconciliation: FundReconciliation
+      readonly status: EnsureFundLedgerStatus
       readonly portfolio: Portfolio
     }
   | {
       readonly ok: false
-      readonly reason: 'fund-not-found' | 'invalid-holding' | 'portfolio-persistence-failed'
+      readonly fundCode: string
+      readonly reason: 'fund-not-found' | 'missing-fund-holding' | 'portfolio-persistence-failed'
       readonly error?: unknown
       readonly partialPersistence: boolean
       readonly portfolio: Portfolio
+      readonly retryable: boolean
     }
 
 export interface ReconcileFundInput {
@@ -85,6 +92,9 @@ export interface FundReconciliation {
     readonly costAmount: MoneyFieldValue
     readonly units: FieldValue<number>
   } | null
+  readonly initialEvent: PortfolioInitialHoldingEvent | null
+  readonly initialEventLocked: boolean
+  readonly ledgerEnabled: boolean
 }
 
 export interface FundDeletionStats {
@@ -122,7 +132,7 @@ export type FundDeletionResult =
 
 export interface PortfolioCoordinator {
   readonly confirmFundDeletion: (preview: FundDeletionPreview) => FundDeletionResult
-  readonly enableFund: (input: EnableFundInput) => EnableFundResult
+  readonly ensureFundLedger: (input: EnsureFundLedgerInput) => EnsureFundLedgerResult
   readonly prepareFundDeletion: (fundCode: string) => FundDeletionPreviewResult
   readonly reconcileFund: (input: ReconcileFundInput) => FundReconciliation
 }
@@ -132,50 +142,106 @@ export function createPortfolioCoordinator(
 ): PortfolioCoordinator {
   const now = dependencies.now ?? (() => new Date().toISOString())
 
-  function enableFund(input: EnableFundInput): EnableFundResult {
+  function ensureFundLedger(input: EnsureFundLedgerInput): EnsureFundLedgerResult {
     const settings = dependencies.funds.getSettingsSnapshot()
     if (!settings.funds.some(({ code }) => code === input.fundCode)) {
       return {
+        fundCode: input.fundCode,
         ok: false,
         partialPersistence: false,
         portfolio: dependencies.portfolio.getPortfolio(),
         reason: 'fund-not-found',
+        retryable: false,
       }
     }
-    if (input.holding !== undefined && input.holding.code !== input.fundCode) {
+    const holding = settings.holdingsByCode[input.fundCode]
+    if (holding === undefined) {
       return {
+        fundCode: input.fundCode,
         ok: false,
         partialPersistence: false,
         portfolio: dependencies.portfolio.getPortfolio(),
-        reason: 'invalid-holding',
+        reason: 'missing-fund-holding',
+        retryable: false,
       }
     }
 
     const current = dependencies.portfolio.getPortfolio()
     const eventId = initialHoldingEventId(input.fundCode)
     const existingEvent = current.events.find((event) => event.id === eventId)
-    const event = existingEvent ?? createInitialHoldingEvent(input.fundCode, input.holding, now())
-    const eventWasPresent = existingEvent !== undefined
+    if (existingEvent !== undefined && existingEvent.kind !== 'initial-holding') {
+      return {
+        error: new Error(`Initial holding ID conflicts for ${input.fundCode}`),
+        fundCode: input.fundCode,
+        ok: false,
+        partialPersistence: false,
+        portfolio: current,
+        reason: 'portfolio-persistence-failed',
+        retryable: false,
+      }
+    }
 
-    const addedEvent = dependencies.portfolio.addEvent(event)
-    if (!addedEvent.ok) return portfolioFailure(addedEvent, eventWasPresent, current)
+    const existingInitialEvent = existingEvent
+    const auditedAt = now()
+    const hasSubsequentEvents = current.events.some(
+      (event) => event.fundCode === input.fundCode && event.id !== eventId,
+    )
+    let event: PortfolioInitialHoldingEvent
+    let eventWasCreated = false
+    let eventWasUpdated = false
+    let status: EnsureFundLedgerStatus
+
+    if (existingInitialEvent === undefined) {
+      event = createInitialHoldingEvent(input.fundCode, holding, auditedAt)
+      const addedEvent = dependencies.portfolio.addEvent(event)
+      if (!addedEvent.ok) return portfolioFailure(input.fundCode, addedEvent, current)
+      eventWasCreated = true
+      status = 'created'
+    } else if (hasSubsequentEvents) {
+      event = existingInitialEvent
+      status = 'locked'
+    } else {
+      event = updateInitialHoldingEvent(existingInitialEvent, holding, auditedAt)
+      const updatedEvent = dependencies.portfolio.updateEvent(event)
+      if (!updatedEvent.ok) return portfolioFailure(input.fundCode, updatedEvent, current)
+      eventWasUpdated = true
+      status = 'updated-initial-holding'
+    }
 
     const enabled = dependencies.portfolio.enableFund(input.fundCode)
     if (!enabled.ok) {
-      if (eventWasPresent) return portfolioFailure(enabled, true, current)
-      const rollback = dependencies.portfolio.deleteEvent(eventId)
-      return rollback.ok
-        ? portfolioFailure(enabled, true, current)
-        : {
-            error: rollback.error ?? enabled.error,
-            ok: false,
-            partialPersistence: true,
-            portfolio: dependencies.portfolio.getPortfolio(),
-            reason: 'portfolio-persistence-failed',
-          }
+      const rollback = eventWasCreated
+        ? dependencies.portfolio.deleteEvent(eventId)
+        : eventWasUpdated && existingInitialEvent !== undefined
+          ? dependencies.portfolio.updateEvent(existingInitialEvent)
+          : { ok: true as const }
+      if (rollback.ok) return portfolioFailure(input.fundCode, enabled, current)
+      return {
+        error: rollback.error ?? enabled.error,
+        fundCode: input.fundCode,
+        ok: false,
+        partialPersistence: true,
+        portfolio: dependencies.portfolio.getPortfolio(),
+        reason: 'portfolio-persistence-failed',
+        retryable: true,
+      }
     }
 
-    return { event, ok: true, portfolio: dependencies.portfolio.getPortfolio() }
+    const portfolio = dependencies.portfolio.getPortfolio()
+    const reconciliation = reconcileFund({
+      asOfDate: shanghaiDate(auditedAt),
+      currentNavByFund: {},
+      fundCode: input.fundCode,
+    })
+    const persistedEvent = portfolio.events.find((candidate) => candidate.id === eventId)
+    return {
+      event: persistedEvent?.kind === 'initial-holding' ? persistedEvent : event,
+      fundCode: input.fundCode,
+      ok: true,
+      portfolio,
+      reconciliation,
+      status,
+    }
   }
 
   function reconcileFund(input: ReconcileFundInput): FundReconciliation {
@@ -185,10 +251,15 @@ export function createPortfolioCoordinator(
       currentNavByFund: input.currentNavByFund,
     })
     const holding = settings.holdingsByCode[input.fundCode]
-    const summary = calculation.confirmedSummary.byFund[input.fundCode]
+    const aggregate = calculation.aggregates.find(({ fundCode }) => fundCode === input.fundCode)
     const ledger =
-      summary === undefined ? null : { costAmount: summary.costAmount, units: summary.units }
+      aggregate === undefined ? null : { costAmount: aggregate.costAmount, units: aggregate.units }
     const fundHolding = holding === undefined ? null : toHoldingComparison(holding)
+    const portfolio = dependencies.portfolio.getPortfolio()
+    const initialEvent = portfolio.events.find(
+      (event): event is PortfolioInitialHoldingEvent =>
+        event.id === initialHoldingEventId(input.fundCode) && event.kind === 'initial-holding',
+    )
     const availability = resolveAvailability(
       settings.funds.some(({ code }) => code === input.fundCode),
       fundHolding,
@@ -210,7 +281,13 @@ export function createPortfolioCoordinator(
       },
       fundCode: input.fundCode,
       fundHolding,
+      initialEvent: initialEvent ?? null,
+      initialEventLocked: portfolio.events.some(
+        (event) =>
+          event.fundCode === input.fundCode && event.id !== initialHoldingEventId(input.fundCode),
+      ),
       ledger,
+      ledgerEnabled: portfolio.fundCodes.includes(input.fundCode),
     }
   }
 
@@ -307,7 +384,7 @@ export function createPortfolioCoordinator(
     }
   }
 
-  return { confirmFundDeletion, enableFund, prepareFundDeletion, reconcileFund }
+  return { confirmFundDeletion, ensureFundLedger, prepareFundDeletion, reconcileFund }
 }
 
 export function initialHoldingEventId(fundCode: string): string {
@@ -316,12 +393,12 @@ export function initialHoldingEventId(fundCode: string): string {
 
 function createInitialHoldingEvent(
   fundCode: string,
-  holding: FundHolding | undefined,
+  holding: FundHolding,
   auditedAt: string,
-): PortfolioEvent {
-  const confirmedDate = auditedAt.slice(0, 10)
-  const units = holding?.units ?? 0
-  const costAmount = holding === undefined ? 0 : Math.round(holding.units * holding.costPrice * 100)
+): PortfolioInitialHoldingEvent {
+  const confirmedDate = shanghaiDate(auditedAt)
+  const units = holding.units
+  const costAmount = Math.round(holding.units * holding.costPrice * 100)
   return {
     auditedAt,
     confirmedDate,
@@ -333,6 +410,19 @@ function createInitialHoldingEvent(
     settlementStatus: 'settled',
     source: 'initial-holding',
     units: migrationField(units),
+    updatedAt: auditedAt,
+  }
+}
+
+function updateInitialHoldingEvent(
+  event: PortfolioInitialHoldingEvent,
+  holding: FundHolding,
+  auditedAt: string,
+): PortfolioInitialHoldingEvent {
+  return {
+    ...event,
+    costAmount: migrationField(Math.round(holding.units * holding.costPrice * 100)),
+    units: migrationField(holding.units),
     updatedAt: auditedAt,
   }
 }
@@ -373,6 +463,17 @@ function countDeletionStats(portfolio: Portfolio, fundCode: string): FundDeletio
   }
 }
 
+function shanghaiDate(instant: string): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).formatToParts(new Date(instant))
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
 function hasPortfolioDataForFund(portfolio: Portfolio, fundCode: string): boolean {
   return (
     portfolio.fundCodes.includes(fundCode) ||
@@ -381,15 +482,17 @@ function hasPortfolioDataForFund(portfolio: Portfolio, fundCode: string): boolea
 }
 
 function portfolioFailure(
+  fundCode: string,
   result: Extract<PortfolioCommandResult, { readonly ok: false }>,
-  _eventWasPresent: boolean,
   current: Portfolio,
-): EnableFundResult {
+): EnsureFundLedgerResult {
   return {
     error: result.error,
+    fundCode,
     ok: false,
     partialPersistence: false,
     portfolio: current,
     reason: 'portfolio-persistence-failed',
+    retryable: true,
   }
 }

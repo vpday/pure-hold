@@ -31,7 +31,6 @@ import type {
 import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 
 const props = defineProps<{
-  enableLedger: (fundCode: string) => boolean
   portfolio: PortfolioStore
   portfolioRevision: number
 }>()
@@ -163,12 +162,6 @@ function close(): void {
   holdings.close()
 }
 
-function handleEnableLedger(): void {
-  const code = detail.currentCode.value
-  if (!code || ledgerEnabled.value) return
-  if (props.enableLedger(code)) ledgerEnabled.value = true
-}
-
 async function refresh(): Promise<void> {
   const [, , metricsResult] = await Promise.all([
     detail.refresh(),
@@ -247,7 +240,6 @@ defineExpose({ open })
     :visible="detail.visible.value"
     @close="close"
     @delete-transaction="deleteTransaction"
-    @enable-ledger="handleEnableLedger"
     @edit="edit"
     @edit-transaction="editTransaction"
     @record-buy="recordBuy"

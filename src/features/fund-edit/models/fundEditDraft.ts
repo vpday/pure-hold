@@ -15,14 +15,24 @@ export interface FundEditDraft {
   selectedGroupIds: string[]
 }
 
+export type EnsureFundLedger = (fundCode: string) => {
+  readonly error?: unknown
+  readonly ok: boolean
+  readonly retryable?: boolean
+}
+
 export interface FundEditSubmitters {
   updateFundGroupMembership(code: string, selectedGroupIds: ReadonlySet<string>): { error?: string }
   updateFundHolding(holding: FundHolding): { error?: string }
+  ensureFundLedger?: EnsureFundLedger
 }
 
 export interface FundEditSubmitResult {
   readonly error?: string
   readonly fieldErrors: FundHoldingDraftErrors
+  readonly holdingSaved?: boolean
+  readonly reason?: 'ledger-persistence-failed'
+  readonly retryable?: boolean
   readonly success: boolean
 }
 
@@ -59,6 +69,18 @@ export function submitFundEditDraft(
       return { error: holdingResult.error, fieldErrors: {}, success: false }
     }
     holdingSaved = true
+
+    const ledgerResult = submitters.ensureFundLedger?.(validation.holding.code)
+    if (ledgerResult && !ledgerResult.ok) {
+      return {
+        error: '持仓信息已保存，但投资账本自动建立失败，请重试',
+        fieldErrors: {},
+        holdingSaved: true,
+        reason: 'ledger-persistence-failed',
+        retryable: ledgerResult.retryable !== false,
+        success: false,
+      }
+    }
   }
 
   const groupResult = submitters.updateFundGroupMembership(

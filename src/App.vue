@@ -3,7 +3,12 @@ import { ref } from 'vue'
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
 import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
+import {
+  createPortfolioCoordinator,
+  type EnsureFundLedgerResult,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import { createPortfolioRuntime } from '@/app/portfolio/createPortfolioRuntime.ts'
+import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
 import SettingsEntry from '@/features/settings/SettingsEntry.vue'
 import FundHoldingStatisticsEntry from '@/features/fund-list/FundHoldingStatisticsEntry.vue'
 import FundListSection from '@/features/fund-list/FundListSection.vue'
@@ -14,7 +19,19 @@ import { requestGlobalRefresh } from '@/shared/services/globalRefreshCoordinator
 const globalRefreshing = ref(false)
 const fundSearchEntry = ref<{ open: () => void }>()
 const settingsEntry = ref<{ open: () => void }>()
+const fundsStore = useFundsStore()
 const portfolio = createPortfolioRuntime()
+const portfolioCoordinator = createPortfolioCoordinator({
+  funds: {
+    deleteFund: fundsStore.deleteFund,
+    getSettingsSnapshot: fundsStore.getSettingsSnapshot,
+  },
+  portfolio,
+})
+
+function ensureFundLedger(fundCode: string): EnsureFundLedgerResult {
+  return portfolioCoordinator.ensureFundLedger({ fundCode })
+}
 
 async function refreshAllData(): Promise<void> {
   if (globalRefreshing.value) {
@@ -92,7 +109,11 @@ async function refreshAllData(): Promise<void> {
         <div class="app-content">
           <IndexOverviewSection />
           <FundHoldingStatisticsEntry />
-          <FundListSection :portfolio="portfolio" @search-funds="fundSearchEntry?.open()" />
+          <FundListSection
+            :portfolio="portfolio"
+            :portfolio-coordinator="portfolioCoordinator"
+            @search-funds="fundSearchEntry?.open()"
+          />
         </div>
       </t-content>
       <t-footer>
@@ -101,7 +122,7 @@ async function refreshAllData(): Promise<void> {
         </div>
       </t-footer>
     </t-layout>
-    <FundSearchEntry ref="fundSearchEntry" />
+    <FundSearchEntry ref="fundSearchEntry" :ensure-fund-ledger="ensureFundLedger" />
     <SettingsEntry ref="settingsEntry" :portfolio="portfolio" />
   </t-config-provider>
 </template>

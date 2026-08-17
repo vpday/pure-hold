@@ -6,11 +6,12 @@ import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import FundSearchActions from './components/FundSearchActions.vue'
 import FundSearchContent from './components/FundSearchContent.vue'
 import FundSearchResponsiveShell from './components/FundSearchResponsiveShell.vue'
-import { useFundAdditionSession } from './composables/useFundAdditionSession'
+import { useFundAdditionSession, type EnsureFundLedger } from './composables/useFundAdditionSession'
 
+const props = defineProps<{ ensureFundLedger?: EnsureFundLedger }>()
 const store = useFundsStore()
 const visible = ref(false)
-const session = useFundAdditionSession(store.addFunds)
+const session = useFundAdditionSession(store.addFunds, props.ensureFundLedger)
 
 function open(): void {
   close()
@@ -29,6 +30,13 @@ function addWithoutHoldings(): void {
 
 function confirmHoldings(): void {
   handleSuccess(session.confirmHoldings())
+}
+
+function retryLedger(): void {
+  const retriedCount = session.retryLedger()
+  if (retriedCount === undefined) return
+  MessagePlugin.success(`已完成 ${retriedCount} 只基金的账本建立`)
+  close()
 }
 
 function handleSuccess(addedCount: number | undefined): void {
@@ -62,6 +70,7 @@ defineExpose({ open })
         @back="session.backToSearch"
         @confirm-holdings="confirmHoldings"
         @enter-holdings="session.enterHoldings"
+        @retry-ledger="retryLedger"
       />
     </template>
   </FundSearchResponsiveShell>

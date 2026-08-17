@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 
 import type { FundAddition } from '@/domains/funds/models/fundAddition'
+import type { FundHolding } from '@/domains/funds/models/fundHolding'
 import {
   createFundHoldingDrafts,
   type FundHoldingDraft,
@@ -11,13 +12,19 @@ import type { FundAdditionSessionModel, FundAdditionStep } from '../models/fundA
 import { useFundSearch } from './useFundSearch'
 
 type AddFunds = (additions: readonly FundAddition[]) => { error?: string }
+export type EnsureFundLedger = (fundCode: string) => {
+  readonly error?: unknown
+  readonly ok: boolean
+  readonly retryable?: boolean
+}
 
-export function useFundAdditionSession(addFunds: AddFunds) {
+export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: EnsureFundLedger) {
   const existingCodes = new Set<string>()
   const search = useFundSearch(existingCodes)
   const step = ref<FundAdditionStep>('search')
   const holdingDrafts = ref<FundHoldingDraft[]>([])
   const holdingErrors = ref<Readonly<Record<string, FundHoldingDraftErrors>>>({})
+  const pendingLedgerRetries = ref<readonly string[]>([])
   const submitError = ref('')
 
   const model = computed<FundAdditionSessionModel>(() => ({
@@ -29,6 +36,7 @@ export function useFundAdditionSession(addFunds: AddFunds) {
           }
         : {
             count: search.selected.value.length,
+            retryLedgerAvailable: pendingLedgerRetries.value.length > 0,
             step: 'holdings',
           },
     content:
@@ -69,6 +77,7 @@ export function useFundAdditionSession(addFunds: AddFunds) {
     step.value = 'search'
     holdingDrafts.value = []
     holdingErrors.value = {}
+    pendingLedgerRetries.value = []
     submitError.value = ''
   }
 
@@ -110,7 +119,39 @@ export function useFundAdditionSession(addFunds: AddFunds) {
       submitError.value = result.error
       return undefined
     }
+
+    const failedLedgerCodes = ensureFundLedger
+      ? additions
+          .filter((addition): addition is FundAddition & { readonly holding: FundHolding } => {
+            return addition.holding !== undefined
+          })
+          .flatMap(({ code }) => {
+            const ledgerResult = ensureFundLedger(code)
+            return ledgerResult.ok ? [] : [code]
+          })
+      : []
+    if (failedLedgerCodes.length > 0) {
+      pendingLedgerRetries.value = failedLedgerCodes
+      submitError.value = '基金设置已保存，但投资账本自动建立失败，请重试。'
+      return undefined
+    }
+
+    pendingLedgerRetries.value = []
     return additions.length
+  }
+
+  function retryLedger(): number | undefined {
+    if (!ensureFundLedger || pendingLedgerRetries.value.length === 0) return undefined
+    const retryCodes = pendingLedgerRetries.value
+    const failedCodes = retryCodes.filter((code) => !ensureFundLedger(code).ok)
+    if (failedCodes.length > 0) {
+      pendingLedgerRetries.value = failedCodes
+      submitError.value = '投资账本自动建立仍未完成，请稍后重试。'
+      return undefined
+    }
+    pendingLedgerRetries.value = []
+    submitError.value = ''
+    return retryCodes.length
   }
 
   return {
@@ -123,6 +164,7 @@ export function useFundAdditionSession(addFunds: AddFunds) {
     open,
     removeSelection: search.removeSelection,
     reset,
+    retryLedger,
     retry: search.retry,
     setKeyword: search.setKeyword,
     toggleSelectedPanel,

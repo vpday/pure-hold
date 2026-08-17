@@ -34,6 +34,7 @@ export type FundAdditionActionsModel =
     }
   | {
       readonly count: number
+      readonly retryLedgerAvailable: boolean
       readonly step: 'holdings'
     }
 

@@ -3,9 +3,9 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { MessagePlugin } from 'tdesign-vue-next'
 
-import {
-  createPortfolioCoordinator,
-  type FundDeletionPreview,
+import type {
+  FundDeletionPreview,
+  PortfolioCoordinator,
 } from '@/app/portfolio/portfolioCoordinator.ts'
 import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
@@ -22,7 +22,10 @@ import FundMobileList from './components/FundMobileList.vue'
 import { useFundListSession } from './composables/useFundListSession'
 
 const emit = defineEmits<{ searchFunds: [] }>()
-const props = defineProps<{ portfolio: PortfolioStore }>()
+const props = defineProps<{
+  portfolio: PortfolioStore
+  portfolioCoordinator: PortfolioCoordinator
+}>()
 const store = useFundsStore()
 const appSettingsStore = useAppSettingsStore()
 const {
@@ -49,13 +52,6 @@ const portfolioRevision = ref(0)
 const deletionPreview = ref<FundDeletionPreview>()
 const deletionVisible = ref(false)
 const deletionError = ref('')
-const portfolioCoordinator = createPortfolioCoordinator({
-  funds: {
-    deleteFund: store.deleteFund,
-    getSettingsSnapshot: store.getSettingsSnapshot,
-  },
-  portfolio: props.portfolio,
-})
 const { clearCategorySorts, model, selectCategory, setSort } = useFundListSession({
   fundOrder,
   groups,
@@ -110,27 +106,12 @@ function showComingSoon(): void {
   MessagePlugin.info('功能开发中')
 }
 
-function enableLedger(code: string): boolean {
-  const result = portfolioCoordinator.enableFund({
-    fundCode: code,
-    holding: holdingsByCode.value[code],
-  })
-  if (!result.ok) {
-    const message =
-      result.reason === 'portfolio-persistence-failed'
-        ? '投资账本保存失败，启用未完成。'
-        : result.reason === 'invalid-holding'
-          ? '当前持仓无效，无法启用账本。'
-          : '基金不存在，无法启用账本。'
-    MessagePlugin.error(message)
-    return false
-  }
-  MessagePlugin.success('已启用投资账本')
-  return true
+function ensureFundLedger(fundCode: string) {
+  return props.portfolioCoordinator.ensureFundLedger({ fundCode })
 }
 
 function deleteFund(code: string): void {
-  const result = portfolioCoordinator.prepareFundDeletion(code)
+  const result = props.portfolioCoordinator.prepareFundDeletion(code)
   if (!result.ok) {
     MessagePlugin.error('基金不存在，无法删除')
     return
@@ -149,7 +130,7 @@ function cancelFundDeletion(): void {
 function confirmFundDeletion(): void {
   const preview = deletionPreview.value
   if (!preview) return
-  const result = portfolioCoordinator.confirmFundDeletion(preview)
+  const result = props.portfolioCoordinator.confirmFundDeletion(preview)
   if (!result.ok) {
     deletionError.value = result.partialPersistence
       ? '删除失败，数据可能已部分持久化，请先检查账本和基金配置。'
@@ -303,7 +284,6 @@ function deleteTransaction(eventId: string): void {
     <FundGroupSettingsEntry ref="groupSettings" @saved="clearSavedCategorySorts" />
     <FundDetailEntry
       ref="fundDetail"
-      :enable-ledger="enableLedger"
       :portfolio="props.portfolio"
       :portfolio-revision="portfolioRevision"
       @delete-transaction="deleteTransaction"
@@ -312,7 +292,7 @@ function deleteTransaction(eventId: string): void {
       @record-buy="openBuy"
       @record-sell="openSell"
     />
-    <FundEditEntry ref="fundEdit" />
+    <FundEditEntry ref="fundEdit" :ensure-fund-ledger="ensureFundLedger" />
     <FundTransactionEntry
       ref="fundTransaction"
       :portfolio="props.portfolio"

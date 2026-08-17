@@ -115,7 +115,55 @@ function reinvestmentEvent(fundCode: string, id: string): PortfolioEvent {
   }
 }
 
-function createFundsFacade(initial: FundSettings, failDelete = false): FundsPortfolioFacade {
+function pendingBuyEvent(fundCode: string, id: string): PortfolioEvent {
+  return {
+    auditedAt: '2026-08-14T09:00:00.000Z',
+    createdAt: '2026-08-14T09:00:00.000Z',
+    entryMode: 'pending',
+    fundCode,
+    id,
+    kind: 'buy',
+    navDate: '2026-08-14',
+    purchaseFee: actual(0),
+    purchaseFeeRate: actual(0),
+    settlementStatus: 'pending-settlement',
+    source: 'manual',
+    submittedAt: '2026-08-14 09:00',
+    totalAmount: actual(1000),
+    unitNav: actual(1),
+    units: actual(10),
+    updatedAt: '2026-08-14T09:00:00.000Z',
+  } as PortfolioEvent
+}
+
+function insufficientSellEvent(fundCode: string, id: string): PortfolioEvent {
+  return {
+    auditedAt: '2026-08-14T09:00:00.000Z',
+    confirmedDate: '2026-08-14',
+    createdAt: '2026-08-14T09:00:00.000Z',
+    entryMode: 'historical',
+    fundCode,
+    grossAmount: actual(10100),
+    id,
+    kind: 'sell',
+    navDate: '2026-08-14',
+    netAmount: actual(10100),
+    redemptionFee: actual(0),
+    requestedUnits: actual(101),
+    settlementStatus: 'settled',
+    source: 'manual',
+    submittedAt: '2026-08-14 09:00',
+    unitNav: actual(1),
+    units: actual(101),
+    updatedAt: '2026-08-14T09:00:00.000Z',
+  } as PortfolioEvent
+}
+
+type TestFundsFacade = FundsPortfolioFacade & {
+  readonly setHolding: (holding: FundHolding) => void
+}
+
+function createFundsFacade(initial: FundSettings, failDelete = false): TestFundsFacade {
   let current = structuredClone(initial)
   return {
     deleteFund(code) {
@@ -137,13 +185,26 @@ function createFundsFacade(initial: FundSettings, failDelete = false): FundsPort
     getSettingsSnapshot() {
       return structuredClone(current)
     },
+    setHolding(nextHolding: FundHolding) {
+      current = {
+        ...current,
+        holdingOrder: current.holdingOrder.includes(nextHolding.code)
+          ? current.holdingOrder
+          : [...current.holdingOrder, nextHolding.code],
+        holdingsByCode: { ...current.holdingsByCode, [nextHolding.code]: nextHolding },
+      }
+    },
   }
 }
 
 function createCoordinator(
   initialSettings: FundSettings = settings(),
   initial: Portfolio = emptyPortfolio(),
-  options: { readonly failDeleteFund?: boolean; readonly failPortfolioWrites?: boolean } = {},
+  options: {
+    readonly failDeleteFund?: boolean
+    readonly failPortfolioWrites?: boolean
+    readonly now?: () => string
+  } = {},
 ) {
   const funds = createFundsFacade(initialSettings, options.failDeleteFund)
   const writes: Portfolio[] = []
@@ -154,7 +215,7 @@ function createCoordinator(
   return {
     coordinator: createPortfolioCoordinator({
       funds,
-      now: () => '2026-08-14T09:00:00.000Z',
+      now: options.now ?? (() => '2026-08-14T09:00:00.000Z'),
       portfolio,
     }),
     funds,
@@ -163,20 +224,24 @@ function createCoordinator(
   }
 }
 
-test('enables an existing holding with one stable initial-holding event', () => {
-  const { coordinator, portfolio, writes } = createCoordinator()
+test('automatically creates and updates one stable initial-holding event', () => {
+  let now = '2026-08-14T09:00:00.000Z'
+  const { coordinator, funds, portfolio, writes } = createCoordinator(
+    settings(),
+    emptyPortfolio(),
+    { now: () => now },
+  )
 
-  const first = coordinator.enableFund({ fundCode: '000001', holding: holding() })
-  const second = coordinator.enableFund({
-    fundCode: '000001',
-    holding: holding({ costPrice: 9, units: 9 }),
-  })
+  const first = coordinator.ensureFundLedger({ fundCode: '000001' })
+  now = '2026-08-15T09:00:00.000Z'
+  funds.setHolding(holding({ costPrice: 9, units: 9 }))
+  const second = coordinator.ensureFundLedger({ fundCode: '000001' })
 
   assert.equal(first.ok, true)
   assert.equal(second.ok, true)
   if (!first.ok || !second.ok) return
   assert.equal(first.event.id, 'initial-holding:000001')
-  assert.deepEqual(first.event, second.event)
+  assert.equal(second.status, 'updated-initial-holding')
   assert.deepEqual(first.event, {
     auditedAt: '2026-08-14T09:00:00.000Z',
     confirmedDate: '2026-08-14',
@@ -190,31 +255,77 @@ test('enables an existing holding with one stable initial-holding event', () => 
     units: actual(100, 'migration'),
     updatedAt: '2026-08-14T09:00:00.000Z',
   })
+  assert.equal(second.event.confirmedDate, first.event.confirmedDate)
+  assert.equal(second.event.createdAt, first.event.createdAt)
+  assert.equal(second.event.auditedAt, first.event.auditedAt)
+  assert.equal(second.event.updatedAt, '2026-08-15T09:00:00.000Z')
+  assert.deepEqual(second.event.units, actual(9, 'migration'))
+  assert.deepEqual(second.event.costAmount, actual(8100, 'migration'))
   assert.equal(portfolio.getPortfolio().events.length, 1)
   assert.deepEqual(portfolio.getPortfolio().fundCodes, ['000001'])
-  assert.equal(writes.length, 2)
+  assert.equal(writes.length, 3)
 })
 
-test('isolates funds and creates a zero initial holding when no holding exists', () => {
-  const { coordinator, portfolio } = createCoordinator()
+test('uses the first successful save Shanghai date and never invents a holding', () => {
+  const nextDay = createCoordinator(settings(), emptyPortfolio(), {
+    now: () => '2026-08-14T16:30:00.000Z',
+  }).coordinator.ensureFundLedger({ fundCode: '000001' })
+  assert.equal(nextDay.ok, true)
+  if (!nextDay.ok) return
+  assert.equal(nextDay.event.confirmedDate, '2026-08-15')
 
-  assert.equal(coordinator.enableFund({ fundCode: '000001', holding: holding() }).ok, true)
-  const empty = coordinator.enableFund({ fundCode: '000002' })
-
-  assert.equal(empty.ok, true)
-  if (!empty.ok) return
-  assert.equal(empty.event.kind, 'initial-holding')
-  if (empty.event.kind !== 'initial-holding') return
-  assert.deepEqual(empty.event.units, actual(0, 'migration'))
-  assert.deepEqual(empty.event.costAmount, actual(0, 'migration'))
-  assert.equal(empty.event.confirmedDate, '2026-08-14')
-  assert.deepEqual(
-    portfolio.getPortfolio().events.map(({ fundCode, id }) => ({ fundCode, id })),
-    [
-      { fundCode: '000001', id: 'initial-holding:000001' },
-      { fundCode: '000002', id: 'initial-holding:000002' },
-    ],
+  const { coordinator, portfolio } = createCoordinator(
+    settings({ holdingsByCode: {} }),
+    emptyPortfolio(),
   )
+  const empty = coordinator.ensureFundLedger({ fundCode: '000002' })
+  assert.deepEqual(empty, {
+    fundCode: '000002',
+    ok: false,
+    partialPersistence: false,
+    portfolio: emptyPortfolio(),
+    reason: 'missing-fund-holding',
+    retryable: false,
+  })
+  assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
+})
+
+test('locks the initial event for every saved follow-up event, including unusable events', () => {
+  const followUps = [
+    cashDividendEvent('000001', 'cash-1'),
+    reinvestmentEvent('000001', 'reinvestment-1'),
+    adjustmentEvent('000001', 'adjustment-1'),
+    pendingBuyEvent('000001', 'pending-buy-1'),
+    insufficientSellEvent('000001', 'insufficient-sell-1'),
+  ]
+
+  for (const followUp of followUps) {
+    const initial = initialHoldingEvent('000001')
+    const { coordinator, funds, portfolio } = createCoordinator(settings(), {
+      events: [initial, followUp],
+      fundCodes: ['000001'],
+    })
+    funds.setHolding(holding({ costPrice: 9, units: 9 }))
+
+    const result = coordinator.ensureFundLedger({ fundCode: '000001' })
+
+    assert.equal(result.ok, true)
+    if (!result.ok) continue
+    assert.equal(result.status, 'locked')
+    assert.equal(result.reconciliation.initialEventLocked, true)
+    assert.deepEqual(result.event, initial)
+    assert.deepEqual(portfolio.getPortfolio().events[0], initial)
+    if (followUp.kind === 'sell') {
+      assert.equal(result.reconciliation.calculation.issues[0]?.eventId, followUp.id)
+    }
+    const expectedUnits =
+      followUp.kind === 'dividend-reinvestment' || followUp.kind === 'adjustment' ? 101 : 100
+    const expectedCost = followUp.kind === 'dividend-reinvestment' ? 12100 : 12000
+    assert.deepEqual(result.reconciliation.difference, {
+      costAmountCents: expectedCost - 9 * 9 * 100,
+      units: expectedUnits - 9,
+    })
+  }
 })
 
 test('reconciles confirmed ledger units and cost without writing either facade', () => {
@@ -232,6 +343,8 @@ test('reconciles confirmed ledger units and cost without writing either facade',
   assert.equal(reconciliation.availability, 'available')
   assert.equal(reconciliation.ledger?.units.value, 100)
   assert.equal(reconciliation.ledger?.costAmount.value, 12000)
+  assert.equal(reconciliation.ledgerEnabled, true)
+  assert.equal(reconciliation.initialEventLocked, false)
   assert.deepEqual(reconciliation.difference, { costAmountCents: 0, units: 0 })
   assert.equal(writes.length, 0)
 })
@@ -261,6 +374,25 @@ test('reports explicit reconciliation differences and missing-data availability'
     fundCode: '000001',
   })
   assert.equal(missingLedger.availability, 'missing-ledger')
+})
+
+test('returns a retryable, idempotent result when automatic ledger persistence fails', () => {
+  const { coordinator, portfolio } = createCoordinator(settings(), emptyPortfolio(), {
+    failPortfolioWrites: true,
+  })
+
+  const first = coordinator.ensureFundLedger({ fundCode: '000001' })
+  const retry = coordinator.ensureFundLedger({ fundCode: '000001' })
+
+  assert.equal(first.ok, false)
+  assert.equal(retry.ok, false)
+  if (first.ok || retry.ok) return
+  assert.equal(first.reason, 'portfolio-persistence-failed')
+  assert.equal(first.retryable, true)
+  assert.equal(first.partialPersistence, false)
+  assert.deepEqual(first.portfolio, emptyPortfolio())
+  assert.deepEqual(retry.portfolio, emptyPortfolio())
+  assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
 })
 
 test('prepares read-only deletion statistics and cancellation performs no writes', () => {

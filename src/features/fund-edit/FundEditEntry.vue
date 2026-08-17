@@ -10,10 +10,12 @@ import FundEditMobileDrawer from './components/FundEditMobileDrawer.vue'
 import {
   createFundEditDraft,
   type FundEditDraft,
+  type EnsureFundLedger,
   submitFundEditDraft,
 } from './models/fundEditDraft'
 import type { FundHoldingDraftErrors } from '../fund-holding-form/models/fundHoldingDraft'
 
+const props = defineProps<{ ensureFundLedger?: EnsureFundLedger }>()
 const store = useFundsStore()
 const { isSmUp } = useBreakpoints()
 const visible = ref(false)
@@ -41,7 +43,11 @@ function close(): void {
 
 function confirm(): void {
   if (!draft.value) return
-  const result = submitFundEditDraft(draft.value, store)
+  const result = submitFundEditDraft(draft.value, {
+    ensureFundLedger: props.ensureFundLedger,
+    updateFundGroupMembership: store.updateFundGroupMembership,
+    updateFundHolding: store.updateFundHolding,
+  })
   errors.value = result.fieldErrors
   submitError.value = result.error ?? ''
   if (!result.success) return

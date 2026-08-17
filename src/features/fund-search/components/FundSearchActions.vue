@@ -8,6 +8,7 @@ const emit = defineEmits<{
   back: []
   confirmHoldings: []
   enterHoldings: []
+  retryLedger: []
 }>()
 </script>
 
@@ -26,6 +27,9 @@ const emit = defineEmits<{
     </p>
     <div class="flex min-w-0 justify-end gap-2">
       <t-button variant="outline" @click="emit('back')">返回搜索</t-button>
+      <t-button v-if="model.retryLedgerAvailable" variant="outline" @click="emit('retryLedger')">
+        重试自动建账
+      </t-button>
       <t-button theme="primary" @click="emit('confirmHoldings')">确认录入</t-button>
     </div>
   </div>

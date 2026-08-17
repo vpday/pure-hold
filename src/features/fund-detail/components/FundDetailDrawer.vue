@@ -30,7 +30,6 @@ const emit = defineEmits<{
   close: []
   deleteTransaction: [eventId: string]
   edit: [code: string]
-  enableLedger: []
   editTransaction: [eventId: string]
   recordBuy: [code: string]
   recordSell: [code: string]
@@ -288,14 +287,12 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                   {{
                     ledgerEnabled
                       ? '已启用，可记录交易和查看移动平均成本。'
-                      : '启用后可记录交易和查看移动平均成本。'
+                      : '首次保存有效持仓后自动建立，可记录交易和查看移动平均成本。'
                   }}
                 </p>
               </div>
               <t-tag v-if="ledgerEnabled" theme="success" variant="light">已启用</t-tag>
-              <t-button v-else size="small" theme="primary" @click="emit('enableLedger')">
-                启用账本
-              </t-button>
+              <t-tag v-else variant="light">未建立</t-tag>
             </div>
           </section>
 
