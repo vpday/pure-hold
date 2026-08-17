@@ -105,8 +105,8 @@ test('exposes the existing portfolio coordinator through the fund detail ledger 
   assert.match(transactionSectionSource, /<t-popconfirm/)
   assert.match(transactionSectionSource, /记录买入/)
   assert.match(transactionSectionSource, /记录卖出/)
-  assert.match(detailEntrySource, /event\.kind === 'initial-holding'/)
-  assert.match(detailEntrySource, /event\.auditedAt\.slice\(0, 10\)/)
+  assert.match(transactionSectionSource, /costBasisAmount/)
+  assert.doesNotMatch(detailEntrySource, /toRemainingBatchViewModels|initialHoldingDatesByEventId/)
 })
 
 test('keeps the detail drawer open while launching transaction actions', () => {

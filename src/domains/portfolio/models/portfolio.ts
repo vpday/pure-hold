@@ -107,15 +107,6 @@ export type PortfolioEvent =
   | PortfolioInitialHoldingEvent
   | PortfolioAdjustmentEvent
 
-export interface PortfolioBatch {
-  readonly id: string
-  readonly eventId: string
-  readonly fundCode: string
-  readonly confirmedDate: string
-  readonly units: UnitsFieldValue
-  readonly costAmount: MoneyFieldValue
-}
-
 export interface Portfolio {
   readonly fundCodes: readonly string[]
   readonly events: readonly PortfolioEvent[]

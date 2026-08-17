@@ -3,7 +3,6 @@ import type { TableProps } from 'tdesign-vue-next'
 
 import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 import type {
-  RemainingBatchViewModel,
   SellTransactionIssueViewModel,
   SellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
@@ -15,7 +14,6 @@ type FundTransactionViewModel =
 defineProps<{
   code: string
   ledgerEnabled: boolean
-  remainingBatches: readonly RemainingBatchViewModel[]
   sellIssues: readonly SellTransactionIssueViewModel[]
   transactions: readonly FundTransactionViewModel[]
 }>()
@@ -38,12 +36,6 @@ const transactionColumns: TableProps<FundTransactionViewModel>['columns'] = [
   { cell: 'result', colKey: 'result', title: '收益/状态' },
   { cell: 'actions', colKey: 'actions', title: '操作', fixed: 'right' },
 ]
-const remainingBatchColumns: TableProps<RemainingBatchViewModel>['columns'] = [
-  { cell: 'confirmed-date', colKey: 'confirmedDateText', title: '确认日期' },
-  { cell: 'units', colKey: 'units', title: '剩余份额' },
-  { cell: 'cost', colKey: 'costAmount', title: '剩余成本' },
-]
-
 function confirmedDateText(transaction: FundTransactionViewModel): string {
   return transaction.confirmedDateText !== '--'
     ? transaction.confirmedDateText
@@ -53,7 +45,7 @@ function confirmedDateText(transaction: FundTransactionViewModel): string {
 function deleteConfirmationText(transaction: FundTransactionViewModel): string {
   return transaction.kind === 'buy'
     ? '删除这条买入记录？删除后会重新计算持仓。'
-    : '删除这条卖出记录？删除后会重新计算 FIFO 和收益。'
+    : '删除这条卖出记录？删除后会重新计算移动平均成本和收益。'
 }
 </script>
 
@@ -146,6 +138,9 @@ function deleteConfirmationText(transaction: FundTransactionViewModel): string {
             </t-tag>
           </template>
           <template v-else>
+            <span class="block text-xs text-(--td-text-color-secondary)">
+              成本基础 {{ row.costBasisAmount.text }}
+            </span>
             <span class="block">{{ row.realizedGain.text }}</span>
             <span class="text-xs text-(--td-text-color-secondary)">
               {{ row.realizedGainStatusText }}
@@ -158,19 +153,6 @@ function deleteConfirmationText(transaction: FundTransactionViewModel): string {
             >
               {{ row.statusText }}
             </t-tag>
-            <div
-              v-if="row.allocations.length"
-              class="mt-2 rounded-md bg-(--td-bg-color-secondarycontainer) p-2 text-xs"
-            >
-              <p class="font-medium text-(--td-text-color-primary)">FIFO 分配</p>
-              <ul class="mt-1 flex flex-col gap-1">
-                <li v-for="allocation in row.allocations" :key="allocation.buyEventId">
-                  买入事件 {{ allocation.buyEventId }}：{{ allocation.units.text }} 份，成本
-                  {{ allocation.costAmount.text }}（{{ allocation.costAmount.confidenceText }} ·
-                  {{ allocation.costAmount.sourceText }}）
-                </li>
-              </ul>
-            </div>
           </template>
         </template>
         <template #actions="{ row }">
@@ -190,35 +172,6 @@ function deleteConfirmationText(transaction: FundTransactionViewModel): string {
               <t-button size="small" theme="danger" variant="text">删除</t-button>
             </t-popconfirm>
           </div>
-        </template>
-      </t-table>
-    </div>
-
-    <div v-if="remainingBatches.length" class="mt-4 overflow-x-auto">
-      <h3 class="mb-2 text-sm font-medium">剩余批次</h3>
-      <t-table
-        class="min-w-[30rem]"
-        bordered
-        :columns="remainingBatchColumns"
-        :data="remainingBatches"
-        empty="暂无剩余批次"
-        row-key="eventId"
-        size="small"
-        table-layout="auto"
-      >
-        <template #confirmed-date="{ row }">
-          <span class="font-mono tabular-nums">{{ row.confirmedDateText }}</span>
-        </template>
-        <template #units="{ row }">
-          <span class="font-mono tabular-nums">
-            {{ row.units.text }}（{{ row.units.confidenceText }} · {{ row.units.sourceText }}）
-          </span>
-        </template>
-        <template #cost="{ row }">
-          <span class="font-mono tabular-nums">
-            {{ row.costAmount.text }}（{{ row.costAmount.confidenceText }} ·
-            {{ row.costAmount.sourceText }}）
-          </span>
         </template>
       </t-table>
     </div>

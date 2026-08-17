@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import {
-  createPortfolio,
-  createPortfolioBatch,
-  createPortfolioEvent,
-  validatePortfolio,
-} from './index.ts'
-import type { FieldValue, Portfolio, PortfolioBatch, PortfolioEvent } from './index.ts'
+import { createPortfolio, createPortfolioEvent, validatePortfolio } from './index.ts'
+import type { FieldValue, Portfolio, PortfolioEvent } from './index.ts'
 
 const actual = (value: number): FieldValue<number> => ({
   confidence: 'actual',
@@ -104,7 +99,7 @@ function event(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
   }
 }
 
-test('constructs a portfolio with every event kind and independent batch objects', () => {
+test('constructs a portfolio with every event kind and independent event objects', () => {
   const events: PortfolioEvent[] = [
     event(),
     event({
@@ -151,21 +146,10 @@ test('constructs a portfolio with every event kind and independent batch objects
     events,
     fundCodes: ['000001'],
   }
-  const batch: PortfolioBatch = {
-    confirmedDate: '2026-08-12',
-    costAmount: actual(10000),
-    eventId: 'event-1',
-    fundCode: '000001',
-    id: 'batch-1',
-    units: estimated(49.5),
-  }
-
   const result = createPortfolio(input)
-  const resultBatch = createPortfolioBatch(batch)
   const resultEvent = createPortfolioEvent(input.events[0])
 
   assert.deepEqual(result, input)
-  assert.deepEqual(resultBatch, batch)
   assert.deepEqual(resultEvent, input.events[0])
   assert.notStrictEqual(result.events, input.events)
   const resultBuy = result.events[0]

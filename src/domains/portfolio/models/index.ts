@@ -4,7 +4,6 @@ export type {
   NavFieldValue,
   Portfolio,
   PortfolioAdjustmentEvent,
-  PortfolioBatch,
   PortfolioBuyEvent,
   PortfolioCashDividendEvent,
   PortfolioDividendReinvestmentEvent,
@@ -22,9 +21,7 @@ export type {
 } from './portfolio.ts'
 export {
   createPortfolio,
-  createPortfolioBatch,
   createPortfolioEvent,
   validatePortfolio,
-  validatePortfolioBatch,
   validatePortfolioEvent,
 } from './portfolioValidation.ts'

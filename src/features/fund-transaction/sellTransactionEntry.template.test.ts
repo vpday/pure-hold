@@ -34,14 +34,14 @@ test('fund list routes sell actions on desktop and mobile', async () => {
   assert.match(quoteCard, /@sell="emit\('sell', \$event\)"/)
 })
 
-test('fund detail reserves space for sell FIFO facts and remaining batches', async () => {
+test('fund detail exposes average-cost sell facts without FIFO outputs', async () => {
   const source = await readFile(
     new URL('../fund-detail/components/FundTransactionsSection.vue', import.meta.url),
     'utf8',
   )
 
   assert.match(source, /row\.kind === 'sell'/)
-  assert.match(source, /remainingBatches/)
+  assert.match(source, /row\.costBasisAmount/)
   assert.match(source, /realizedGainStatusText/)
-  assert.match(source, /overflow-x-auto/)
+  assert.doesNotMatch(source, /remainingBatches|allocations|FIFO/)
 })

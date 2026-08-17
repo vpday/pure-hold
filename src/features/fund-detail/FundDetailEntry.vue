@@ -21,12 +21,10 @@ import { useFundPerformance } from './composables/useFundPerformance'
 import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
 import { toBuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 import {
-  toRemainingBatchViewModels,
   toSellTransactionIssueViewModels,
   toSellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
 import type {
-  RemainingBatchViewModel,
   SellTransactionIssueViewModel,
   SellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
@@ -111,23 +109,6 @@ const transactions = computed<readonly FundTransactionViewModel[]>(() => {
       }
       return { kind: 'sell' as const, ...toSellTransactionViewModel(event, currentCalculation) }
     })
-})
-const remainingBatches = computed<readonly RemainingBatchViewModel[]>(() => {
-  const code = detail.currentCode.value
-  const currentCalculation = calculation.value
-  if (!code || !currentCalculation) return []
-
-  const initialHoldingDatesByEventId = new Map(
-    props.portfolio
-      .getPortfolio()
-      .events.filter((event) => event.fundCode === code && event.kind === 'initial-holding')
-      .map((event) => [event.id, event.auditedAt.slice(0, 10)] as const),
-  )
-
-  return toRemainingBatchViewModels(currentCalculation, code).map((batch) => {
-    const initialHoldingDate = initialHoldingDatesByEventId.get(batch.eventId)
-    return initialHoldingDate ? { ...batch, confirmedDateText: initialHoldingDate } : batch
-  })
 })
 const sellIssues = computed<readonly SellTransactionIssueViewModel[]>(() => {
   const code = detail.currentCode.value
@@ -259,7 +240,6 @@ defineExpose({ open })
     :ledger-enabled="ledgerEnabled"
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
-    :remaining-batches="remainingBatches"
     :sell-issues="sellIssues"
     :transactions="transactions"
     size="100dvh"

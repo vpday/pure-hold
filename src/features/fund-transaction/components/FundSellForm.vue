@@ -330,7 +330,7 @@ defineExpose({ validate })
           {{ entryMode === 'historical' ? '确认信息（必填）' : '确认信息（可选）' }}
         </h2>
         <p class="mt-2 text-xs text-(--td-text-color-secondary)">
-          确认费用可以未知；实际确认日期和确认份额都填写后，卖出才会参与 FIFO。
+          确认费用可以未知；实际确认日期和确认份额都填写后，卖出才会参与移动平均成本计算。
         </p>
       </div>
       <div class="grid grid-cols-1 sm:gap-x-4 sm:grid-cols-2">

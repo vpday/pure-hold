@@ -15,15 +15,8 @@ export interface SellTransactionFieldViewModel {
   readonly text: string
 }
 
-export interface SellAllocationViewModel {
-  readonly buyEventId: string
-  readonly costAmount: SellTransactionFieldViewModel
-  readonly units: SellTransactionFieldViewModel
-}
-
 export interface SellTransactionViewModel {
-  readonly allocatedCostAmount: SellTransactionFieldViewModel
-  readonly allocations: readonly SellAllocationViewModel[]
+  readonly costBasisAmount: SellTransactionFieldViewModel
   readonly confirmedDateText: string
   readonly entryMode: PortfolioSellEvent['entryMode']
   readonly expectedConfirmationDateText: string
@@ -45,13 +38,6 @@ export interface SellTransactionViewModel {
 
 export type SellTransactionDisplayStatus = 'pending' | 'settled-nav-pending' | 'settled-nav-ready'
 
-export interface RemainingBatchViewModel {
-  readonly confirmedDateText: string
-  readonly costAmount: SellTransactionFieldViewModel
-  readonly eventId: string
-  readonly units: SellTransactionFieldViewModel
-}
-
 export interface SellTransactionIssueViewModel {
   readonly eventId: string
   readonly text: string
@@ -64,17 +50,9 @@ export function toSellTransactionViewModel(
   const calculated = calculation.sellEvents.find(({ eventId }) => eventId === event.id)
   const result = calculated ?? fallbackCalculation(event)
   const status = resolveStatus(result)
-  const allocations = calculation.sellAllocations
-    .filter(({ sellEventId }) => sellEventId === event.id)
-    .map((allocation) => ({
-      buyEventId: allocation.buyEventId,
-      costAmount: toMoneyField(allocation.costAmount),
-      units: toUnitsField(allocation.units),
-    }))
 
   return {
-    allocatedCostAmount: toMoneyField(result.allocatedCostAmount),
-    allocations,
+    costBasisAmount: toMoneyField(result.costBasisAmount),
     confirmedDateText: event.confirmedDate ?? '--',
     entryMode: event.entryMode,
     expectedConfirmationDateText: event.expectedConfirmationDate ?? '--',
@@ -93,20 +71,6 @@ export function toSellTransactionViewModel(
     unitNav: toNavField(result.unitNav),
     units: toUnitsField(result.units),
   }
-}
-
-export function toRemainingBatchViewModels(
-  calculation: PortfolioCalculation,
-  fundCode: string,
-): readonly RemainingBatchViewModel[] {
-  return calculation.batches
-    .filter((batch) => batch.fundCode === fundCode)
-    .map((batch) => ({
-      confirmedDateText: batch.confirmedDate,
-      costAmount: toMoneyField(batch.costAmount),
-      eventId: batch.eventId,
-      units: toUnitsField(batch.units),
-    }))
 }
 
 export function toSellTransactionIssueViewModels(
@@ -128,7 +92,7 @@ export function toSellTransactionIssueViewModels(
       }
       return {
         eventId: issue.eventId,
-        text: '卖出事实未能完成 FIFO 分配，请检查事件份额和结算状态。',
+        text: '卖出事实未能计算成本基础，请检查事件份额和结算状态。',
       }
     })
 }
@@ -176,7 +140,7 @@ function formatUnits(field: PortfolioSellCalculation['units']): string {
 
 function fallbackCalculation(event: PortfolioSellEvent): PortfolioSellCalculation {
   return {
-    allocatedCostAmount: unknownField(),
+    costBasisAmount: unknownField(),
     eventId: event.id,
     fundCode: event.fundCode,
     grossAmount: event.grossAmount,

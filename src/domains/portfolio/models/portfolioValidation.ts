@@ -2,7 +2,6 @@ import type {
   FieldValue,
   Portfolio,
   PortfolioAdjustmentEvent,
-  PortfolioBatch,
   PortfolioBuyEvent,
   PortfolioCashDividendEvent,
   PortfolioDividendReinvestmentEvent,
@@ -83,24 +82,6 @@ export function validatePortfolioEvent(value: unknown): PortfolioEvent {
     case 'adjustment':
       return validateAdjustmentEvent(record)
   }
-}
-
-export function createPortfolioBatch(value: unknown): PortfolioBatch {
-  return validatePortfolioBatch(value)
-}
-
-export function validatePortfolioBatch(value: unknown): PortfolioBatch {
-  const record = requireRecord(value, 'Portfolio batch')
-  const id = validateId(record.id, 'batch ID')
-  const eventId = validateId(record.eventId, 'batch event ID')
-  const fundCode = validateFundCode(record.fundCode)
-  const confirmedDate = validateDate(record.confirmedDate, 'batch confirmation date')
-  const units = validateField(record.units, 'batch units', { allowNegative: false, maxDecimals: 4 })
-  const costAmount = validateField(record.costAmount, 'batch cost amount', {
-    allowNegative: false,
-    maxDecimals: 0,
-  })
-  return { confirmedDate, costAmount, eventId, fundCode, id, units }
 }
 
 function validateEventCommon(record: Record<string, unknown>): void {

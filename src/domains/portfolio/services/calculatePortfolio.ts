@@ -33,6 +33,7 @@ export type PortfolioPendingFact =
 
 export type PortfolioCalculationIssueCode =
   | 'insufficient-adjustment-units'
+  | 'insufficient-adjustment-cost'
   | 'insufficient-units'
   | 'missing-sell-units'
 
@@ -80,17 +81,8 @@ export interface PortfolioPendingSettlement {
   readonly missingFacts: readonly PortfolioPendingFact[]
 }
 
-export interface PortfolioBatchCalculation {
-  readonly eventId: string
+export interface PortfolioAggregateCalculation {
   readonly fundCode: string
-  readonly confirmedDate: string
-  readonly units: UnitsFieldValue
-  readonly costAmount: MoneyFieldValue
-}
-
-export interface PortfolioSellAllocation {
-  readonly buyEventId: string
-  readonly sellEventId: string
   readonly units: UnitsFieldValue
   readonly costAmount: MoneyFieldValue
 }
@@ -105,17 +97,39 @@ export interface PortfolioSellCalculation {
   readonly grossAmount: MoneyFieldValue
   readonly redemptionFee: MoneyFieldValue
   readonly netAmount: MoneyFieldValue
-  readonly allocatedCostAmount: MoneyFieldValue
+  readonly costBasisAmount: MoneyFieldValue
   readonly realizedGain: MoneyFieldValue
   readonly realizedGainStatus: 'complete' | 'incomplete'
 }
 
-export interface PortfolioCalculationIssue {
-  readonly eventId: string
-  readonly fundCode: string
-  readonly code: PortfolioCalculationIssueCode
-  readonly requestedUnits: UnitsFieldValue
-  readonly availableUnits: UnitsFieldValue
+export type PortfolioCalculationIssue =
+  | {
+      readonly eventId: string
+      readonly fundCode: string
+      readonly code: Exclude<PortfolioCalculationIssueCode, 'insufficient-adjustment-cost'>
+      readonly requestedUnits: UnitsFieldValue
+      readonly availableUnits: UnitsFieldValue
+    }
+  | {
+      readonly eventId: string
+      readonly fundCode: string
+      readonly code: 'insufficient-adjustment-cost'
+      readonly requestedCostAmount: MoneyFieldValue
+      readonly availableCostAmount: MoneyFieldValue
+    }
+
+export interface PortfolioCalculation {
+  readonly asOfDate: string
+  readonly cashDividendEvents: readonly PortfolioCashDividendCalculation[]
+  readonly dividendReinvestmentEvents: readonly PortfolioDividendReinvestmentCalculation[]
+  readonly adjustmentEvents: readonly PortfolioAdjustmentCalculation[]
+  readonly events: readonly PortfolioBuyCalculation[]
+  readonly sellEvents: readonly PortfolioSellCalculation[]
+  readonly aggregates: readonly PortfolioAggregateCalculation[]
+  readonly issues: readonly PortfolioCalculationIssue[]
+  readonly confirmedSummary: PortfolioSummary
+  readonly estimatedSummary: PortfolioSummary
+  readonly pendingSettlement: readonly PortfolioPendingSettlement[]
 }
 
 export interface PortfolioFundSummary {
@@ -137,21 +151,6 @@ export interface PortfolioSummary {
   readonly byFund: Readonly<Record<string, PortfolioFundSummary>>
 }
 
-export interface PortfolioCalculation {
-  readonly asOfDate: string
-  readonly cashDividendEvents: readonly PortfolioCashDividendCalculation[]
-  readonly dividendReinvestmentEvents: readonly PortfolioDividendReinvestmentCalculation[]
-  readonly adjustmentEvents: readonly PortfolioAdjustmentCalculation[]
-  readonly events: readonly PortfolioBuyCalculation[]
-  readonly sellEvents: readonly PortfolioSellCalculation[]
-  readonly batches: readonly PortfolioBatchCalculation[]
-  readonly sellAllocations: readonly PortfolioSellAllocation[]
-  readonly issues: readonly PortfolioCalculationIssue[]
-  readonly confirmedSummary: PortfolioSummary
-  readonly estimatedSummary: PortfolioSummary
-  readonly pendingSettlement: readonly PortfolioPendingSettlement[]
-}
-
 export interface PortfolioCalculationInput {
   readonly events: readonly PortfolioEvent[]
   readonly currentNavByFund: CurrentNavByFund
@@ -164,19 +163,24 @@ interface CalculatedBuy extends PortfolioBuyCalculation {
 
 interface CalculatedSell extends PortfolioSellCalculation {
   readonly event: PortfolioSellEvent
-  readonly allocations: readonly PortfolioSellAllocation[]
 }
 
-interface WorkingBatch {
-  readonly eventId: string
+interface WorkingAggregate {
   readonly fundCode: string
-  readonly confirmedDate: string
   units: number
   unitsConfidence: UnitsFieldValue['confidence']
   unitsSource: UnitsFieldValue['source']
   costAmount: number
   costConfidence: MoneyFieldValue['confidence']
   costSource: MoneyFieldValue['source']
+}
+
+interface AdjustmentApplication {
+  readonly applied: boolean
+  readonly insufficientUnits: boolean
+  readonly insufficientCost: boolean
+  readonly availableUnits: number
+  readonly availableCostAmount: number
 }
 
 interface FieldAccumulator {
@@ -220,16 +224,21 @@ export function calculatePortfolio({
   const calculatedAdjustments = events.filter(isAdjustmentEvent).map(calculateAdjustment)
   const adjustmentsById = new Map(calculatedAdjustments.map((event) => [event.eventId, event]))
   const buysById = new Map(calculatedBuys.map((event) => [event.eventId, event]))
-  const workingBatches: WorkingBatch[] = []
+  const workingAggregates = new Map<string, WorkingAggregate>()
+  const confirmedAggregates = new Map<string, WorkingAggregate>()
   const sellCalculations = new Map<string, CalculatedSell>()
-  const sellAllocations: PortfolioSellAllocation[] = []
+  const confirmedSellCalculations = new Map<string, CalculatedSell>()
   const issues: PortfolioCalculationIssue[] = []
 
   for (const { event } of orderEvents(events)) {
     if (isBuyEvent(event)) {
       const calculated = buysById.get(event.id)
       if (calculated?.settlementStatus === 'settled') {
-        workingBatches.push(toWorkingBatch(calculated))
+        const costAmount = resolveBuyCost(calculated)
+        addToAggregate(workingAggregates, calculated.fundCode, calculated.units, costAmount)
+        if (isConfirmedBuy(calculated, costAmount)) {
+          addToAggregate(confirmedAggregates, calculated.fundCode, calculated.units, costAmount)
+        }
       }
       continue
     }
@@ -239,44 +248,68 @@ export function calculatePortfolio({
         event.units.value !== null &&
         event.costAmount.value !== null
       ) {
-        workingBatches.push(toWorkingBatchFromInitialHolding(event))
+        const units = cloneField(event.units)
+        const costAmount = cloneField(event.costAmount)
+        addToAggregate(workingAggregates, event.fundCode, units, costAmount)
+        if (units.confidence === 'actual' && costAmount.confidence === 'actual') {
+          addToAggregate(confirmedAggregates, event.fundCode, units, costAmount)
+        }
       }
       continue
     }
     if (isDividendReinvestmentEvent(event)) {
       const calculated = dividendReinvestmentsById.get(event.id)
       if (calculated?.settlementStatus === 'settled' && event.settlementStatus === 'settled') {
-        workingBatches.push(toWorkingBatchFromDividendReinvestment(calculated, event.confirmedDate))
+        const costAmount = cloneField(calculated.dividendAmount)
+        addToAggregate(workingAggregates, calculated.fundCode, calculated.units, costAmount)
+        if (
+          calculated.units.confidence === 'actual' &&
+          calculated.dividendAmount.confidence === 'actual'
+        ) {
+          addToAggregate(confirmedAggregates, calculated.fundCode, calculated.units, costAmount)
+        }
       }
       continue
     }
     if (isAdjustmentEvent(event)) {
       const calculated = adjustmentsById.get(event.id)
       if (calculated?.settlementStatus === 'settled' && event.settlementStatus === 'settled') {
-        const unitsDelta = calculated.unitsDelta.value
-        if (
-          unitsDelta !== null &&
-          unitsDelta < -UNIT_EPSILON &&
-          availableUnitsFor(workingBatches, event.fundCode) + UNIT_EPSILON < Math.abs(unitsDelta)
-        ) {
-          issues.push({
-            availableUnits: valueField(
-              availableUnitsFor(workingBatches, event.fundCode),
-              'estimated',
-              FORMULA_SOURCE,
-            ),
-            code: 'insufficient-adjustment-units',
-            eventId: calculated.eventId,
-            fundCode: calculated.fundCode,
-            requestedUnits: cloneField(calculated.unitsDelta),
-          })
+        const application = applyAdjustment(workingAggregates, calculated)
+        if (!application.applied) {
+          if (application.insufficientUnits) {
+            issues.push({
+              availableUnits: valueField(application.availableUnits, 'estimated', FORMULA_SOURCE),
+              code: 'insufficient-adjustment-units',
+              eventId: calculated.eventId,
+              fundCode: calculated.fundCode,
+              requestedUnits: cloneField(calculated.unitsDelta),
+            })
+          }
+          if (application.insufficientCost) {
+            issues.push({
+              availableCostAmount: valueField(
+                application.availableCostAmount,
+                'estimated',
+                FORMULA_SOURCE,
+              ),
+              code: 'insufficient-adjustment-cost',
+              eventId: calculated.eventId,
+              fundCode: calculated.fundCode,
+              requestedCostAmount: cloneField(calculated.costAmountDelta),
+            })
+          }
           adjustmentsById.set(event.id, {
             ...calculated,
             settlementStatus: 'pending-settlement',
           })
           continue
         }
-        applyAdjustment(workingBatches, calculated, event.confirmedDate)
+        if (
+          calculated.unitsDelta.confidence === 'actual' &&
+          calculated.costAmountDelta.confidence === 'actual'
+        ) {
+          applyAdjustment(confirmedAggregates, calculated)
+        }
       }
       continue
     }
@@ -299,8 +332,9 @@ export function calculatePortfolio({
       continue
     }
 
-    const availableUnits = availableUnitsFor(workingBatches, event.fundCode)
-    if (availableUnits + UNIT_EPSILON < calculated.units.value) {
+    const costBasisAmount = applyAverageSell(workingAggregates, event.fundCode, calculated.units)
+    if (costBasisAmount === undefined) {
+      const availableUnits = availableUnitsFor(workingAggregates, event.fundCode)
       issues.push({
         availableUnits: valueField(availableUnits, 'estimated', FORMULA_SOURCE),
         code: 'insufficient-units',
@@ -312,17 +346,26 @@ export function calculatePortfolio({
       continue
     }
 
-    const allocations = consumeFifo(workingBatches, event.fundCode, event.id, calculated.units)
-    sellAllocations.push(...allocations)
-    sellCalculations.set(
-      event.id,
-      completeSellCalculation(calculated, allocations, allocationCost(allocations)),
-    )
+    const completed = completeSellCalculation(calculated, costBasisAmount)
+    sellCalculations.set(event.id, completed)
+    if (calculated.units.confidence === 'actual') {
+      const confirmedCostBasis = applyAverageSell(
+        confirmedAggregates,
+        event.fundCode,
+        calculated.units,
+      )
+      if (confirmedCostBasis !== undefined) {
+        confirmedSellCalculations.set(
+          event.id,
+          completeSellCalculation(calculated, confirmedCostBasis),
+        )
+      }
+    }
   }
 
   const settledEvents = calculatedBuys.filter((event) => event.settlementStatus === 'settled')
-  const confirmedEvents = settledEvents.filter(
-    (event) => event.totalAmount.confidence === 'actual' && event.units.confidence === 'actual',
+  const confirmedEvents = settledEvents.filter((event) =>
+    isConfirmedBuy(event, resolveBuyCost(event)),
   )
   const settledCashDividends = calculatedCashDividends.filter(
     (event) => event.settlementStatus === 'settled',
@@ -360,31 +403,26 @@ export function calculatePortfolio({
     pendingSettlements.set(event.eventId, toPendingSellSettlement(event))
   }
   const calculatedSellEvents = events.filter(isSellEvent).map((event) => {
-    const {
-      event: _event,
-      allocations: _allocations,
-      ...calculation
-    } = sellCalculations.get(event.id) ?? calculateSell(event, currentNavByFund[event.fundCode])
+    const { event: _event, ...calculation } =
+      sellCalculations.get(event.id) ?? calculateSell(event, currentNavByFund[event.fundCode])
     return calculation
   })
   const settledSellEvents = calculatedSellEvents.filter(
     (event) => event.settlementStatus === 'settled',
   )
-  const confirmedSellEvents = settledSellEvents.filter(
-    (event) => event.units.confidence === 'actual',
-  )
+  const confirmedSellEvents = events.filter(isSellEvent).flatMap((event) => {
+    const calculation = confirmedSellCalculations.get(event.id)
+    return calculation === undefined ? [] : [calculation]
+  })
 
   return {
     asOfDate,
-    batches: workingBatches.filter(({ units }) => units > UNIT_EPSILON).map(toBatchCalculation),
+    aggregates: [...workingAggregates.values()].map(toAggregateCalculation),
     cashDividendEvents: calculatedCashDividends,
     confirmedSummary: createSummary(
       confirmedEvents,
       confirmedCashDividends,
-      workingBatches.filter(
-        ({ unitsConfidence, costConfidence }) =>
-          unitsConfidence === 'actual' && costConfidence === 'actual',
-      ),
+      confirmedAggregates,
       confirmedSellEvents,
       currentNavByFund,
     ),
@@ -393,7 +431,7 @@ export function calculatePortfolio({
     estimatedSummary: createSummary(
       settledEvents,
       settledCashDividends,
-      workingBatches,
+      workingAggregates,
       settledSellEvents,
       currentNavByFund,
     ),
@@ -403,7 +441,6 @@ export function calculatePortfolio({
       const pending = pendingSettlements.get(event.id)
       return pending === undefined ? [] : [pending]
     }),
-    sellAllocations,
     sellEvents: calculatedSellEvents,
   }
 }
@@ -515,8 +552,7 @@ function calculateSell(
     ? 'settled'
     : 'pending-settlement'
   return {
-    allocatedCostAmount: unknownField(FORMULA_SOURCE),
-    allocations: [],
+    costBasisAmount: unknownField(FORMULA_SOURCE),
     event,
     eventId: event.id,
     fundCode: event.fundCode,
@@ -534,21 +570,17 @@ function calculateSell(
 
 function completeSellCalculation(
   calculation: CalculatedSell,
-  allocations: readonly PortfolioSellAllocation[],
-  allocatedCostAmount: MoneyFieldValue,
+  costBasisAmount: MoneyFieldValue,
 ): CalculatedSell {
   const gainIsComplete =
-    calculation.netAmount.value !== null && calculation.redemptionFee.confidence === 'actual'
+    calculation.netAmount.value !== null &&
+    calculation.redemptionFee.confidence === 'actual' &&
+    costBasisAmount.value !== null
   return {
     ...calculation,
-    allocatedCostAmount,
-    allocations,
+    costBasisAmount,
     realizedGain: gainIsComplete
-      ? valueField(
-          calculation.netAmount.value - (allocatedCostAmount.value ?? 0),
-          'estimated',
-          FORMULA_SOURCE,
-        )
+      ? valueField(calculation.netAmount.value - costBasisAmount.value, 'estimated', FORMULA_SOURCE)
       : unknownField(FORMULA_SOURCE),
     realizedGainStatus: gainIsComplete ? 'complete' : 'incomplete',
   }
@@ -588,158 +620,204 @@ function resolveNetAmount(
   return unknownField(event.netAmount.source)
 }
 
-function toWorkingBatch(event: CalculatedBuy): WorkingBatch {
-  return {
-    confirmedDate: event.event.confirmedDate as string,
-    costAmount: event.totalAmount.value as number,
-    costConfidence: event.totalAmount.confidence,
-    costSource: event.totalAmount.source,
-    eventId: event.eventId,
-    fundCode: event.fundCode,
-    units: event.units.value as number,
-    unitsConfidence: event.units.confidence,
-    unitsSource: event.units.source,
+function resolveBuyCost(event: CalculatedBuy): MoneyFieldValue {
+  if (
+    event.totalAmount.value === null ||
+    event.purchaseFee.value === null ||
+    !Number.isFinite(event.totalAmount.value) ||
+    !Number.isFinite(event.purchaseFee.value)
+  ) {
+    return unknownField(FORMULA_SOURCE)
   }
-}
-
-function toWorkingBatchFromInitialHolding(event: PortfolioInitialHoldingEvent): WorkingBatch {
-  return {
-    confirmedDate: event.confirmedDate,
-    costAmount: event.costAmount.value as number,
-    costConfidence: event.costAmount.confidence,
-    costSource: event.costAmount.source,
-    eventId: event.id,
-    fundCode: event.fundCode,
-    units: event.units.value as number,
-    unitsConfidence: event.units.confidence,
-    unitsSource: event.units.source,
-  }
-}
-
-function toWorkingBatchFromDividendReinvestment(
-  event: PortfolioDividendReinvestmentCalculation,
-  confirmedDate: string,
-): WorkingBatch {
-  return {
-    confirmedDate,
-    costAmount: event.dividendAmount.value as number,
-    costConfidence: event.dividendAmount.confidence,
-    costSource: event.dividendAmount.source,
-    eventId: event.eventId,
-    fundCode: event.fundCode,
-    units: event.units.value as number,
-    unitsConfidence: event.units.confidence,
-    unitsSource: event.units.source,
-  }
-}
-
-function applyAdjustment(
-  batches: WorkingBatch[],
-  event: PortfolioAdjustmentCalculation,
-  confirmedDate: string,
-): void {
-  const unitsDelta = event.unitsDelta.value as number
-  const costAmountDelta = event.costAmountDelta.value as number
-  if (unitsDelta > UNIT_EPSILON) {
-    batches.push({
-      confirmedDate,
-      costAmount: costAmountDelta,
-      costConfidence: event.costAmountDelta.confidence,
-      costSource: event.costAmountDelta.source,
-      eventId: event.eventId,
-      fundCode: event.fundCode,
-      units: unitsDelta,
-      unitsConfidence: event.unitsDelta.confidence,
-      unitsSource: event.unitsDelta.source,
-    })
-    return
-  }
-
-  let remainingUnits = Math.abs(unitsDelta)
-  let costTarget: WorkingBatch | undefined
-  for (let index = batches.length - 1; index >= 0 && remainingUnits > UNIT_EPSILON; index -= 1) {
-    const batch = batches[index]
-    if (batch.fundCode !== event.fundCode) continue
-    const removedUnits = Math.min(remainingUnits, batch.units)
-    batch.units -= removedUnits
-    costTarget = batch
-    remainingUnits -= removedUnits
-  }
-  if (costTarget === undefined && Math.abs(costAmountDelta) > UNIT_EPSILON) {
-    costTarget = [...batches].reverse().find(({ fundCode }) => fundCode === event.fundCode)
-  }
-  if (costTarget !== undefined && Math.abs(costAmountDelta) > UNIT_EPSILON) {
-    costTarget.costAmount += costAmountDelta
-    costTarget.costConfidence = event.costAmountDelta.confidence
-    costTarget.costSource = event.costAmountDelta.source
-  }
-}
-
-function availableUnitsFor(batches: readonly WorkingBatch[], fundCode: string): number {
-  return batches
-    .filter((batch) => batch.fundCode === fundCode)
-    .reduce((total, batch) => total + batch.units, 0)
-}
-
-function consumeFifo(
-  batches: WorkingBatch[],
-  fundCode: string,
-  sellEventId: string,
-  requestedUnits: UnitsFieldValue,
-): PortfolioSellAllocation[] {
-  let remaining = requestedUnits.value as number
-  const allocations: PortfolioSellAllocation[] = []
-  for (const batch of batches) {
-    if (batch.fundCode !== fundCode || batch.units <= UNIT_EPSILON || remaining <= UNIT_EPSILON) {
-      continue
-    }
-    const consumedUnits = Math.min(remaining, batch.units)
-    const costAmount =
-      consumedUnits >= batch.units - UNIT_EPSILON
-        ? batch.costAmount
-        : roundMoney((batch.costAmount * consumedUnits) / batch.units)
-    const costConfidence =
-      consumedUnits >= batch.units - UNIT_EPSILON ? batch.costConfidence : 'estimated'
-    const costSource =
-      consumedUnits >= batch.units - UNIT_EPSILON ? batch.costSource : FORMULA_SOURCE
-    allocations.push({
-      buyEventId: batch.eventId,
-      costAmount: valueField(costAmount, costConfidence, costSource),
-      sellEventId,
-      units: valueField(
-        consumedUnits,
-        requestedUnits.confidence === 'actual' && batch.unitsConfidence === 'actual'
-          ? 'actual'
-          : 'estimated',
-        FORMULA_SOURCE,
-      ),
-    })
-    batch.units -= consumedUnits
-    batch.costAmount -= costAmount
-    remaining -= consumedUnits
-  }
-  return allocations
-}
-
-function allocationCost(allocations: readonly PortfolioSellAllocation[]): MoneyFieldValue {
-  if (allocations.length === 0) return valueField(0, 'actual', FORMULA_SOURCE)
-  const confidence = allocations.every(({ costAmount }) => costAmount.confidence === 'actual')
-    ? 'actual'
-    : 'estimated'
   return valueField(
-    allocations.reduce((total, allocation) => total + (allocation.costAmount.value ?? 0), 0),
-    confidence,
+    roundMoney(event.totalAmount.value + event.purchaseFee.value),
+    mergeConfidence(event.totalAmount.confidence, event.purchaseFee.confidence),
     FORMULA_SOURCE,
   )
 }
 
-function toBatchCalculation(batch: WorkingBatch): PortfolioBatchCalculation {
+function isConfirmedBuy(event: CalculatedBuy, costAmount: MoneyFieldValue): boolean {
+  return (
+    event.settlementStatus === 'settled' &&
+    event.units.confidence === 'actual' &&
+    costAmount.confidence === 'actual'
+  )
+}
+
+function addToAggregate(
+  aggregates: Map<string, WorkingAggregate>,
+  fundCode: string,
+  units: UnitsFieldValue,
+  costAmount: MoneyFieldValue,
+): void {
+  if (
+    units.value === null ||
+    costAmount.value === null ||
+    !Number.isFinite(units.value) ||
+    !Number.isFinite(costAmount.value)
+  ) {
+    return
+  }
+  const current = aggregates.get(fundCode)
+  if (current === undefined) {
+    aggregates.set(fundCode, {
+      costAmount: costAmount.value,
+      costConfidence: costAmount.confidence,
+      costSource: costAmount.source,
+      fundCode,
+      units: units.value,
+      unitsConfidence: units.confidence,
+      unitsSource: units.source,
+    })
+    return
+  }
+  current.units += units.value
+  current.costAmount += costAmount.value
+  current.unitsConfidence = mergeConfidence(current.unitsConfidence, units.confidence)
+  current.unitsSource = FORMULA_SOURCE
+  current.costConfidence = mergeConfidence(current.costConfidence, costAmount.confidence)
+  current.costSource = FORMULA_SOURCE
+}
+
+function applyAdjustment(
+  aggregates: Map<string, WorkingAggregate>,
+  event: PortfolioAdjustmentCalculation,
+): AdjustmentApplication {
+  const unitsDelta = event.unitsDelta.value
+  const costAmountDelta = event.costAmountDelta.value
+  const current = aggregates.get(event.fundCode)
+  const availableUnits = current?.units ?? 0
+  const availableCostAmount = current?.costAmount ?? 0
+  if (unitsDelta === null || costAmountDelta === null) {
+    return {
+      applied: false,
+      availableCostAmount,
+      availableUnits,
+      insufficientCost: false,
+      insufficientUnits: false,
+    }
+  }
+
+  const nextUnits = availableUnits + unitsDelta
+  const nextCostAmount = availableCostAmount + costAmountDelta
+  const insufficientUnits = nextUnits < -UNIT_EPSILON
+  const insufficientCost = nextCostAmount < -UNIT_EPSILON
+  if (insufficientUnits || insufficientCost) {
+    return {
+      applied: false,
+      availableCostAmount,
+      availableUnits,
+      insufficientCost,
+      insufficientUnits,
+    }
+  }
+
+  if (current === undefined) {
+    if (Math.abs(nextUnits) <= UNIT_EPSILON && Math.abs(nextCostAmount) <= UNIT_EPSILON) {
+      return {
+        applied: true,
+        availableCostAmount,
+        availableUnits,
+        insufficientCost: false,
+        insufficientUnits: false,
+      }
+    }
+    aggregates.set(event.fundCode, {
+      costAmount: Math.max(0, nextCostAmount),
+      costConfidence: event.costAmountDelta.confidence,
+      costSource: event.costAmountDelta.source,
+      fundCode: event.fundCode,
+      units: Math.max(0, nextUnits),
+      unitsConfidence: event.unitsDelta.confidence,
+      unitsSource: event.unitsDelta.source,
+    })
+    return {
+      applied: true,
+      availableCostAmount,
+      availableUnits,
+      insufficientCost: false,
+      insufficientUnits: false,
+    }
+  }
+
+  current.units = Math.max(0, nextUnits)
+  current.costAmount = Math.max(0, nextCostAmount)
+  current.unitsConfidence = mergeConfidence(current.unitsConfidence, event.unitsDelta.confidence)
+  current.unitsSource = FORMULA_SOURCE
+  current.costConfidence = mergeConfidence(current.costConfidence, event.costAmountDelta.confidence)
+  current.costSource = FORMULA_SOURCE
   return {
-    confirmedDate: batch.confirmedDate,
-    costAmount: valueField(batch.costAmount, batch.costConfidence, batch.costSource),
-    eventId: batch.eventId,
-    fundCode: batch.fundCode,
-    units: valueField(batch.units, batch.unitsConfidence, batch.unitsSource),
+    applied: true,
+    availableCostAmount,
+    availableUnits,
+    insufficientCost: false,
+    insufficientUnits: false,
+  }
+}
+
+function applyAverageSell(
+  aggregates: Map<string, WorkingAggregate>,
+  fundCode: string,
+  requestedUnits: UnitsFieldValue,
+): MoneyFieldValue | undefined {
+  if (requestedUnits.value === null || !Number.isFinite(requestedUnits.value)) return undefined
+  const aggregate = aggregates.get(fundCode)
+  if (
+    aggregate === undefined ||
+    requestedUnits.value < -UNIT_EPSILON ||
+    aggregate.units + UNIT_EPSILON < requestedUnits.value
+  ) {
+    return undefined
+  }
+
+  const isFullSell = requestedUnits.value >= aggregate.units - UNIT_EPSILON
+  const costBasis = isFullSell
+    ? aggregate.costAmount
+    : roundMoney((aggregate.costAmount * requestedUnits.value) / aggregate.units)
+  const costBasisAmount = valueField(
+    costBasis,
+    isFullSell ? aggregate.costConfidence : 'estimated',
+    isFullSell ? aggregate.costSource : FORMULA_SOURCE,
+  )
+
+  if (isFullSell) {
+    aggregate.units = 0
+    aggregate.costAmount = 0
+    aggregate.unitsSource = FORMULA_SOURCE
+    aggregate.costSource = FORMULA_SOURCE
+    return costBasisAmount
+  }
+
+  aggregate.units -= requestedUnits.value
+  aggregate.costAmount = Math.max(0, aggregate.costAmount - costBasis)
+  aggregate.unitsConfidence = mergeConfidence(aggregate.unitsConfidence, requestedUnits.confidence)
+  aggregate.unitsSource = FORMULA_SOURCE
+  aggregate.costConfidence = mergeConfidence(aggregate.costConfidence, costBasisAmount.confidence)
+  aggregate.costSource = FORMULA_SOURCE
+  return costBasisAmount
+}
+
+function availableUnitsFor(
+  aggregates: ReadonlyMap<string, WorkingAggregate>,
+  fundCode: string,
+): number {
+  return aggregates.get(fundCode)?.units ?? 0
+}
+
+function mergeConfidence(
+  left: FieldValue<number>['confidence'],
+  right: FieldValue<number>['confidence'],
+): FieldValue<number>['confidence'] {
+  if (left === 'unknown' || right === 'unknown') return 'unknown'
+  if (left === 'actual' && right === 'actual') return 'actual'
+  return 'estimated'
+}
+
+function toAggregateCalculation(aggregate: WorkingAggregate): PortfolioAggregateCalculation {
+  return {
+    costAmount: valueField(aggregate.costAmount, aggregate.costConfidence, aggregate.costSource),
+    fundCode: aggregate.fundCode,
+    units: valueField(aggregate.units, aggregate.unitsConfidence, aggregate.unitsSource),
   }
 }
 
@@ -871,7 +949,7 @@ function toPendingSellSettlement(event: CalculatedSell): PortfolioPendingSettlem
 function createSummary(
   events: readonly PortfolioBuyCalculation[],
   cashDividendEvents: readonly PortfolioCashDividendCalculation[] = [],
-  batches: readonly WorkingBatch[] = [],
+  aggregates: ReadonlyMap<string, WorkingAggregate> = new Map(),
   sellEvents: readonly PortfolioSellCalculation[] = [],
   currentNavByFund: CurrentNavByFund = {},
 ): PortfolioSummary {
@@ -890,17 +968,17 @@ function createSummary(
     addField(summary.cashDividend, event.cashAmount)
     summaries.set(event.fundCode, summary)
   }
-  for (const batch of batches) {
-    const summary = summaries.get(batch.fundCode) ?? createSummaryAccumulator()
+  for (const aggregate of aggregates.values()) {
+    const summary = summaries.get(aggregate.fundCode) ?? createSummaryAccumulator()
     addField(
       summary.currentUnits,
-      valueField(batch.units, batch.unitsConfidence, batch.unitsSource),
+      valueField(aggregate.units, aggregate.unitsConfidence, aggregate.unitsSource),
     )
     addField(
       summary.costAmount,
-      valueField(batch.costAmount, batch.costConfidence, batch.costSource),
+      valueField(aggregate.costAmount, aggregate.costConfidence, aggregate.costSource),
     )
-    summaries.set(batch.fundCode, summary)
+    summaries.set(aggregate.fundCode, summary)
   }
   for (const event of sellEvents) {
     const summary = summaries.get(event.fundCode) ?? createSummaryAccumulator()
@@ -959,7 +1037,7 @@ function createZeroFieldAccumulator(): FieldAccumulator {
 }
 
 function addField<T>(accumulator: FieldAccumulator, field: FieldValue<T>): void {
-  if (field.value === null) {
+  if (field.value === null || field.confidence === 'unknown') {
     accumulator.hasUnknown = true
     return
   }

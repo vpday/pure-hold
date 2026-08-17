@@ -4,7 +4,6 @@ import { ref } from 'vue'
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
 import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 import type {
-  RemainingBatchViewModel,
   SellTransactionIssueViewModel,
   SellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
@@ -21,7 +20,6 @@ defineProps<{
   error: string
   isLoading: boolean
   ledgerEnabled: boolean
-  remainingBatches: readonly RemainingBatchViewModel[]
   sellIssues: readonly SellTransactionIssueViewModel[]
   size: string
   transactions: readonly FundTransactionViewModel[]
@@ -289,8 +287,8 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                 <p class="mt-1 text-sm text-(--td-text-color-secondary)">
                   {{
                     ledgerEnabled
-                      ? '已启用，可记录交易和查看 FIFO。'
-                      : '启用后可记录交易和查看 FIFO。'
+                      ? '已启用，可记录交易和查看移动平均成本。'
+                      : '启用后可记录交易和查看移动平均成本。'
                   }}
                 </p>
               </div>
@@ -342,7 +340,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <FundTransactionsSection
             :code="viewModel.code"
             :ledger-enabled="ledgerEnabled"
-            :remaining-batches="remainingBatches"
             :sell-issues="sellIssues"
             :transactions="transactions"
             @delete-transaction="emit('deleteTransaction', $event)"
