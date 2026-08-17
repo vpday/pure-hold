@@ -238,4 +238,8 @@ defineExpose({ validate })
 :deep(.t-input-number) {
   width: 100%;
 }
+
+:deep(.t-form__item) {
+  margin-bottom: var(--td-comp-margin-l);
+}
 </style>

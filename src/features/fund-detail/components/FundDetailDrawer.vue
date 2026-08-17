@@ -29,8 +29,12 @@ defineProps<{
 }>()
 const emit = defineEmits<{
   close: []
+  deleteTransaction: [eventId: string]
   edit: [code: string]
   enableLedger: []
+  editTransaction: [eventId: string]
+  recordBuy: [code: string]
+  recordSell: [code: string]
   retry: []
   selectSection: [section: string]
 }>()
@@ -293,6 +297,14 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               <t-button v-else size="small" theme="primary" @click="emit('enableLedger')">
                 启用账本
               </t-button>
+              <div v-if="ledgerEnabled" class="flex items-center gap-2">
+                <t-button size="small" variant="outline" @click="emit('recordBuy', viewModel.code)">
+                  记录买入
+                </t-button>
+                <t-button size="small" theme="primary" @click="emit('recordSell', viewModel.code)">
+                  记录卖出
+                </t-button>
+              </div>
             </div>
           </section>
 
@@ -341,16 +353,19 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           >
             <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
             <div v-if="transactions.length" class="mt-4 overflow-x-auto">
-              <table class="w-full min-w-[54rem] text-sm">
+              <table class="w-full min-w-[72rem] text-sm">
                 <thead>
                   <tr class="text-left text-(--td-text-color-secondary)">
                     <th class="pb-2 pr-3">类型</th>
-                    <th class="pb-2 pr-3">日期</th>
+                    <th class="pb-2 pr-3">提交时间</th>
+                    <th class="pb-2 pr-3">净值日期</th>
+                    <th class="pb-2 pr-3">确认/预计确认</th>
                     <th class="pb-2 pr-3">份额</th>
                     <th class="pb-2 pr-3">单位净值</th>
                     <th class="pb-2 pr-3">金额</th>
                     <th class="pb-2 pr-3">费用</th>
-                    <th class="pb-2">收益/状态</th>
+                    <th class="pb-2 pr-3">收益/状态</th>
+                    <th class="pb-2">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -358,7 +373,17 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                     <tr v-if="transaction.kind === 'buy'">
                       <td class="py-2 pr-3">买入</td>
                       <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.confirmedDateText }}
+                        {{ transaction.submittedAtText }}
+                      </td>
+                      <td class="py-2 pr-3 font-mono tabular-nums">
+                        {{ transaction.navDateText }}
+                      </td>
+                      <td class="py-2 pr-3 font-mono tabular-nums">
+                        {{
+                          transaction.confirmedDateText !== '--'
+                            ? transaction.confirmedDateText
+                            : transaction.expectedConfirmationDateText
+                        }}
                       </td>
                       <td class="py-2 pr-3 font-mono tabular-nums">
                         {{ transaction.units.text }}
@@ -375,14 +400,54 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                       <td class="py-2 pr-3 font-mono tabular-nums">
                         {{ transaction.purchaseFee.text }}
                       </td>
+                      <td class="py-2 pr-3">
+                        <t-tag
+                          size="small"
+                          :theme="
+                            transaction.status === 'settled-nav-ready' ? 'success' : 'warning'
+                          "
+                          variant="light"
+                        >
+                          {{ transaction.statusText }}
+                        </t-tag>
+                      </td>
                       <td class="py-2">
-                        <t-tag size="small" variant="light">{{ transaction.statusText }}</t-tag>
+                        <div class="flex items-center gap-1">
+                          <t-button
+                            size="small"
+                            variant="text"
+                            @click="emit('editTransaction', transaction.id)"
+                          >
+                            编辑
+                          </t-button>
+                          <t-popconfirm
+                            :cancel-btn="{ content: '取消', variant: 'outline' }"
+                            :confirm-btn="{ content: '删除', theme: 'danger' }"
+                            content="删除这条买入记录？删除后会重新计算持仓。"
+                            placement="top-right"
+                            :popup-props="{ attach: 'body' }"
+                            theme="warning"
+                            @confirm="emit('deleteTransaction', transaction.id)"
+                          >
+                            <t-button size="small" theme="danger" variant="text">删除</t-button>
+                          </t-popconfirm>
+                        </div>
                       </td>
                     </tr>
                     <tr v-else>
                       <td class="py-2 pr-3">卖出</td>
                       <td class="py-2 pr-3 font-mono tabular-nums">
-                        {{ transaction.confirmedDateText }}
+                        {{ transaction.submittedAtText }}
+                      </td>
+                      <td class="py-2 pr-3 font-mono tabular-nums">
+                        {{ transaction.navDateText }}
+                      </td>
+                      <td class="py-2 pr-3 font-mono tabular-nums">
+                        {{
+                          transaction.confirmedDateText !== '--'
+                            ? transaction.confirmedDateText
+                            : transaction.expectedConfirmationDateText
+                        }}
                       </td>
                       <td class="py-2 pr-3 font-mono tabular-nums">
                         <span>{{ transaction.units.text }}</span>
@@ -411,15 +476,47 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                           {{ transaction.redemptionFee.sourceText }}
                         </span>
                       </td>
-                      <td class="py-2">
+                      <td class="py-2 pr-3">
                         <span class="block">{{ transaction.realizedGain.text }}</span>
                         <span class="text-xs text-(--td-text-color-secondary)">
                           {{ transaction.realizedGainStatusText }}
                         </span>
+                        <t-tag
+                          class="mt-1"
+                          size="small"
+                          :theme="
+                            transaction.status === 'settled-nav-ready' ? 'success' : 'warning'
+                          "
+                          variant="light"
+                        >
+                          {{ transaction.statusText }}
+                        </t-tag>
+                      </td>
+                      <td class="py-2">
+                        <div class="flex items-center gap-1">
+                          <t-button
+                            size="small"
+                            variant="text"
+                            @click="emit('editTransaction', transaction.id)"
+                          >
+                            编辑
+                          </t-button>
+                          <t-popconfirm
+                            :cancel-btn="{ content: '取消', variant: 'outline' }"
+                            :confirm-btn="{ content: '删除', theme: 'danger' }"
+                            content="删除这条卖出记录？删除后会重新计算 FIFO 和收益。"
+                            placement="top-right"
+                            :popup-props="{ attach: 'body' }"
+                            theme="warning"
+                            @confirm="emit('deleteTransaction', transaction.id)"
+                          >
+                            <t-button size="small" theme="danger" variant="text">删除</t-button>
+                          </t-popconfirm>
+                        </div>
                       </td>
                     </tr>
                     <tr v-if="transaction.kind === 'sell' && transaction.allocations.length">
-                      <td colspan="7" class="border-b border-(--td-component-border) pb-3">
+                      <td colspan="10" class="border-b border-(--td-component-border) pb-3">
                         <div class="rounded-md bg-(--td-bg-color-secondarycontainer) p-3 text-xs">
                           <p class="font-medium text-(--td-text-color-primary)">FIFO 分配</p>
                           <ul class="mt-2 flex flex-col gap-1">

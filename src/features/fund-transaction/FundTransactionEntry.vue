@@ -1,219 +1,507 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { fetchTiantianFundBasicInfo } from '@/domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
-import { lookupExactUnitNav } from '@/domains/funds/services/tiantian/lookupExactUnitNav.ts'
+import {
+  lookupExactUnitNav,
+  type FundValue,
+} from '@/domains/funds/services/tiantian/lookupExactUnitNav.ts'
+import type {
+  PortfolioBuyEvent,
+  PortfolioEvent,
+  PortfolioSellEvent,
+  PortfolioTransactionEntryMode,
+} from '@/domains/portfolio/models/index.ts'
+import {
+  deriveTransactionSchedule,
+  getShanghaiMinute,
+  isValidShanghaiMinute,
+} from '@/domains/portfolio/services/tradingCalendar.ts'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints.ts'
 import { createBuyDraft } from './models/buyDraft.ts'
 import { createSellDraft } from './models/sellDraft.ts'
-import { completeBuyEventWithExactNav, saveBuyDraft } from './services/buyTransactionService.ts'
-import { saveSellDraft } from './services/sellTransactionService.ts'
+import {
+  completeBuyEventWithExactNav,
+  saveBuyDraft,
+  updateBuyDraft,
+} from './services/buyTransactionService.ts'
+import {
+  completeSellEventWithExactNav,
+  saveSellDraft,
+  updateSellDraft,
+} from './services/sellTransactionService.ts'
 import FundBuyForm from './components/FundBuyForm.vue'
 import FundSellForm from './components/FundSellForm.vue'
 
+type TransactionMode = 'buy' | 'sell'
+type TransactionEvent = PortfolioBuyEvent | PortfolioSellEvent
+type NavStatus = 'idle' | 'loading' | 'ready' | 'missing' | 'error'
+
 const props = defineProps<{ portfolio: PortfolioStore }>()
 const emit = defineEmits<{ saved: [] }>()
-const mode = ref<'buy' | 'sell'>('buy')
+
+const mode = ref<TransactionMode>('buy')
+const entryMode = ref<PortfolioTransactionEntryMode>('pending')
 const visible = ref(false)
 const fundCode = ref('')
 const fundName = ref('')
+const editingEvent = ref<TransactionEvent>()
+const submittedAt = ref('')
 const confirmedDate = ref('')
 const totalAmountYuan = ref('')
-const purchaseFeePercent = ref('')
-const purchaseFeePercentSource = ref<'fund-basic-info' | 'manual'>('fund-basic-info')
+const requestedUnits = ref('')
 const actualUnits = ref('')
 const actualPurchaseFeeYuan = ref('')
-const actualUnitNav = ref('')
-const sellUnits = ref('')
-const actualNetAmountYuan = ref('')
 const actualRedemptionFeeYuan = ref('')
+const purchaseFeePercent = ref<number | null>(null)
+const purchaseFeePercentSource = ref<'fund-basic-info' | 'manual'>('fund-basic-info')
 const purchaseConfirmationDays = ref<number | null>(null)
 const redemptionConfirmationDays = ref<number | null>(null)
+const basicInfoLoading = ref(false)
+const basicInfoError = ref('')
+const navValue = ref<FundValue | null>(null)
+const navStatus = ref<NavStatus>('idle')
+const navError = ref('')
 const errors = ref<Readonly<Record<string, string>>>({})
+const isSaving = ref(false)
 const transactionForm = ref<{ validate: () => Promise<boolean> }>()
 let openGeneration = 0
+let navRequestGeneration = 0
 const { isSmUp } = useBreakpoints()
 
+const confirmationDays = computed(() =>
+  mode.value === 'buy' ? purchaseConfirmationDays.value : redemptionConfirmationDays.value,
+)
+const schedule = computed(() => {
+  if (!isValidShanghaiMinute(submittedAt.value)) return undefined
+  try {
+    return deriveTransactionSchedule({
+      confirmationDays: confirmationDays.value,
+      submittedAt: submittedAt.value,
+    })
+  } catch {
+    return undefined
+  }
+})
+const navDate = computed(() => schedule.value?.navDate ?? '')
+const expectedConfirmationDate = computed(() =>
+  entryMode.value === 'pending' ? (schedule.value?.expectedConfirmationDate ?? '') : '',
+)
+const hasConfirmedFacts = computed(
+  () => confirmedDate.value.trim() !== '' && actualUnits.value.trim() !== '',
+)
+const transactionStatus = computed(() => {
+  if (!hasConfirmedFacts.value) return '待确认'
+  return navValue.value === null ? '已确认，净值待补全' : '已确认，净值已获取'
+})
+const transactionStatusTheme = computed<'default' | 'success' | 'warning'>(() => {
+  if (!hasConfirmedFacts.value || navValue.value === null) return 'warning'
+  return 'success'
+})
+const navStatusText = computed(() => {
+  if (navStatus.value === 'loading') return '查询中'
+  if (navStatus.value === 'ready') return '已获取精确历史净值'
+  if (navStatus.value === 'missing') return '净值待补全'
+  if (navStatus.value === 'error') return '查询失败，可重试'
+  return '未查询'
+})
+const unitNavText = computed(() =>
+  navValue.value === null ? '--' : navValue.value.unitNav.toFixed(4),
+)
+const navSourceText = computed(() => (navValue.value === null ? '' : '历史净值'))
+const warnings = computed(() => {
+  const result: string[] = []
+  if (
+    entryMode.value === 'pending' &&
+    (confirmedDate.value.trim() === '') !== (actualUnits.value.trim() === '')
+  ) {
+    result.push('确认日期和确认份额需要同时填写；只填写一项时，记录仍按待确认处理。')
+  }
+  if (
+    mode.value === 'sell' &&
+    Number.isFinite(Number(actualUnits.value)) &&
+    Number.isFinite(Number(requestedUnits.value)) &&
+    Number(actualUnits.value) > Number(requestedUnits.value)
+  ) {
+    result.push('确认份额高于申请卖出份额，保存后请在成交记录中核对。')
+  }
+  return result
+})
+const grossAmountText = computed(() => {
+  if (mode.value !== 'sell') return '--'
+  const units = Number(actualUnits.value)
+  if (Number.isFinite(units) && units > 0 && navValue.value !== null) {
+    return formatYuan(units * navValue.value.unitNav)
+  }
+  const event = editingEvent.value
+  return event?.kind === 'sell' && event.grossAmount.value !== null
+    ? formatYuan(event.grossAmount.value / 100)
+    : '--'
+})
+const netAmountText = computed(() => {
+  if (mode.value !== 'sell' || grossAmountText.value === '--') return '--'
+  const fee = parseMoneyYuan(actualRedemptionFeeYuan.value)
+  if (fee === null) {
+    const event = editingEvent.value
+    return event?.kind === 'sell' && event.netAmount.value !== null
+      ? formatYuan(event.netAmount.value / 100)
+      : '--'
+  }
+  const gross = Number(grossAmountText.value.replace('¥', ''))
+  return Number.isFinite(gross) ? `¥${Math.max(0, gross - fee).toFixed(2)}` : '--'
+})
+
 function open(code: string, name: string): void {
-  mode.value = 'buy'
-  openGeneration += 1
-  const generation = openGeneration
-  fundCode.value = code
-  fundName.value = name
-  confirmedDate.value = defaultTransactionDate()
-  totalAmountYuan.value = ''
-  purchaseFeePercent.value = ''
-  purchaseFeePercentSource.value = 'fund-basic-info'
-  actualUnits.value = ''
-  actualPurchaseFeeYuan.value = ''
-  actualUnitNav.value = ''
-  sellUnits.value = ''
-  actualNetAmountYuan.value = ''
-  actualRedemptionFeeYuan.value = ''
-  purchaseConfirmationDays.value = null
-  redemptionConfirmationDays.value = null
-  errors.value = {}
-  visible.value = true
-  void loadPurchaseFee(code, generation)
+  openNewTransaction('buy', code, name)
 }
 
 function openSell(code: string, name: string): void {
-  mode.value = 'sell'
+  openNewTransaction('sell', code, name)
+}
+
+function openEdit(event: TransactionEvent, name: string): void {
   openGeneration += 1
-  const generation = openGeneration
-  fundCode.value = code
+  mode.value = event.kind
+  entryMode.value = event.entryMode
+  fundCode.value = event.fundCode
   fundName.value = name
-  confirmedDate.value = defaultTransactionDate()
-  sellUnits.value = ''
-  actualUnitNav.value = ''
-  actualNetAmountYuan.value = ''
-  actualRedemptionFeeYuan.value = ''
+  editingEvent.value = event
+  submittedAt.value = event.submittedAt
+  confirmedDate.value = event.confirmedDate ?? ''
+  totalAmountYuan.value = event.kind === 'buy' ? formatCents(event.totalAmount.value) : ''
+  requestedUnits.value = event.kind === 'sell' ? formatUnits(event.requestedUnits.value) : ''
+  actualUnits.value = formatUnits(event.units.value)
+  actualPurchaseFeeYuan.value =
+    event.kind === 'buy' ? formatOptionalCents(event.purchaseFee.value) : ''
+  actualRedemptionFeeYuan.value =
+    event.kind === 'sell' ? formatOptionalCents(event.redemptionFee.value) : ''
+  purchaseFeePercent.value = event.kind === 'buy' ? event.purchaseFeeRate.value : null
+  purchaseFeePercentSource.value =
+    event.kind === 'buy' && event.purchaseFeeRate.source === 'manual' ? 'manual' : 'fund-basic-info'
   purchaseConfirmationDays.value = null
   redemptionConfirmationDays.value = null
+  basicInfoLoading.value = false
+  basicInfoError.value = ''
   errors.value = {}
+  setInitialNav(event)
   visible.value = true
-  void loadPurchaseFee(code, generation)
+  const generation = openGeneration
+  void loadBasicInfo(event.fundCode, generation)
+  void requestExactNav()
 }
 
 function close(): void {
   visible.value = false
+  openGeneration += 1
+  navRequestGeneration += 1
 }
 
-async function loadPurchaseFee(code: string, generation: number): Promise<void> {
+async function loadBasicInfo(code: string, generation: number): Promise<void> {
+  basicInfoLoading.value = true
+  basicInfoError.value = ''
   try {
     const basicInfo = await fetchTiantianFundBasicInfo(code)
-    if (generation === openGeneration) {
-      purchaseConfirmationDays.value = basicInfo.purchaseConfirmationDays
-      redemptionConfirmationDays.value = basicInfo.redemptionConfirmationDays
-      if (basicInfo.purchaseFeePercent !== null) {
-        purchaseFeePercent.value = String(basicInfo.purchaseFeePercent)
-        purchaseFeePercentSource.value = 'fund-basic-info'
-      }
+    if (generation !== openGeneration) return
+    purchaseConfirmationDays.value = basicInfo.purchaseConfirmationDays
+    redemptionConfirmationDays.value = basicInfo.redemptionConfirmationDays
+    if (editingEvent.value === undefined && basicInfo.purchaseFeePercent !== null) {
+      purchaseFeePercent.value = basicInfo.purchaseFeePercent
+      purchaseFeePercentSource.value = 'fund-basic-info'
     }
   } catch {
-    // The fee rate stays blank and the draft remains explicitly pending.
+    if (generation === openGeneration) {
+      basicInfoError.value = '基金基础资料加载失败，预计确认日暂不可用；仍可保存交易。'
+    }
+  } finally {
+    if (generation === openGeneration) basicInfoLoading.value = false
   }
+}
+
+async function requestExactNav(shouldPersist = false): Promise<void> {
+  const generation = ++navRequestGeneration
+  const code = fundCode.value
+  const date = navDate.value
+  const eventId = editingEvent.value?.id
+  const requestSubmittedAt = submittedAt.value
+  if (!code || !date) {
+    resetNavState()
+    return
+  }
+
+  navStatus.value = 'loading'
+  navError.value = ''
+  try {
+    const value = await lookupExactUnitNav(code, date)
+    if (generation !== navRequestGeneration) return
+    if (value === null) {
+      navValue.value = null
+      navStatus.value = 'missing'
+      return
+    }
+    navValue.value = value
+    navStatus.value = 'ready'
+    if (shouldPersist && eventId !== undefined) {
+      persistExactNav(eventId, requestSubmittedAt, date, value)
+    }
+  } catch {
+    if (generation === navRequestGeneration) {
+      navStatus.value = 'error'
+      navError.value = '历史净值查询失败，请检查网络后重试。'
+    }
+  }
+}
+
+function persistExactNav(
+  eventId: string,
+  requestSubmittedAt: string,
+  requestNavDate: string,
+  value: FundValue,
+): void {
+  const event = props.portfolio.getPortfolio().events.find(({ id }) => id === eventId)
+  if (
+    event === undefined ||
+    (event.kind !== 'buy' && event.kind !== 'sell') ||
+    event.submittedAt !== requestSubmittedAt ||
+    event.navDate !== requestNavDate
+  ) {
+    return
+  }
+  const now = new Date().toISOString()
+  const result =
+    event.kind === 'buy'
+      ? completeBuyEventWithExactNav(props.portfolio, event, value, now)
+      : completeSellEventWithExactNav(props.portfolio, event, value, now)
+  if (result.ok) emit('saved')
+}
+
+function retryNav(): void {
+  void requestExactNav(true)
+}
+
+function updateSubmittedAt(value: string): void {
+  submittedAt.value = value
+  resetNavState()
+  void requestExactNav()
+}
+
+function updateEntryMode(value: PortfolioTransactionEntryMode): void {
+  if (value === 'pending' || value === 'historical') entryMode.value = value
 }
 
 function saveBuy(): void {
   const now = new Date().toISOString()
-  const draft = createBuyDraft(
+  const existing = editingEvent.value?.kind === 'buy' ? editingEvent.value : undefined
+  const result = createBuyDraft(
     {
       actualPurchaseFeeYuan: actualPurchaseFeeYuan.value || undefined,
       actualUnits: actualUnits.value || undefined,
-      confirmedDate: actualUnits.value.trim() ? confirmedDate.value : undefined,
-      entryMode: 'pending',
+      confirmedDate: confirmedDate.value || undefined,
+      entryMode: entryMode.value,
       fundCode: fundCode.value,
-      id: createEventId(fundCode.value),
-      purchaseFeePercent:
-        purchaseFeePercent.value.trim() === '' ? null : Number(purchaseFeePercent.value),
+      id: existing?.id ?? createEventId(fundCode.value),
+      purchaseFeePercent: purchaseFeePercent.value,
       purchaseFeePercentSource: purchaseFeePercentSource.value,
-      submittedAt: `${confirmedDate.value} 00:00`,
+      submittedAt: submittedAt.value,
       totalAmountYuan: totalAmountYuan.value,
     },
     { confirmationDays: purchaseConfirmationDays.value, now },
   )
-  if (!draft.ok) {
-    errors.value = draft.errors
+  if (!result.ok) {
+    errors.value = result.errors
     return
   }
 
-  const result = saveBuyDraft(props.portfolio, draft.draft)
-  if (!result.ok) {
+  const draft = preserveBuyFacts(result.draft, existing)
+  const saveResult = existing
+    ? updateBuyDraft(props.portfolio, draft)
+    : saveBuyDraft(props.portfolio, draft)
+  if (!saveResult.ok) {
     errors.value = { form: '保存失败，原有账本和当前草稿均未改变' }
     return
   }
-  errors.value = {}
-  visible.value = false
-  emit('saved')
-  if (draft.draft.unitNav.value === null) void completePendingBuy(draft.draft)
+  completeSave(findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft)
 }
 
 function saveSell(): void {
   const now = new Date().toISOString()
-  const draft = createSellDraft(
+  const existing = editingEvent.value?.kind === 'sell' ? editingEvent.value : undefined
+  const result = createSellDraft(
     {
-      actualNetAmountYuan: actualNetAmountYuan.value || undefined,
       actualRedemptionFeeYuan: actualRedemptionFeeYuan.value || undefined,
-      confirmedDate: undefined,
-      entryMode: 'pending',
+      actualUnits: actualUnits.value || undefined,
+      confirmedDate: confirmedDate.value || undefined,
+      entryMode: entryMode.value,
       fundCode: fundCode.value,
-      id: createEventId(fundCode.value, 'sell'),
-      requestedUnits: sellUnits.value,
-      submittedAt: `${confirmedDate.value} 00:00`,
+      id: existing?.id ?? createEventId(fundCode.value, 'sell'),
+      requestedUnits: requestedUnits.value,
+      submittedAt: submittedAt.value,
     },
     { confirmationDays: redemptionConfirmationDays.value, now },
   )
-  if (!draft.ok) {
-    errors.value = draft.errors
+  if (!result.ok) {
+    errors.value = result.errors
     return
   }
 
-  const result = saveSellDraft(props.portfolio, draft.draft)
-  if (!result.ok) {
+  const draft = preserveSellFacts(result.draft, existing)
+  const saveResult = existing
+    ? updateSellDraft(props.portfolio, draft)
+    : saveSellDraft(props.portfolio, draft)
+  if (!saveResult.ok) {
     errors.value = { form: '保存失败，原有账本和当前草稿均未改变' }
     return
   }
-  errors.value = {}
-  visible.value = false
-  emit('saved')
+  completeSave(findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft)
 }
 
 async function saveCurrentTransaction(): Promise<void> {
-  if (transactionForm.value === undefined || !(await transactionForm.value.validate())) return
-  if (mode.value === 'buy') saveBuy()
-  else saveSell()
-}
-
-function updatePurchaseFeePercent(value: string): void {
-  purchaseFeePercent.value = value
-  purchaseFeePercentSource.value = 'manual'
-}
-
-async function completePendingBuy(event: Parameters<typeof completeBuyEventWithExactNav>[1]) {
+  if (isSaving.value || transactionForm.value === undefined) return
+  if (!(await transactionForm.value.validate())) return
+  isSaving.value = true
   try {
-    const value = await lookupExactUnitNav(event.fundCode, event.navDate)
-    if (value) {
-      const now = new Date().toISOString()
-      completeBuyEventWithExactNav(props.portfolio, event, value, now)
-    }
-  } catch {
-    // Network and cancellation failures leave the saved event pending.
+    if (mode.value === 'buy') saveBuy()
+    else saveSell()
+  } finally {
+    isSaving.value = false
   }
+}
+
+function completeSave(event: TransactionEvent): void {
+  editingEvent.value = event
+  errors.value = {}
+  visible.value = false
+  openGeneration += 1
+  navRequestGeneration += 1
+  emit('saved')
+  if (event.unitNav.value === null) void requestExactNav(true)
+}
+
+function findTransactionEvent(
+  events: readonly PortfolioEvent[],
+  id: string,
+): TransactionEvent | undefined {
+  const event = events.find((candidate) => candidate.id === id)
+  return event?.kind === 'buy' || event?.kind === 'sell' ? event : undefined
+}
+
+function preserveBuyFacts(
+  draft: PortfolioBuyEvent,
+  existing: PortfolioBuyEvent | undefined,
+): PortfolioBuyEvent {
+  const unitNav = resolveUnitNav(draft.navDate, existing)
+  return {
+    ...draft,
+    ...(existing === undefined ? {} : { createdAt: existing.createdAt, id: existing.id }),
+    ...(unitNav === undefined ? {} : { unitNav }),
+  }
+}
+
+function preserveSellFacts(
+  draft: PortfolioSellEvent,
+  existing: PortfolioSellEvent | undefined,
+): PortfolioSellEvent {
+  const unitNav = resolveUnitNav(draft.navDate, existing)
+  const preserveAmounts =
+    existing?.navDate === draft.navDate &&
+    existing.units.value === draft.units.value &&
+    existing.redemptionFee.value === draft.redemptionFee.value &&
+    unitNav !== undefined
+  return {
+    ...draft,
+    ...(existing === undefined ? {} : { createdAt: existing.createdAt, id: existing.id }),
+    ...(preserveAmounts
+      ? { grossAmount: existing.grossAmount, netAmount: existing.netAmount }
+      : {}),
+    ...(unitNav === undefined ? {} : { unitNav }),
+  }
+}
+
+function resolveUnitNav(
+  date: string,
+  existing: TransactionEvent | undefined,
+): TransactionEvent['unitNav'] | undefined {
+  if (navValue.value?.date === date) {
+    return { confidence: 'actual', source: navValue.value.source, value: navValue.value.unitNav }
+  }
+  if (existing?.navDate === date) return existing.unitNav
+  return undefined
+}
+
+function setInitialNav(event: TransactionEvent): void {
+  navError.value = ''
+  if (
+    event.unitNav.value === null ||
+    event.unitNav.confidence !== 'actual' ||
+    event.unitNav.source !== 'nav-history'
+  ) {
+    resetNavState()
+    return
+  }
+  navValue.value = { date: event.navDate, source: 'nav-history', unitNav: event.unitNav.value }
+  navStatus.value = 'ready'
+}
+
+function resetNavState(): void {
+  navValue.value = null
+  navStatus.value = 'idle'
+  navError.value = ''
+}
+
+function openNewTransaction(nextMode: TransactionMode, code: string, name: string): void {
+  openGeneration += 1
+  mode.value = nextMode
+  entryMode.value = 'pending'
+  fundCode.value = code
+  fundName.value = name
+  editingEvent.value = undefined
+  submittedAt.value = getShanghaiMinute()
+  confirmedDate.value = ''
+  totalAmountYuan.value = ''
+  requestedUnits.value = ''
+  actualUnits.value = ''
+  actualPurchaseFeeYuan.value = ''
+  actualRedemptionFeeYuan.value = ''
+  purchaseFeePercent.value = null
+  purchaseFeePercentSource.value = 'fund-basic-info'
+  purchaseConfirmationDays.value = null
+  redemptionConfirmationDays.value = null
+  basicInfoError.value = ''
+  errors.value = {}
+  resetNavState()
+  visible.value = true
+  const generation = openGeneration
+  void loadBasicInfo(code, generation)
+  void requestExactNav()
 }
 
 function createEventId(code: string, kind: 'buy' | 'sell' = 'buy'): string {
   return `${kind}:${code}:${globalThis.crypto.randomUUID()}`
 }
 
-function shanghaiDate(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-  }).formatToParts(now)
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
-  return `${values.year}-${values.month}-${values.day}`
+function formatCents(value: number | null): string {
+  return value === null ? '' : (value / 100).toFixed(2)
 }
 
-function defaultTransactionDate(now = new Date()): string {
-  let value = shanghaiDate(now)
-  while (isWeekend(value)) {
-    const date = new Date(`${value}T00:00:00.000Z`)
-    date.setUTCDate(date.getUTCDate() - 1)
-    value = date.toISOString().slice(0, 10)
-  }
-  return value
+function formatOptionalCents(value: number | null): string {
+  return value === null ? '' : (value / 100).toFixed(2)
 }
 
-function isWeekend(value: string): boolean {
-  const day = new Date(`${value}T00:00:00.000Z`).getUTCDay()
-  return day === 0 || day === 6
+function formatUnits(value: number | null): string {
+  return value === null ? '' : value.toFixed(4)
 }
 
-defineExpose({ open, openBuy: open, openSell })
+function formatYuan(value: number): string {
+  return `¥${value.toFixed(2)}`
+}
+
+function parseMoneyYuan(value: string): number | null {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+defineExpose({ open, openBuy: open, openEdit, openSell })
 </script>
 
 <template>
@@ -233,44 +521,78 @@ defineExpose({ open, openBuy: open, openSell })
       v-if="mode === 'buy'"
       ref="transactionForm"
       :actual-purchase-fee-yuan="actualPurchaseFeeYuan"
-      :actual-unit-nav="actualUnitNav"
       :actual-units="actualUnits"
+      :basic-info-error="basicInfoError"
+      :basic-info-loading="basicInfoLoading"
       :confirmed-date="confirmedDate"
+      :entry-mode="entryMode"
       :errors="errors"
+      :expected-confirmation-date="expectedConfirmationDate"
       :fund-code="fundCode"
       :fund-name="fundName"
-      :purchase-fee-percent="purchaseFeePercent"
+      :nav-date="navDate"
+      :nav-error="navError"
+      :nav-loading="navStatus === 'loading'"
+      :nav-source-text="navSourceText"
+      :nav-status="navStatus"
+      :nav-status-text="navStatusText"
+      :status-text="transactionStatus"
+      :status-theme="transactionStatusTheme"
+      :submitted-at="submittedAt"
       :total-amount-yuan="totalAmountYuan"
+      :unit-nav-text="unitNavText"
+      :warnings="warnings"
+      @retry-nav="retryNav"
       @save="saveBuy"
       @update-actual-purchase-fee-yuan="actualPurchaseFeeYuan = $event"
-      @update-actual-unit-nav="actualUnitNav = $event"
       @update-actual-units="actualUnits = $event"
       @update-confirmed-date="confirmedDate = $event"
-      @update-purchase-fee-percent="updatePurchaseFeePercent($event)"
+      @update-entry-mode="updateEntryMode"
+      @update-submitted-at="updateSubmittedAt"
       @update-total-amount-yuan="totalAmountYuan = $event"
     />
     <FundSellForm
       v-else
       ref="transactionForm"
-      :actual-net-amount-yuan="actualNetAmountYuan"
       :actual-redemption-fee-yuan="actualRedemptionFeeYuan"
-      :actual-unit-nav="actualUnitNav"
+      :actual-units="actualUnits"
+      :basic-info-error="basicInfoError"
+      :basic-info-loading="basicInfoLoading"
       :confirmed-date="confirmedDate"
+      :entry-mode="entryMode"
       :errors="errors"
+      :expected-confirmation-date="expectedConfirmationDate"
       :fund-code="fundCode"
       :fund-name="fundName"
-      :units="sellUnits"
+      :gross-amount-text="grossAmountText"
+      :nav-date="navDate"
+      :nav-error="navError"
+      :nav-loading="navStatus === 'loading'"
+      :nav-source-text="navSourceText"
+      :nav-status="navStatus"
+      :nav-status-text="navStatusText"
+      :net-amount-text="netAmountText"
+      :requested-units="requestedUnits"
+      :status-text="transactionStatus"
+      :status-theme="transactionStatusTheme"
+      :submitted-at="submittedAt"
+      :unit-nav-text="unitNavText"
+      :warnings="warnings"
+      @retry-nav="retryNav"
       @save="saveSell"
-      @update-actual-net-amount-yuan="actualNetAmountYuan = $event"
       @update-actual-redemption-fee-yuan="actualRedemptionFeeYuan = $event"
-      @update-actual-unit-nav="actualUnitNav = $event"
+      @update-actual-units="actualUnits = $event"
       @update-confirmed-date="confirmedDate = $event"
-      @update-units="sellUnits = $event"
+      @update-entry-mode="updateEntryMode"
+      @update-requested-units="requestedUnits = $event"
+      @update-submitted-at="updateSubmittedAt"
     />
     <template #footer>
       <div class="flex justify-end gap-2">
         <t-button type="button" variant="outline" @click="close">取消</t-button>
-        <t-button type="button" theme="primary" @click="saveCurrentTransaction">确认</t-button>
+        <t-button type="button" theme="primary" :loading="isSaving" @click="saveCurrentTransaction">
+          保存
+        </t-button>
       </div>
     </template>
   </t-dialog>
@@ -304,45 +626,79 @@ defineExpose({ open, openBuy: open, openSell })
         v-if="mode === 'buy'"
         ref="transactionForm"
         :actual-purchase-fee-yuan="actualPurchaseFeeYuan"
-        :actual-unit-nav="actualUnitNav"
         :actual-units="actualUnits"
+        :basic-info-error="basicInfoError"
+        :basic-info-loading="basicInfoLoading"
         :confirmed-date="confirmedDate"
+        :entry-mode="entryMode"
         :errors="errors"
+        :expected-confirmation-date="expectedConfirmationDate"
         :fund-code="fundCode"
         :fund-name="fundName"
-        :purchase-fee-percent="purchaseFeePercent"
+        :nav-date="navDate"
+        :nav-error="navError"
+        :nav-loading="navStatus === 'loading'"
+        :nav-source-text="navSourceText"
+        :nav-status="navStatus"
+        :nav-status-text="navStatusText"
+        :status-text="transactionStatus"
+        :status-theme="transactionStatusTheme"
+        :submitted-at="submittedAt"
         :total-amount-yuan="totalAmountYuan"
+        :unit-nav-text="unitNavText"
+        :warnings="warnings"
+        @retry-nav="retryNav"
         @save="saveBuy"
         @update-actual-purchase-fee-yuan="actualPurchaseFeeYuan = $event"
-        @update-actual-unit-nav="actualUnitNav = $event"
         @update-actual-units="actualUnits = $event"
         @update-confirmed-date="confirmedDate = $event"
-        @update-purchase-fee-percent="updatePurchaseFeePercent($event)"
+        @update-entry-mode="updateEntryMode"
+        @update-submitted-at="updateSubmittedAt"
         @update-total-amount-yuan="totalAmountYuan = $event"
       />
       <FundSellForm
         v-else
         ref="transactionForm"
-        :actual-net-amount-yuan="actualNetAmountYuan"
         :actual-redemption-fee-yuan="actualRedemptionFeeYuan"
-        :actual-unit-nav="actualUnitNav"
+        :actual-units="actualUnits"
+        :basic-info-error="basicInfoError"
+        :basic-info-loading="basicInfoLoading"
         :confirmed-date="confirmedDate"
+        :entry-mode="entryMode"
         :errors="errors"
+        :expected-confirmation-date="expectedConfirmationDate"
         :fund-code="fundCode"
         :fund-name="fundName"
-        :units="sellUnits"
+        :gross-amount-text="grossAmountText"
+        :nav-date="navDate"
+        :nav-error="navError"
+        :nav-loading="navStatus === 'loading'"
+        :nav-source-text="navSourceText"
+        :nav-status="navStatus"
+        :nav-status-text="navStatusText"
+        :net-amount-text="netAmountText"
+        :requested-units="requestedUnits"
+        :status-text="transactionStatus"
+        :status-theme="transactionStatusTheme"
+        :submitted-at="submittedAt"
+        :unit-nav-text="unitNavText"
+        :warnings="warnings"
+        @retry-nav="retryNav"
         @save="saveSell"
-        @update-actual-net-amount-yuan="actualNetAmountYuan = $event"
         @update-actual-redemption-fee-yuan="actualRedemptionFeeYuan = $event"
-        @update-actual-unit-nav="actualUnitNav = $event"
+        @update-actual-units="actualUnits = $event"
         @update-confirmed-date="confirmedDate = $event"
-        @update-units="sellUnits = $event"
+        @update-entry-mode="updateEntryMode"
+        @update-requested-units="requestedUnits = $event"
+        @update-submitted-at="updateSubmittedAt"
       />
     </div>
     <template #footer>
       <div class="flex justify-end gap-2 pb-[env(safe-area-inset-bottom)]">
         <t-button type="button" variant="outline" @click="close">取消</t-button>
-        <t-button type="button" theme="primary" @click="saveCurrentTransaction">确认</t-button>
+        <t-button type="button" theme="primary" :loading="isSaving" @click="saveCurrentTransaction">
+          保存
+        </t-button>
       </div>
     </template>
   </t-drawer>

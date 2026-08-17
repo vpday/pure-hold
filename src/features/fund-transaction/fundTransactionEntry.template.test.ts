@@ -22,7 +22,8 @@ test('provides desktop dialog and mobile drawer entry surfaces', () => {
   assert.match(entrySource, /<t-drawer[\s\S]*v-else/)
   assert.match(entrySource, /calc\(100vw - 32px\)/)
   assert.match(formSource, /含费总额/)
-  assert.match(formSource, /实际份额/)
+  assert.match(formSource, /实际确认日期/)
+  assert.match(formSource, /确认份额/)
   assert.match(formSource, /<t-tag[\s\S]*只记录本地买入信息，不会提交真实交易。[\s\S]*<section/)
   assert.match(sellFormSource, /<t-tag[\s\S]*只记录本地卖出信息，不会提交真实交易。[\s\S]*<section/)
 })
@@ -40,29 +41,39 @@ test('keeps one shared confirmation footer for each transaction surface', () => 
 test('uses TDesign controls while preserving the transaction value contract', () => {
   for (const source of [formSource, sellFormSource]) {
     assert.match(source, /<t-date-picker/)
-    assert.match(source, /format="YYYY-MM-DD"/)
-    assert.match(source, /value-type="YYYY-MM-DD"/)
+    assert.match(source, /enable-time-picker/)
+    assert.match(source, /format="YYYY-MM-DD HH:mm"/)
+    assert.match(source, /value-type="YYYY-MM-DD HH:mm"/)
+    assert.match(source, /<t-tabs/)
+    assert.match(source, /待确认/)
+    assert.match(source, /历史补录/)
+    assert.match(source, /<t-descriptions/)
+    assert.match(source, /<t-alert/)
     assert.match(source, /<t-input-number/)
     assert.match(source, /<t-form-item/)
     assert.match(source, /label-align="top"/)
-    assert.match(source, /disableTransactionDate/)
-    assert.match(source, /formatLocalDate\(date\)/)
-    assert.match(source, /<section[\s\S]*(净值与费用|到账与费用)/)
-    assert.match(source, /可选填写平台返回的实际值/)
     assert.doesNotMatch(source, /<input\b|<details\b|<summary\b/)
     assert.match(source, /toDraftValue\(\$event\)/)
+    assert.doesNotMatch(source, /actualUnitNav|actualNetAmountYuan|purchaseFeePercent/)
   }
 })
 
-test('routes only the buy action into the transaction feature', () => {
+test('routes buy and sell actions into the transaction feature', () => {
   assert.match(actionsSource, /emit\('buy', props\.code\)/)
-  assert.match(entrySource, /saveBuyDraft\(props\.portfolio, draft\.draft\)/)
+  assert.match(actionsSource, /emit\('sell', props\.code\)/)
+  assert.match(entrySource, /saveBuyDraft\(props\.portfolio, draft\)/)
+  assert.match(entrySource, /saveSellDraft\(props\.portfolio, draft\)/)
   assert.match(entrySource, /emit\('saved'\)/)
 })
 
-test('shows pending, estimated and actual-facing transaction fields in details', () => {
+test('shows transaction provenance and edit/delete operations in details', () => {
   assert.match(drawerSource, /transactions\.length/)
+  assert.match(drawerSource, /transaction\.submittedAtText/)
+  assert.match(drawerSource, /transaction\.navDateText/)
   assert.match(drawerSource, /transaction\.units\.sourceText/)
   assert.match(drawerSource, /transaction\.unitNav\.sourceText/)
   assert.match(drawerSource, /transaction\.statusText/)
+  assert.match(drawerSource, /<t-popconfirm/)
+  assert.match(drawerSource, /emit\('editTransaction', transaction\.id\)/)
+  assert.match(drawerSource, /emit\('deleteTransaction', transaction\.id\)/)
 })

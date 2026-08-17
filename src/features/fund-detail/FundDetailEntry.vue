@@ -35,9 +35,14 @@ import type { BuyTransactionViewModel } from '@/features/fund-transaction/presen
 const props = defineProps<{
   enableLedger: (fundCode: string) => boolean
   portfolio: PortfolioStore
+  portfolioRevision: number
 }>()
 const emit = defineEmits<{
+  deleteTransaction: [eventId: string]
   edit: [code: string]
+  editTransaction: [eventId: string]
+  recordBuy: [code: string]
+  recordSell: [code: string]
 }>()
 type FundTransactionViewModel =
   | (BuyTransactionViewModel & { readonly kind: 'buy' })
@@ -79,9 +84,10 @@ const viewModel = computed(() => {
 })
 const calculation = computed(() => {
   const code = detail.currentCode.value
-  return code
-    ? props.portfolio.calculate({ asOfDate: shanghaiDate(), currentNavByFund: {} })
-    : undefined
+  if (!code) return undefined
+  // PortfolioStore is deliberately not reactive; this token invalidates the derived calculation.
+  void props.portfolioRevision
+  return props.portfolio.calculate({ asOfDate: shanghaiDate(), currentNavByFund: {} })
 })
 const transactions = computed<readonly FundTransactionViewModel[]>(() => {
   const code = detail.currentCode.value
@@ -94,9 +100,10 @@ const transactions = computed<readonly FundTransactionViewModel[]>(() => {
         event.fundCode === code && (event.kind === 'buy' || event.kind === 'sell'),
     )
     .sort((left, right) => {
-      const leftDate = left.confirmedDate ?? left.navDate
-      const rightDate = right.confirmedDate ?? right.navDate
-      return leftDate.localeCompare(rightDate)
+      const leftPending = left.settlementStatus === 'pending-settlement'
+      const rightPending = right.settlementStatus === 'pending-settlement'
+      if (leftPending !== rightPending) return leftPending ? -1 : 1
+      return right.submittedAt.localeCompare(left.submittedAt) || right.id.localeCompare(left.id)
     })
     .map((event) => {
       if (event.kind === 'buy') {
@@ -210,6 +217,34 @@ async function edit(code: string): Promise<void> {
   emit('edit', code)
 }
 
+async function editTransaction(eventId: string): Promise<void> {
+  close()
+  await nextTick()
+  emit('editTransaction', eventId)
+}
+
+async function deleteTransaction(eventId: string): Promise<void> {
+  close()
+  await nextTick()
+  emit('deleteTransaction', eventId)
+}
+
+async function recordBuy(): Promise<void> {
+  const code = detail.currentCode.value
+  if (!code || !ledgerEnabled.value) return
+  close()
+  await nextTick()
+  emit('recordBuy', code)
+}
+
+async function recordSell(): Promise<void> {
+  const code = detail.currentCode.value
+  if (!code || !ledgerEnabled.value) return
+  close()
+  await nextTick()
+  emit('recordSell', code)
+}
+
 defineExpose({ open })
 </script>
 
@@ -227,8 +262,12 @@ defineExpose({ open })
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"
+    @delete-transaction="deleteTransaction"
     @enable-ledger="handleEnableLedger"
     @edit="edit"
+    @edit-transaction="editTransaction"
+    @record-buy="recordBuy"
+    @record-sell="recordSell"
     @retry="detail.retry"
     @select-section="activeSection = $event"
   >

@@ -9,6 +9,7 @@ import {
 } from '@/app/portfolio/portfolioCoordinator.ts'
 import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
+import type { PortfolioBuyEvent, PortfolioSellEvent } from '@/domains/portfolio/models/index.ts'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
 import FundDetailEntry from '@/features/fund-detail/FundDetailEntry.vue'
@@ -41,8 +42,10 @@ const fundEdit = ref<{ open: (code: string) => void }>()
 const fundDetail = ref<{ open: (code: string) => void }>()
 const fundTransaction = ref<{
   open: (code: string, name: string) => void
+  openEdit: (event: TransactionEvent, name: string) => void
   openSell: (code: string, name: string) => void
 }>()
+const portfolioRevision = ref(0)
 const deletionPreview = ref<FundDeletionPreview>()
 const deletionVisible = ref(false)
 const deletionError = ref('')
@@ -169,6 +172,37 @@ function openSell(code: string): void {
   const row = model.value.rows.find((candidate) => candidate.code === code)
   if (row) fundTransaction.value?.openSell(code, row.name)
 }
+
+type TransactionEvent = PortfolioBuyEvent | PortfolioSellEvent
+
+function findTransaction(eventId: string): TransactionEvent | undefined {
+  const event = props.portfolio.getPortfolio().events.find(({ id }) => id === eventId)
+  return event?.kind === 'buy' || event?.kind === 'sell' ? event : undefined
+}
+
+function handleTransactionSaved(): void {
+  portfolioRevision.value += 1
+}
+
+function editTransaction(eventId: string): void {
+  const event = findTransaction(eventId)
+  if (event === undefined) {
+    MessagePlugin.error('交易记录不存在，无法编辑')
+    return
+  }
+  const row = model.value.rows.find((candidate) => candidate.code === event.fundCode)
+  fundTransaction.value?.openEdit(event, row?.name ?? event.fundCode)
+}
+
+function deleteTransaction(eventId: string): void {
+  const result = props.portfolio.deleteEvent(eventId)
+  if (!result.ok) {
+    MessagePlugin.error('交易记录删除失败，账本未改变')
+    return
+  }
+  portfolioRevision.value += 1
+  MessagePlugin.success('交易记录已删除')
+}
 </script>
 
 <template>
@@ -271,10 +305,19 @@ function openSell(code: string): void {
       ref="fundDetail"
       :enable-ledger="enableLedger"
       :portfolio="props.portfolio"
+      :portfolio-revision="portfolioRevision"
+      @delete-transaction="deleteTransaction"
       @edit="fundEdit?.open($event)"
+      @edit-transaction="editTransaction"
+      @record-buy="openBuy"
+      @record-sell="openSell"
     />
     <FundEditEntry ref="fundEdit" />
-    <FundTransactionEntry ref="fundTransaction" :portfolio="props.portfolio" />
+    <FundTransactionEntry
+      ref="fundTransaction"
+      :portfolio="props.portfolio"
+      @saved="handleTransactionSaved"
+    />
 
     <t-dialog
       v-if="deletionPreview"
