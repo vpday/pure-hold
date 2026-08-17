@@ -50,9 +50,12 @@ test('keeps one shared confirmation footer for each transaction surface', () => 
 test('uses TDesign controls while preserving the transaction value contract', () => {
   for (const source of [formSource, sellFormSource]) {
     assert.match(source, /<t-date-picker/)
-    assert.match(source, /enable-time-picker/)
-    assert.match(source, /format="YYYY-MM-DD HH:mm"/)
-    assert.match(source, /value-type="YYYY-MM-DD HH:mm"/)
+    assert.doesNotMatch(source, /enable-time-picker/)
+    assert.match(source, /format="YYYY-MM-DD"/)
+    assert.match(source, /value-type="YYYY-MM-DD"/)
+    assert.match(source, /<t-radio-group/)
+    assert.match(source, /15:00 前/)
+    assert.match(source, /15:00 后/)
     assert.match(source, /<t-tabs/)
     assert.match(source, /待确认/)
     assert.match(source, /历史补录/)
@@ -62,8 +65,19 @@ test('uses TDesign controls while preserving the transaction value contract', ()
     assert.match(source, /<t-form-item/)
     assert.match(source, /label-align="top"/)
     assert.doesNotMatch(source, /<input\b|<details\b|<summary\b/)
-    assert.match(source, /toDraftValue\(\$event\)/)
+    assert.match(source, /@change="updateSubmissionDate"/)
+    assert.match(source, /@change="updateTransactionSession"/)
     assert.doesNotMatch(source, /actualUnitNav|actualNetAmountYuan|purchaseFeePercent/)
+  }
+})
+
+test('does not warn when the submission date is today', () => {
+  for (const source of [formSource, sellFormSource]) {
+    assert.match(
+      source,
+      /const showMissingNavWarning = computed\([\s\S]*props\.navStatus === 'missing'[\s\S]*submissionDate\.value !== getShanghaiDate\(\)/,
+    )
+    assert.match(source, /<div v-if="navError \|\| showMissingNavWarning"/)
   }
 })
 

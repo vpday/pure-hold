@@ -9,6 +9,7 @@ import {
 
 type EntryMode = 'pending' | 'historical'
 type NavStatus = 'idle' | 'loading' | 'ready' | 'missing' | 'error'
+type TransactionSession = 'before-15' | 'after-15'
 
 interface FormInstance {
   validate: (params?: { readonly showErrorMessage?: boolean }) => Promise<unknown>
@@ -55,14 +56,26 @@ const emit = defineEmits<{
   updateSubmittedAt: [value: string]
 }>()
 
+const submissionDate = computed(() => props.submittedAt.slice(0, 10))
+const transactionSession = computed<TransactionSession | ''>(() => {
+  const time = props.submittedAt.slice(11)
+  if (!/^\d{2}:\d{2}$/.test(time)) return ''
+  const [hour, minute] = time.split(':').map(Number)
+  if (hour > 23 || minute > 59) return ''
+  return time < '15:00' ? 'before-15' : 'after-15'
+})
+const showMissingNavWarning = computed(
+  () => props.navStatus === 'missing' && submissionDate.value !== getShanghaiDate(),
+)
 const formRef = ref<FormInstance>()
 const formData = computed(() => ({
   actualRedemptionFeeYuan: props.actualRedemptionFeeYuan,
   actualUnits: props.actualUnits,
   confirmedDate: props.confirmedDate,
   entryMode: props.entryMode,
+  submissionDate: submissionDate.value,
+  transactionSession: transactionSession.value,
   requestedUnits: props.requestedUnits,
-  submittedAt: props.submittedAt,
 }))
 const rules = computed(() => ({
   actualRedemptionFeeYuan: [
@@ -94,11 +107,18 @@ const rules = computed(() => ({
       validator: (value: unknown) => isPositiveDecimal(value, 4),
     },
   ],
-  submittedAt: [
+  submissionDate: [
     {
-      message: '提交时间必须是上海时区分钟值，且不能晚于当前时间',
+      message: '请选择不晚于今天的提交日期',
       required: true,
-      validator: (value: unknown) => isValidSubmissionMinute(value),
+      validator: (value: unknown) => isValidSubmissionDate(value),
+    },
+  ],
+  transactionSession: [
+    {
+      message: '请选择有效的交易时段，且提交时间不能晚于当前时间',
+      required: true,
+      validator: (value: unknown) => isValidTransactionSession(value),
     },
   ],
 }))
@@ -128,6 +148,33 @@ function isValidSubmissionMinute(value: unknown): boolean {
   return value <= getShanghaiMinute() && isValidDate(value.slice(0, 10))
 }
 
+function isValidSubmissionDate(value: unknown): boolean {
+  return typeof value === 'string' && isValidDate(value) && value <= getShanghaiDate()
+}
+
+function isTransactionSession(value: unknown): value is TransactionSession {
+  return value === 'before-15' || value === 'after-15'
+}
+
+function isValidTransactionSession(value: unknown): boolean {
+  return (
+    isTransactionSession(value) &&
+    isValidSubmissionDate(submissionDate.value) &&
+    isValidSubmissionMinute(buildSubmittedAt(submissionDate.value, value))
+  )
+}
+
+function buildSubmittedAt(date: string, session: TransactionSession): string {
+  const today = getShanghaiDate()
+  const now = getShanghaiMinute()
+  if (date === today) {
+    const currentTime = now.slice(11)
+    if (session === 'before-15' && currentTime < '15:00') return now
+    if (session === 'after-15' && currentTime >= '15:00') return now
+  }
+  return `${date} ${session === 'before-15' ? '14:59' : '15:00'}`
+}
+
 function isHistoricalDate(value: unknown): boolean {
   const date = toIsoDate(value)
   return (
@@ -140,33 +187,28 @@ function disableSubmissionDate(value: string | number | Date): boolean {
   return date === undefined || date > getShanghaiDate()
 }
 
-function disableSubmissionTime(value: Date): Partial<{
-  hour: number[]
-  minute: number[]
-}> {
-  const selectedMinute = getShanghaiMinute(value)
-  const latestTransactionMinute = getShanghaiMinute()
-  const latestTransactionDate = latestTransactionMinute.slice(0, 10)
-  if (selectedMinute.slice(0, 10) !== latestTransactionDate) return {}
-
-  const currentHour = Number(latestTransactionMinute.slice(11, 13))
-  const currentMinute = Number(latestTransactionMinute.slice(14, 16))
-  const selectedHour = Number(selectedMinute.slice(11, 13))
-  return {
-    hour: Array.from({ length: 24 }, (_, hour) => hour).filter((hour) => hour > currentHour),
-    minute:
-      selectedHour === currentHour
-        ? Array.from({ length: 60 }, (_, minute) => minute).filter(
-            (minute) => minute > currentMinute,
-          )
-        : [],
-  }
-}
-
 function disableConfirmedDate(value: string | number | Date): boolean {
   const date = toIsoDate(value)
   return (
     date === undefined || date < props.navDate || date > getShanghaiDate() || !isTradingDay(date)
+  )
+}
+
+function updateSubmissionDate(value: unknown): void {
+  const date = toDraftValue(value)
+  emit(
+    'updateSubmittedAt',
+    isTransactionSession(transactionSession.value)
+      ? buildSubmittedAt(date, transactionSession.value)
+      : '',
+  )
+}
+
+function updateTransactionSession(value: unknown): void {
+  const session = toDraftValue(value)
+  emit(
+    'updateSubmittedAt',
+    isTransactionSession(session) ? buildSubmittedAt(submissionDate.value, session) : '',
   )
 }
 
@@ -236,22 +278,30 @@ defineExpose({ validate })
       <div class="grid grid-cols-1 sm:gap-x-4 sm:grid-cols-2">
         <t-form-item
           label="提交时间"
-          name="submittedAt"
-          :status="errors.submittedAt ? 'error' : undefined"
-          :tips="errors.submittedAt"
+          name="submissionDate"
+          :status="errors.submissionDate || errors.submittedAt ? 'error' : undefined"
+          :tips="errors.submissionDate || errors.submittedAt"
         >
           <t-date-picker
-            :value="submittedAt"
+            :value="submissionDate"
             class="w-full"
             :disable-date="disableSubmissionDate"
-            :disable-time="disableSubmissionTime"
-            enable-time-picker
-            format="YYYY-MM-DD HH:mm"
-            placeholder="请选择提交时间"
-            :time-picker-props="{ format: 'HH:mm', steps: [1, 1] }"
-            value-type="YYYY-MM-DD HH:mm"
-            @change="emit('updateSubmittedAt', toDraftValue($event))"
+            format="YYYY-MM-DD"
+            placeholder="请选择提交日期"
+            value-type="YYYY-MM-DD"
+            @change="updateSubmissionDate"
           />
+        </t-form-item>
+        <t-form-item
+          label="交易时段"
+          name="transactionSession"
+          :status="errors.transactionSession || errors.submittedAt ? 'error' : undefined"
+          :tips="errors.transactionSession || errors.submittedAt"
+        >
+          <t-radio-group :value="transactionSession" @change="updateTransactionSession">
+            <t-radio value="before-15">15:00 前</t-radio>
+            <t-radio value="after-15">15:00 后</t-radio>
+          </t-radio-group>
         </t-form-item>
         <t-form-item
           label="申请卖出份额"
@@ -359,7 +409,7 @@ defineExpose({ validate })
           <t-tag size="small" :theme="statusTheme" variant="light">{{ statusText }}</t-tag>
         </t-descriptions-item>
       </t-descriptions>
-      <div v-if="navError || navStatus === 'missing'" class="mt-4">
+      <div v-if="navError || showMissingNavWarning" class="mt-4">
         <t-alert theme="warning">
           <template #message>
             {{ navError || '指定净值日期暂无精确历史净值，记录仍可保存。' }}
