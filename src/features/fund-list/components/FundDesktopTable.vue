@@ -31,7 +31,6 @@ const emit = defineEmits<{
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
-  plan: [code: string]
   sell: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
@@ -153,7 +152,6 @@ const columns = computed<PrimaryTableProps<FundRowViewModel>['columns']>(() => {
 const moreActionOptions = [
   { content: '详情', value: 'detail' },
   { content: '编辑', value: 'edit' },
-  { content: '定投', value: 'plan' },
   { content: '记录买入', value: 'buy' },
   { content: '记录卖出', value: 'sell' },
   { content: '删除', theme: 'error', value: 'delete' },
@@ -202,10 +200,6 @@ function handleMoreAction(code: string, value: unknown): void {
   }
   if (value === 'edit') {
     emit('edit', code)
-    return
-  }
-  if (value === 'plan') {
-    emit('plan', code)
     return
   }
   if (value === 'delete') {

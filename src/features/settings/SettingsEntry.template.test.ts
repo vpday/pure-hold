@@ -23,7 +23,7 @@ test('renders import selection in a dialog and overwrite confirmation as a popco
 })
 
 test('exposes portfolio transfer selection and explicit recovery modes', () => {
-  assert.match(transferSource, /投资账本（交易、分红、修正、定投）/)
+  assert.match(transferSource, /投资账本（交易、分红、修正）/)
   assert.match(transferSource, /合并：保留现有记录，相同稳定 ID 内容一致时幂等/)
   assert.match(transferSource, /显式替换：先备份现有账本，失败时尝试恢复/)
   assert.match(source, /portfolio: props\.portfolio\.getPortfolio\(\)/)

@@ -25,8 +25,6 @@ export type PortfolioCoordinationFacade = Pick<
   | 'addEvent'
   | 'calculate'
   | 'deleteEvent'
-  | 'deleteInstallment'
-  | 'deletePlan'
   | 'disableFund'
   | 'enableFund'
   | 'getPortfolio'
@@ -94,8 +92,6 @@ export interface FundDeletionStats {
   readonly cashDividendCount: number
   readonly dividendReinvestmentCount: number
   readonly eventCount: number
-  readonly installmentCount: number
-  readonly planCount: number
 }
 
 export interface FundDeletionPreview {
@@ -294,18 +290,6 @@ export function createPortfolioCoordinator(
       const result = dependencies.portfolio.deleteEvent(event.id)
       if (!result.ok) return recoverPortfolioFailure(result, previous)
     }
-    for (const installment of previous.installments.filter(
-      ({ fundCode: installmentFundCode }) => installmentFundCode === fundCode,
-    )) {
-      const result = dependencies.portfolio.deleteInstallment(installment.id)
-      if (!result.ok) return recoverPortfolioFailure(result, previous)
-    }
-    for (const plan of previous.plans.filter(
-      ({ fundCode: planFundCode }) => planFundCode === fundCode,
-    )) {
-      const result = dependencies.portfolio.deletePlan(plan.id)
-      if (!result.ok) return recoverPortfolioFailure(result, previous)
-    }
     const result = dependencies.portfolio.disableFund(fundCode)
     if (!result.ok) return recoverPortfolioFailure(result, previous)
     return { ok: true }
@@ -386,18 +370,13 @@ function countDeletionStats(portfolio: Portfolio, fundCode: string): FundDeletio
     cashDividendCount: events.filter(({ kind }) => kind === 'cash-dividend').length,
     dividendReinvestmentCount: events.filter(({ kind }) => kind === 'dividend-reinvestment').length,
     eventCount: events.length,
-    installmentCount: portfolio.installments.filter(({ fundCode: code }) => code === fundCode)
-      .length,
-    planCount: portfolio.plans.filter(({ fundCode: code }) => code === fundCode).length,
   }
 }
 
 function hasPortfolioDataForFund(portfolio: Portfolio, fundCode: string): boolean {
   return (
     portfolio.fundCodes.includes(fundCode) ||
-    portfolio.events.some(({ fundCode: code }) => code === fundCode) ||
-    portfolio.installments.some(({ fundCode: code }) => code === fundCode) ||
-    portfolio.plans.some(({ fundCode: code }) => code === fundCode)
+    portfolio.events.some(({ fundCode: code }) => code === fundCode)
   )
 }
 

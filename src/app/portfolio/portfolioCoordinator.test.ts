@@ -3,13 +3,7 @@ import test from 'node:test'
 
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
-import type {
-  FieldValue,
-  Portfolio,
-  PortfolioEvent,
-  PortfolioInstallment,
-  PortfolioPlan,
-} from '@/domains/portfolio/models/index.ts'
+import type { FieldValue, Portfolio, PortfolioEvent } from '@/domains/portfolio/models/index.ts'
 import { createPortfolioStore } from '@/domains/portfolio/stores/createPortfolioStore.ts'
 
 import {
@@ -49,7 +43,7 @@ function settings(overrides: Partial<FundSettings> = {}): FundSettings {
 }
 
 function emptyPortfolio(): Portfolio {
-  return { events: [], fundCodes: [], installments: [], plans: [] }
+  return { events: [], fundCodes: [] }
 }
 
 function initialHoldingEvent(
@@ -118,35 +112,6 @@ function reinvestmentEvent(fundCode: string, id: string): PortfolioEvent {
     unitNav: actual(1),
     units: actual(1),
     updatedAt: '2026-08-14T09:00:00.000Z',
-  }
-}
-
-function plan(overrides: Partial<PortfolioPlan> = {}): PortfolioPlan {
-  return {
-    amountCents: 10000,
-    createdAt: '2026-08-14T09:00:00.000Z',
-    cycle: 'monthly',
-    executionDay: 15,
-    executionMode: 'manual',
-    fundCode: '000001',
-    id: 'plan-1',
-    startDate: '2024-01-01',
-    status: 'active',
-    updatedAt: '2026-08-14T09:00:00.000Z',
-    ...overrides,
-  }
-}
-
-function installment(overrides: Partial<PortfolioInstallment> = {}): PortfolioInstallment {
-  return {
-    createdAt: '2026-08-14T09:00:00.000Z',
-    fundCode: '000001',
-    id: 'installment-1',
-    planId: 'plan-1',
-    plannedDate: '2024-02-15',
-    status: 'pending',
-    updatedAt: '2026-08-14T09:00:00.000Z',
-    ...overrides,
   }
 }
 
@@ -256,8 +221,6 @@ test('reconciles confirmed ledger units and cost without writing either facade',
   const { coordinator, writes } = createCoordinator(settings(), {
     events: [initialHoldingEvent('000001')],
     fundCodes: ['000001'],
-    installments: [],
-    plans: [],
   })
 
   const reconciliation = coordinator.reconcileFund({
@@ -276,7 +239,7 @@ test('reconciles confirmed ledger units and cost without writing either facade',
 test('reports explicit reconciliation differences and missing-data availability', () => {
   const { coordinator } = createCoordinator(
     settings({ holdingsByCode: { '000001': holding({ costPrice: 1.3 }) } }),
-    { events: [initialHoldingEvent('000001')], fundCodes: ['000001'], installments: [], plans: [] },
+    { events: [initialHoldingEvent('000001')], fundCodes: ['000001'] },
   )
   const changed = coordinator.reconcileFund({
     asOfDate: '2026-08-14',
@@ -289,8 +252,6 @@ test('reports explicit reconciliation differences and missing-data availability'
   const missingHolding = createCoordinator(settings({ holdingsByCode: {} }), {
     events: [initialHoldingEvent('000001')],
     fundCodes: ['000001'],
-    installments: [],
-    plans: [],
   }).coordinator.reconcileFund({ asOfDate: '2026-08-14', currentNavByFund: {}, fundCode: '000001' })
   assert.equal(missingHolding.availability, 'missing-fund-holding')
 
@@ -312,8 +273,6 @@ test('prepares read-only deletion statistics and cancellation performs no writes
       initialHoldingEvent('000002'),
     ],
     fundCodes: ['000001', '000002'],
-    installments: [installment()],
-    plans: [plan()],
   }
   const { coordinator, portfolio, writes } = createCoordinator(settings(), initial)
   const before = portfolio.getPortfolio()
@@ -329,8 +288,6 @@ test('prepares read-only deletion statistics and cancellation performs no writes
         cashDividendCount: 1,
         dividendReinvestmentCount: 1,
         eventCount: 4,
-        installmentCount: 1,
-        planCount: 1,
       },
     },
   })
@@ -342,8 +299,6 @@ test('confirms deletion only for the target fund and is idempotent', () => {
   const initial: Portfolio = {
     events: [initialHoldingEvent('000001'), initialHoldingEvent('000002')],
     fundCodes: ['000001', '000002'],
-    installments: [installment()],
-    plans: [plan()],
   }
   const { coordinator, funds, portfolio } = createCoordinator(settings(), initial)
   const prepared = coordinator.prepareFundDeletion('000001')
@@ -355,16 +310,11 @@ test('confirms deletion only for the target fund and is idempotent', () => {
   assert.deepEqual(portfolio.getPortfolio(), {
     events: [initialHoldingEvent('000002')],
     fundCodes: ['000002'],
-    installments: [],
-    plans: [],
   })
   assert.equal(
     funds.getSettingsSnapshot().funds.some(({ code }) => code === '000001'),
     false,
   )
-  assert.deepEqual(portfolio.getPortfolio().installments, [])
-  assert.deepEqual(portfolio.getPortfolio().plans, [])
-
   const repeated = coordinator.confirmFundDeletion(prepared.preview)
   assert.deepEqual(repeated, { ok: true, preview: prepared.preview, status: 'already-absent' })
   assert.deepEqual(portfolio.getPortfolio().fundCodes, ['000002'])
@@ -374,8 +324,6 @@ test('restores portfolio when Funds deletion fails and reports old state', () =>
   const initial: Portfolio = {
     events: [initialHoldingEvent('000001'), initialHoldingEvent('000002')],
     fundCodes: ['000001', '000002'],
-    installments: [],
-    plans: [],
   }
   const { coordinator, funds, portfolio } = createCoordinator(settings(), initial, {
     failDeleteFund: true,
@@ -404,8 +352,6 @@ test('returns a verifiable partial-persistence result when rollback also fails',
   const initial: Portfolio = {
     events: [initialHoldingEvent('000001')],
     fundCodes: ['000001'],
-    installments: [],
-    plans: [],
   }
   let writes = 0
   const funds = createFundsFacade(settings())

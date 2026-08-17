@@ -8,8 +8,6 @@ import type {
   PortfolioDividendReinvestmentEvent,
   PortfolioEvent,
   PortfolioInitialHoldingEvent,
-  PortfolioInstallment,
-  PortfolioPlan,
   PortfolioSellEvent,
 } from './portfolio.ts'
 
@@ -23,8 +21,6 @@ const EVENT_COMMON_KEYS = new Set([
   'auditedAt',
   'createdAt',
   'updatedAt',
-  'planId',
-  'installmentId',
 ])
 
 export function createPortfolio(value: unknown): Portfolio {
@@ -33,47 +29,19 @@ export function createPortfolio(value: unknown): Portfolio {
 
 export function validatePortfolio(value: unknown): Portfolio {
   const record = requireRecord(value, 'Portfolio')
+  for (const key of Object.keys(record)) {
+    if (key !== 'events' && key !== 'fundCodes') {
+      throw new TypeError(`Portfolio field ${key} is incompatible with its structure`)
+    }
+  }
   const fundCodes = validateFundCodes(record.fundCodes)
   const events = validateArray(record.events, 'Portfolio events').map(validatePortfolioEvent)
-  const plans = validateArray(record.plans, 'Portfolio plans').map(validatePortfolioPlan)
-  const installments = validateArray(record.installments, 'Portfolio installments').map(
-    validatePortfolioInstallment,
-  )
-
   const ids = new Set<string>()
-  for (const item of [...events, ...plans, ...installments]) {
-    if (ids.has(item.id)) throw new TypeError('Portfolio contains duplicate ID')
-    ids.add(item.id)
-  }
-
-  const plansById = new Map(plans.map((plan) => [plan.id, plan]))
-  const installmentsById = new Map(installments.map((installment) => [installment.id, installment]))
   for (const event of events) {
-    if (event.planId === undefined && event.installmentId === undefined) continue
-    if (event.kind !== 'buy') {
-      throw new TypeError('Plan associations are only valid for buy events')
-    }
-    if (event.planId === undefined || event.installmentId === undefined) {
-      throw new TypeError('Buy plan association requires plan and installment IDs')
-    }
-    const plan = plansById.get(event.planId)
-    const installment = installmentsById.get(event.installmentId)
-    if (!plan || !installment || installment.planId !== plan.id) {
-      throw new TypeError('Portfolio event references an unknown plan or installment')
-    }
-    if (event.fundCode !== plan.fundCode || event.fundCode !== installment.fundCode) {
-      throw new TypeError('Portfolio plan association references another fund')
-    }
+    if (ids.has(event.id)) throw new TypeError('Portfolio contains duplicate ID')
+    ids.add(event.id)
   }
-  for (const installment of installments) {
-    const plan = plansById.get(installment.planId)
-    if (!plan) throw new TypeError('Portfolio installment references an unknown plan')
-    if (plan.fundCode !== installment.fundCode) {
-      throw new TypeError('Portfolio installment references another fund')
-    }
-  }
-
-  return { events, fundCodes, installments, plans }
+  return { events, fundCodes }
 }
 
 export function createPortfolioEvent(value: unknown): PortfolioEvent {
@@ -90,11 +58,10 @@ export function validatePortfolioEvent(value: unknown): PortfolioEvent {
   )
   const source = requireStringUnion(
     record.source,
-    ['manual', 'plan', 'dividend-reinvestment', 'initial-holding', 'adjustment'],
+    ['manual', 'dividend-reinvestment', 'initial-holding', 'adjustment'],
     'event source',
   )
   validateEventSource(kind, source)
-  validateAssociationFields(record, kind, source)
 
   switch (kind) {
     case 'buy':
@@ -130,93 +97,6 @@ export function validatePortfolioBatch(value: unknown): PortfolioBatch {
   return { confirmedDate, costAmount, eventId, fundCode, id, units }
 }
 
-export function createPortfolioPlan(value: unknown): PortfolioPlan {
-  return validatePortfolioPlan(value)
-}
-
-export function validatePortfolioPlan(value: unknown): PortfolioPlan {
-  const record = requireRecord(value, 'Portfolio plan')
-  validateId(record.id, 'plan ID')
-  const fundCode = validateFundCode(record.fundCode)
-  const amountCents = validateInteger(record.amountCents, 'plan amount', false)
-  const cycle = requireStringUnion(record.cycle, ['weekly', 'monthly', 'daily'], 'plan cycle')
-  const executionDay = validateInteger(record.executionDay, 'plan execution day', false)
-  if (
-    (cycle === 'weekly' && (executionDay < 1 || executionDay > 7)) ||
-    (cycle === 'monthly' && (executionDay < 1 || executionDay > 31)) ||
-    (cycle === 'daily' && executionDay !== 1)
-  ) {
-    throw new TypeError('Plan execution day is out of range')
-  }
-  const startDate = validateDate(record.startDate, 'plan start date')
-  const endDate =
-    record.endDate === undefined ? undefined : validateDate(record.endDate, 'plan end date')
-  if (endDate !== undefined && endDate < startDate) {
-    throw new TypeError('Plan end date must not precede its start date')
-  }
-  const status = requireStringUnion(record.status, ['active', 'paused'], 'plan status')
-  const executionMode = requireStringUnion(
-    record.executionMode,
-    ['manual', 'local-draft'],
-    'plan execution mode',
-  )
-  const purchaseFeeRate =
-    record.purchaseFeeRate === undefined
-      ? undefined
-      : validateRate(record.purchaseFeeRate, 'plan purchase fee rate')
-  const createdAt = validateDateTime(record.createdAt, 'plan created audit time')
-  const updatedAt = validateDateTime(record.updatedAt, 'plan updated audit time')
-  const result: Record<string, unknown> = {
-    amountCents,
-    createdAt,
-    cycle,
-    executionDay,
-    executionMode,
-    fundCode,
-    id: record.id,
-    startDate,
-    status,
-    updatedAt,
-  }
-  if (endDate !== undefined) result.endDate = endDate
-  if (purchaseFeeRate !== undefined) result.purchaseFeeRate = purchaseFeeRate
-  return result as unknown as PortfolioPlan
-}
-
-export function createPortfolioInstallment(value: unknown): PortfolioInstallment {
-  return validatePortfolioInstallment(value)
-}
-
-export function validatePortfolioInstallment(value: unknown): PortfolioInstallment {
-  const record = requireRecord(value, 'Portfolio installment')
-  validateId(record.id, 'installment ID')
-  const planId = validateId(record.planId, 'installment plan ID')
-  const fundCode = validateFundCode(record.fundCode)
-  const plannedDate = validateDate(record.plannedDate, 'installment planned date')
-  const confirmedDate =
-    record.confirmedDate === undefined
-      ? undefined
-      : validateDate(record.confirmedDate, 'installment confirmation date')
-  const status = requireStringUnion(
-    record.status,
-    ['pending', 'executed', 'skipped', 'cancelled'],
-    'installment status',
-  )
-  const createdAt = validateDateTime(record.createdAt, 'installment created audit time')
-  const updatedAt = validateDateTime(record.updatedAt, 'installment updated audit time')
-  const result: Record<string, unknown> = {
-    createdAt,
-    fundCode,
-    id: record.id,
-    planId,
-    plannedDate,
-    status,
-    updatedAt,
-  }
-  if (confirmedDate !== undefined) result.confirmedDate = confirmedDate
-  return result as unknown as PortfolioInstallment
-}
-
 function validateEventCommon(record: Record<string, unknown>): void {
   validateId(record.id, 'event ID')
   validateFundCode(record.fundCode)
@@ -233,32 +113,13 @@ function validateEventSource(kind: string, source: string): void {
   const expected = {
     adjustment: 'adjustment',
     'cash-dividend': 'manual',
-    buy: ['manual', 'plan'],
+    buy: 'manual',
     'dividend-reinvestment': 'dividend-reinvestment',
     'initial-holding': 'initial-holding',
     sell: 'manual',
   }[kind as keyof Record<string, string | string[]>]
   if (Array.isArray(expected) ? !expected.includes(source) : expected !== source) {
     throw new TypeError('Event source does not match its kind')
-  }
-}
-
-function validateAssociationFields(
-  record: Record<string, unknown>,
-  kind: string,
-  source: string,
-): void {
-  const hasPlanId = record.planId !== undefined
-  const hasInstallmentId = record.installmentId !== undefined
-  if (hasPlanId !== hasInstallmentId || (hasPlanId && kind !== 'buy')) {
-    throw new TypeError('Event has an invalid plan or installment association')
-  }
-  if (hasPlanId) {
-    validateId(record.planId, 'event plan ID')
-    validateId(record.installmentId, 'event installment ID')
-    if (source !== 'plan') throw new TypeError('Only plan events may have plan associations')
-  } else if (source === 'plan') {
-    throw new TypeError('Plan event requires plan associations')
   }
 }
 
@@ -408,10 +269,6 @@ function eventBase(
     source: requireString(record.source, 'event source') as PortfolioEvent['source'],
     updatedAt: validateDateTime(record.updatedAt, 'event updated audit time'),
   }
-  const planId = optionalId(record.planId, 'event plan ID')
-  const installmentId = optionalId(record.installmentId, 'event installment ID')
-  if (planId !== undefined) result.planId = planId
-  if (installmentId !== undefined) result.installmentId = installmentId
   if (record.submittedDate !== undefined) {
     result.submittedDate = validateDate(record.submittedDate, 'event submission date')
   }
@@ -458,10 +315,6 @@ function optionalField(
     : validateField(value, label, { allowNegative: false, maxDecimals })
 }
 
-function validateRate(value: unknown, label: string): number {
-  return validateNumber(value, label, false, 4, 100)
-}
-
 function validateFundCodes(value: unknown): string[] {
   if (!Array.isArray(value)) throw new TypeError('Portfolio fund codes have an invalid shape')
   const codes = value.map((code) => validateFundCode(code))
@@ -484,10 +337,6 @@ function validateId(value: unknown, label: string): string {
   return value
 }
 
-function optionalId(value: unknown, label: string): string | undefined {
-  return value === undefined ? undefined : validateId(value, label)
-}
-
 function validateDate(value: unknown, label: string): string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new TypeError(`${label} is invalid`)
@@ -506,10 +355,6 @@ function validateDateTime(value: unknown, label: string): string {
   validateDate(value.slice(0, 10), label)
   if (!Number.isFinite(Date.parse(value))) throw new TypeError(`${label} is invalid`)
   return value
-}
-
-function validateInteger(value: unknown, label: string, allowNegative: boolean): number {
-  return validateNumber(value, label, allowNegative, 0)
 }
 
 function validateNumber(

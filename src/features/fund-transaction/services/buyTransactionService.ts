@@ -1,6 +1,5 @@
 import type { FundValue } from '@/domains/funds/services/tiantian/lookupExactUnitNav.ts'
 import type { PortfolioBuyEvent } from '@/domains/portfolio/models/index.ts'
-import { synchronizeInstallmentAfterEvent } from '@/domains/portfolio/services/portfolioPlanService.ts'
 import type { PortfolioCommandResult, PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 
 export type BuyTransactionFailureReason = 'exact-nav-mismatch'
@@ -14,30 +13,6 @@ export function saveBuyDraft(
   draft: PortfolioBuyEvent,
 ): PortfolioCommandResult {
   return store.addEvent(draft)
-}
-
-export function savePlanBuyDraft(
-  store: Pick<PortfolioStore, 'addEvent' | 'getPortfolio' | 'updateEvent' | 'updateInstallment'>,
-  draft: PortfolioBuyEvent,
-): PortfolioCommandResult {
-  const existing = store.getPortfolio().events.find(({ id }) => id === draft.id)
-  const result = existing === undefined ? store.addEvent(draft) : store.updateEvent(draft)
-  if (!result.ok) return result
-  if (draft.settlementStatus !== 'settled') return result
-  return synchronizeInstallmentAfterEvent(store, draft, draft.updatedAt) ?? result
-}
-
-export function completePlanBuyEventWithExactNav(
-  store: Pick<PortfolioStore, 'getPortfolio' | 'updateEvent' | 'updateInstallment'>,
-  event: PortfolioBuyEvent,
-  value: FundValue,
-  now: string,
-): BuyTransactionResult {
-  const result = completeBuyEventWithExactNav(store, event, value, now)
-  if (!result.ok) return result
-  const saved = result.portfolio.events.find(({ id }) => id === event.id)
-  if (saved?.kind !== 'buy') return result
-  return synchronizeInstallmentAfterEvent(store, saved, now) ?? result
 }
 
 export function completeBuyEventWithExactNav(

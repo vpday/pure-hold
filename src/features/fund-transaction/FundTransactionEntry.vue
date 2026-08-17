@@ -3,26 +3,11 @@ import { ref } from 'vue'
 
 import { fetchTiantianFundBasicInfo } from '@/domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
 import { lookupExactUnitNav } from '@/domains/funds/services/tiantian/lookupExactUnitNav.ts'
-import type {
-  PortfolioBuyEvent,
-  PortfolioInstallment,
-  PortfolioPlan,
-} from '@/domains/portfolio/models/index.ts'
-import {
-  deferPlanInstallment,
-  ensurePlanInstallment,
-  planBuyEventId,
-} from '@/domains/portfolio/services/portfolioPlanService.ts'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints.ts'
 import { createBuyDraft } from './models/buyDraft.ts'
 import { createSellDraft } from './models/sellDraft.ts'
-import {
-  completeBuyEventWithExactNav,
-  completePlanBuyEventWithExactNav,
-  saveBuyDraft,
-  savePlanBuyDraft,
-} from './services/buyTransactionService.ts'
+import { completeBuyEventWithExactNav, saveBuyDraft } from './services/buyTransactionService.ts'
 import { saveSellDraft } from './services/sellTransactionService.ts'
 import FundBuyForm from './components/FundBuyForm.vue'
 import FundSellForm from './components/FundSellForm.vue'
@@ -45,55 +30,22 @@ const actualNetAmountYuan = ref('')
 const actualRedemptionFeeYuan = ref('')
 const errors = ref<Readonly<Record<string, string>>>({})
 const transactionForm = ref<{ validate: () => Promise<boolean> }>()
-interface PlanBuyContext {
-  readonly existingEvent?: PortfolioBuyEvent
-  readonly installment?: PortfolioInstallment
-  readonly plan: PortfolioPlan
-  readonly plannedDate: string
-}
-const planBuyContext = ref<PlanBuyContext>()
 let openGeneration = 0
 const { isSmUp } = useBreakpoints()
 
-export interface BuyTransactionOpenOptions {
-  readonly existingEvent?: PortfolioBuyEvent
-  readonly installment?: PortfolioInstallment
-  readonly plan?: PortfolioPlan
-  readonly plannedDate?: string
-}
-
-function open(code: string, name: string, options: BuyTransactionOpenOptions = {}): void {
+function open(code: string, name: string): void {
   mode.value = 'buy'
   openGeneration += 1
   const generation = openGeneration
   fundCode.value = code
   fundName.value = name
-  planBuyContext.value =
-    options.plan === undefined
-      ? undefined
-      : {
-          existingEvent: options.existingEvent,
-          installment: options.installment,
-          plan: options.plan,
-          plannedDate:
-            options.plannedDate ?? options.installment?.plannedDate ?? options.plan.startDate,
-        }
-  const existingEvent = options.existingEvent
-  confirmedDate.value =
-    existingEvent?.confirmedDate ?? planBuyContext.value?.plannedDate ?? defaultTransactionDate()
-  totalAmountYuan.value = existingEvent
-    ? formatCents(existingEvent.totalAmount.value)
-    : options.plan
-      ? formatCents(options.plan.amountCents)
-      : ''
-  purchaseFeePercent.value =
-    existingEvent?.purchaseFeeRate.value?.toString() ??
-    options.plan?.purchaseFeeRate?.toString() ??
-    ''
+  confirmedDate.value = defaultTransactionDate()
+  totalAmountYuan.value = ''
+  purchaseFeePercent.value = ''
   purchaseFeePercentSource.value = 'fund-basic-info'
-  actualUnits.value = formatNumber(existingEvent?.units.value)
-  actualPurchaseFeeYuan.value = formatCents(existingEvent?.purchaseFee.value)
-  actualUnitNav.value = formatNumber(existingEvent?.unitNav.value)
+  actualUnits.value = ''
+  actualPurchaseFeeYuan.value = ''
+  actualUnitNav.value = ''
   sellUnits.value = ''
   actualNetAmountYuan.value = ''
   actualRedemptionFeeYuan.value = ''
@@ -112,14 +64,12 @@ function openSell(code: string, name: string): void {
   actualUnitNav.value = ''
   actualNetAmountYuan.value = ''
   actualRedemptionFeeYuan.value = ''
-  planBuyContext.value = undefined
   errors.value = {}
   visible.value = true
 }
 
 function close(): void {
   visible.value = false
-  planBuyContext.value = undefined
 }
 
 async function loadPurchaseFee(code: string, generation: number): Promise<void> {
@@ -136,24 +86,6 @@ async function loadPurchaseFee(code: string, generation: number): Promise<void> 
 
 function saveBuy(): void {
   const now = new Date().toISOString()
-  const context = planBuyContext.value
-  const ensured = context
-    ? ensurePlanInstallment(
-        props.portfolio,
-        context.plan,
-        context.installment?.plannedDate ?? context.plannedDate,
-        now,
-      )
-    : undefined
-  if (ensured !== undefined && !ensured.ok) {
-    errors.value = { form: '定投期次保存失败，当前草稿未改变' }
-    return
-  }
-  const installment = ensured?.ok ? ensured.installment : context?.installment
-  const eventId =
-    context && installment
-      ? (context.existingEvent?.id ?? planBuyEventId(context.plan.id, installment.id))
-      : createEventId(fundCode.value)
   const draft = createBuyDraft(
     {
       actualPurchaseFeeYuan: actualPurchaseFeeYuan.value || undefined,
@@ -161,9 +93,7 @@ function saveBuy(): void {
       actualUnits: actualUnits.value || undefined,
       confirmedDate: confirmedDate.value,
       fundCode: fundCode.value,
-      id: eventId,
-      installmentId: context && installment ? installment.id : undefined,
-      planId: context?.plan.id,
+      id: createEventId(fundCode.value),
       purchaseFeePercent: purchaseFeePercent.value ? Number(purchaseFeePercent.value) : null,
       purchaseFeePercentSource: purchaseFeePercentSource.value,
       totalAmountYuan: totalAmountYuan.value,
@@ -175,17 +105,7 @@ function saveBuy(): void {
     return
   }
 
-  if (context && installment && confirmedDate.value !== installment.plannedDate) {
-    const deferred = deferPlanInstallment(props.portfolio, installment.id, confirmedDate.value, now)
-    if (!deferred.ok) {
-      errors.value = { form: '顺延日期保存失败，当前草稿未改变' }
-      return
-    }
-  }
-
-  const result = context
-    ? savePlanBuyDraft(props.portfolio, draft.draft)
-    : saveBuyDraft(props.portfolio, draft.draft)
+  const result = saveBuyDraft(props.portfolio, draft.draft)
   if (!result.ok) {
     errors.value = { form: '保存失败，原有账本和当前草稿均未改变' }
     return
@@ -241,11 +161,7 @@ async function completePendingBuy(event: Parameters<typeof completeBuyEventWithE
     const value = await lookupExactUnitNav(event.fundCode, event.confirmedDate)
     if (value) {
       const now = new Date().toISOString()
-      if (event.planId !== undefined && event.installmentId !== undefined) {
-        completePlanBuyEventWithExactNav(props.portfolio, event, value, now)
-      } else {
-        completeBuyEventWithExactNav(props.portfolio, event, value, now)
-      }
+      completeBuyEventWithExactNav(props.portfolio, event, value, now)
     }
   } catch {
     // Network and cancellation failures leave the saved event pending.
@@ -254,14 +170,6 @@ async function completePendingBuy(event: Parameters<typeof completeBuyEventWithE
 
 function createEventId(code: string, kind: 'buy' | 'sell' = 'buy'): string {
   return `${kind}:${code}:${globalThis.crypto.randomUUID()}`
-}
-
-function formatCents(value: number | null | undefined): string {
-  return value === null || value === undefined ? '' : (value / 100).toFixed(2)
-}
-
-function formatNumber(value: number | null | undefined): string {
-  return value === null || value === undefined ? '' : String(value)
 }
 
 function shanghaiDate(now = new Date()): string {

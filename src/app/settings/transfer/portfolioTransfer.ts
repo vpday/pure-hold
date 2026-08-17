@@ -2,7 +2,7 @@ import type { Portfolio } from '@/domains/portfolio/models/index.ts'
 import type { PortfolioCommandResult, PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 
 export interface PortfolioTransferConflict {
-  readonly collection: 'events' | 'installments' | 'plans'
+  readonly collection: 'events'
   readonly id: string
 }
 
@@ -37,14 +37,6 @@ export function createPortfolioTransferAdapter(store: PortfolioStore): Portfolio
       const result = store.deleteEvent(event.id)
       if (!result.ok) return recover(result, store, previous)
     }
-    for (const installment of previous.installments) {
-      const result = store.deleteInstallment(installment.id)
-      if (!result.ok) return recover(result, store, previous)
-    }
-    for (const plan of previous.plans) {
-      const result = store.deletePlan(plan.id)
-      if (!result.ok) return recover(result, store, previous)
-    }
     for (const fundCode of previous.fundCodes) {
       const result = store.disableFund(fundCode)
       if (!result.ok) return recover(result, store, previous)
@@ -59,11 +51,7 @@ export function createPortfolioTransferAdapter(store: PortfolioStore): Portfolio
 }
 
 function findConflicts(current: Portfolio, incoming: Portfolio): PortfolioTransferConflict[] {
-  return [
-    ...findCollectionConflicts('events', current.events, incoming.events),
-    ...findCollectionConflicts('installments', current.installments, incoming.installments),
-    ...findCollectionConflicts('plans', current.plans, incoming.plans),
-  ]
+  return findCollectionConflicts('events', current.events, incoming.events)
 }
 
 function findCollectionConflicts<T extends { readonly id: string }>(

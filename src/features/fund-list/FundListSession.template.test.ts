@@ -53,21 +53,16 @@ test('uses TDesign text buttons for fund navigation and detail tabs', () => {
   assert.match(quoteCardSource, /<span class="block font-medium">\{\{ row\.name \}\}<\/span>/)
   assert.doesNotMatch(desktopSource, /<button\b[\s\S]*fund-name-button/)
   assert.doesNotMatch(quoteCardSource, /<button\b[\s\S]*emit\('detail'/)
-  assert.match(detailDrawerSource, /<t-button[\s\S]*role="tab"/)
-  assert.doesNotMatch(detailDrawerSource, /<button[\s\S]*role="tab"/)
+  assert.doesNotMatch(detailDrawerSource, /role="tab"/)
 })
 
-test('routes plan from the desktop more menu and keeps mobile actions in a dropdown', () => {
-  assert.match(sectionSource, /@plan="openPlan"/)
-  assert.match(
-    desktopSource,
-    /const moreActionOptions = \[[\s\S]*详情[\s\S]*编辑[\s\S]*定投[\s\S]*记录买入[\s\S]*记录卖出[\s\S]*删除/,
-  )
-  assert.match(desktopSource, /value === 'plan'[\s\S]*emit\('plan', code\)/)
-  assert.doesNotMatch(desktopSource, /@click="emit\('plan', row\.code\)"/)
+test('keeps only ordinary fund actions in desktop and mobile menus', () => {
+  assert.doesNotMatch(sectionSource, /@plan=|openPlan/)
+  assert.doesNotMatch(desktopSource, /value === 'plan'|emit\('plan'/)
+  assert.doesNotMatch(actionsSource, /value: 'plan'|emit\('plan'/)
+  assert.doesNotMatch(quoteCardSource, /@plan=|emit\('plan'/)
+  assert.doesNotMatch(mobileSource, /@plan=|emit\('plan'/)
   assert.match(actionsSource, /<t-dropdown/)
-  assert.match(actionsSource, /value: 'plan'/)
-  assert.match(quoteCardSource, /@plan="emit\('plan', \$event\)"/)
   assert.doesNotMatch(quoteCardSource, /actionsVisible/)
 })
 
@@ -77,8 +72,7 @@ test('uses the portfolio coordinator for a counted second deletion confirmation'
   assert.match(sectionSource, /交易事件总数/)
   assert.match(sectionSource, /分红事件（现金 \/ 再投资）/)
   assert.match(sectionSource, /修正事件/)
-  assert.match(sectionSource, /定投计划/)
-  assert.match(sectionSource, /定投期次/)
+  assert.doesNotMatch(sectionSource, /planCount|installmentCount/)
   assert.match(sectionSource, /删除后不可恢复/)
   assert.match(sectionSource, /@cancel="cancelFundDeletion"/)
   assert.match(sectionSource, /@confirm="confirmFundDeletion"/)

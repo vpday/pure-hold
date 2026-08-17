@@ -20,7 +20,6 @@ const emit = defineEmits<{
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
-  plan: [code: string]
   sell: [code: string]
   sortChange: [sort: FundSort | null]
 }>()
@@ -118,7 +117,6 @@ defineExpose({ openSortDrawer })
       @delete="emit('delete', $event)"
       @detail="emit('detail', $event)"
       @edit="emit('edit', $event)"
-      @plan="emit('plan', $event)"
       @sell="emit('sell', $event)"
     />
 

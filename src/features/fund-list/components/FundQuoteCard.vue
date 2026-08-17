@@ -16,7 +16,6 @@ const emit = defineEmits<{
   delete: [code: string]
   detail: [code: string]
   edit: [code: string]
-  plan: [code: string]
   sell: [code: string]
 }>()
 
@@ -56,7 +55,6 @@ function isPlaceholderPair(first: string, second: string): boolean {
         @buy="emit('buy', $event)"
         @delete="emit('delete', $event)"
         @edit="emit('edit', $event)"
-        @plan="emit('plan', $event)"
         @sell="emit('sell', $event)"
       />
     </div>

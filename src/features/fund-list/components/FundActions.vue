@@ -6,12 +6,10 @@ const emit = defineEmits<{
   buy: [code: string]
   delete: [code: string]
   edit: [code: string]
-  plan: [code: string]
   sell: [code: string]
 }>()
 const actionOptions = [
   { content: '编辑', value: 'edit' },
-  { content: '定投', value: 'plan' },
   { content: '记录买入', value: 'buy' },
   { content: '记录卖出', value: 'sell' },
   { content: '删除', theme: 'error', value: 'delete' },
@@ -19,7 +17,6 @@ const actionOptions = [
 
 function handleAction(value: unknown): void {
   if (value === 'edit') emit('edit', props.code)
-  else if (value === 'plan') emit('plan', props.code)
   else if (value === 'buy') emit('buy', props.code)
   else if (value === 'sell') emit('sell', props.code)
   else if (value === 'delete') emit('delete', props.code)

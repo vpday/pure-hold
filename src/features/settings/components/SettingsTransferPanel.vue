@@ -129,7 +129,7 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
           :disabled="!importState.package.portfolio"
           @change="updatePortfolioSelection"
         >
-          投资账本（交易、分红、修正、定投）
+          投资账本（交易、分红、修正）
         </t-checkbox>
       </div>
 

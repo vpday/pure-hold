@@ -22,8 +22,6 @@ const initialPortfolio: Portfolio = {
     },
   ],
   fundCodes: ['000001'],
-  installments: [],
-  plans: [],
 }
 
 function createStore(
@@ -59,7 +57,7 @@ test('portfolio transfer merge is idempotent and exposes stable-ID conflicts', (
 test('portfolio transfer replacement keeps only the explicit incoming snapshot', () => {
   const store = createStore()
   const adapter = createPortfolioTransferAdapter(store)
-  const replacement: Portfolio = { events: [], fundCodes: ['000002'], installments: [], plans: [] }
+  const replacement: Portfolio = { events: [], fundCodes: ['000002'] }
 
   assert.deepEqual(adapter.replace(replacement), { ok: true })
   assert.deepEqual(store.getPortfolio(), replacement)
@@ -72,7 +70,7 @@ test('portfolio transfer replacement reports partial persistence when rollback f
     if (writes >= 2) throw new Error('quota exceeded')
   })
   const adapter = createPortfolioTransferAdapter(store)
-  const replacement: Portfolio = { events: [], fundCodes: ['000002'], installments: [], plans: [] }
+  const replacement: Portfolio = { events: [], fundCodes: ['000002'] }
 
   const result = adapter.replace(replacement)
   assert.equal(result.ok, false)

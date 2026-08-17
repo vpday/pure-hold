@@ -27,7 +27,7 @@ test('fund list routes sell actions on desktop and mobile', async () => {
   assert.match(section, /@sell="openSell"/)
   assert.match(actions, /sell: \[code: string\]/)
   assert.match(actions, /emit\('sell', props\.code\)/)
-  assert.match(actions, /value: 'plan'/)
+  assert.match(actions, /value: 'sell'/)
   assert.match(desktop, /value === 'sell'/)
   assert.match(desktop, /emit\('sell', code\)/)
   assert.match(mobile, /@sell="emit\('sell', \$event\)"/)

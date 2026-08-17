@@ -7,8 +7,6 @@ export interface BuyDraftInput {
   readonly confirmedDate: string
   readonly fundCode: string
   readonly id: string
-  readonly installmentId?: string
-  readonly planId?: string
   readonly purchaseFeePercent: number | null
   readonly purchaseFeePercentSource?: 'fund-basic-info' | 'manual'
   readonly totalAmountYuan: string
@@ -31,10 +29,6 @@ export type BuyDraftResult =
 export function createBuyDraft(input: BuyDraftInput, options: BuyDraftOptions): BuyDraftResult {
   const errors: Record<string, string> = {}
   if (!/^\d{6}$/.test(input.fundCode)) errors.fundCode = '基金代码无效'
-  const hasPlanAssociation = input.planId !== undefined || input.installmentId !== undefined
-  if (hasPlanAssociation && (!input.planId || !input.installmentId)) {
-    errors.planAssociation = '定投买入必须同时关联计划和期次'
-  }
   if (!isValidDate(input.confirmedDate)) {
     errors.confirmedDate = '确认日期无效'
   } else if (input.confirmedDate > options.today) {
@@ -93,21 +87,11 @@ export function createBuyDraft(input: BuyDraftInput, options: BuyDraftOptions): 
       actualUnits !== null || (actualUnitNav !== null && input.purchaseFeePercent !== null)
         ? 'settled'
         : 'pending-settlement',
-    source: hasPlanAssociation ? 'plan' : 'manual',
+    source: 'manual',
     totalAmount: field(totalAmountCents, 'actual', 'manual'),
     unitNav: actualField(actualUnitNav, 'manual'),
     units: actualField(actualUnits, 'manual'),
     updatedAt: options.now,
-  }
-  if (hasPlanAssociation) {
-    return {
-      draft: {
-        ...draft,
-        installmentId: input.installmentId,
-        planId: input.planId,
-      },
-      ok: true,
-    }
   }
   return { draft, ok: true }
 }

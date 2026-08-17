@@ -31,22 +31,13 @@ import type {
   SellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
 import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
-import {
-  toPortfolioPlanViewModel,
-  type PlanExecutionRequest,
-  type PlanInstallmentActionRequest,
-  type PortfolioPlanViewModel,
-} from '@/features/fund-plan/presenters/toPortfolioPlanViewModel.ts'
 
 const props = defineProps<{
   enableLedger: (fundCode: string) => boolean
   portfolio: PortfolioStore
 }>()
 const emit = defineEmits<{
-  cancelPlan: [request: PlanInstallmentActionRequest]
   edit: [code: string]
-  executePlan: [request: PlanExecutionRequest]
-  skipPlan: [request: PlanInstallmentActionRequest]
 }>()
 type FundTransactionViewModel =
   | (BuyTransactionViewModel & { readonly kind: 'buy' })
@@ -122,17 +113,6 @@ const sellIssues = computed<readonly SellTransactionIssueViewModel[]>(() => {
     ? toSellTransactionIssueViewModels(currentCalculation, code)
     : []
 })
-const planViewModels = computed<readonly PortfolioPlanViewModel[]>(() => {
-  const code = detail.currentCode.value
-  if (!code) return []
-  const portfolio = props.portfolio.getPortfolio()
-  return portfolio.plans
-    .filter(({ fundCode }) => fundCode === code)
-    .map((plan) =>
-      toPortfolioPlanViewModel(plan, portfolio.installments, portfolio.events, shanghaiDate()),
-    )
-})
-
 watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, basicInfo]) => {
   if (visible && code && basicInfo) {
     void performance.updateBasicInfo(code, basicInfo)
@@ -226,21 +206,6 @@ async function edit(code: string): Promise<void> {
   emit('edit', code)
 }
 
-function executePlan(request: PlanExecutionRequest): void {
-  close()
-  emit('executePlan', request)
-}
-
-function skipPlan(request: PlanInstallmentActionRequest): void {
-  close()
-  emit('skipPlan', request)
-}
-
-function cancelPlan(request: PlanInstallmentActionRequest): void {
-  close()
-  emit('cancelPlan', request)
-}
-
 defineExpose({ open })
 </script>
 
@@ -252,7 +217,6 @@ defineExpose({ open })
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
     :remaining-batches="remainingBatches"
-    :plan-view-models="planViewModels"
     :sell-issues="sellIssues"
     :transactions="transactions"
     :size="'100dvh'"
@@ -261,9 +225,6 @@ defineExpose({ open })
     @close="close"
     @enable-ledger="handleEnableLedger"
     @edit="edit"
-    @execute-plan="executePlan"
-    @skip-plan="skipPlan"
-    @cancel-plan="cancelPlan"
     @retry="detail.retry"
     @select-section="activeSection = $event"
   >

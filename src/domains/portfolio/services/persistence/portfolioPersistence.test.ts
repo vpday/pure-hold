@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FieldValue, Portfolio, PortfolioEvent, PortfolioPlan } from '../../models/index.ts'
+import type { FieldValue, Portfolio, PortfolioEvent } from '../../models/index.ts'
 import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import {
   corruptPortfolioStorageKeyPrefix,
@@ -48,31 +48,13 @@ function portfolio(overrides: Partial<Portfolio> = {}): Portfolio {
   return {
     events: [buyEvent()],
     fundCodes: ['000001'],
-    installments: [],
-    plans: [],
     ...overrides,
   }
 }
 
-function plan(overrides: Partial<PortfolioPlan> = {}): PortfolioPlan {
-  return {
-    amountCents: 10000,
-    createdAt: '2026-08-13T09:00:00.000Z',
-    cycle: 'monthly',
-    executionDay: 1,
-    executionMode: 'manual',
-    fundCode: '000001',
-    id: 'plan-1',
-    startDate: '2026-08-14',
-    status: 'active',
-    updatedAt: '2026-08-13T09:00:00.000Z',
-    ...overrides,
-  }
-}
-
-test('loads an empty portfolio and round trips version one facts as detached objects', () => {
+test('loads an empty portfolio and round trips version two facts as detached objects', () => {
   withStorage((storage) => {
-    assert.deepEqual(loadPortfolio(), { events: [], fundCodes: [], installments: [], plans: [] })
+    assert.deepEqual(loadPortfolio(), { events: [], fundCodes: [] })
 
     const input = portfolio()
     savePortfolio(input)
@@ -82,7 +64,7 @@ test('loads an empty portfolio and round trips version one facts as detached obj
     assert.notStrictEqual(loaded, input)
     assert.notStrictEqual(loaded.events, input.events)
     assert.notStrictEqual(loaded.events[0], input.events[0])
-    assert.equal(JSON.parse(storage.getItem(portfolioStorageKey) ?? '').version, 1)
+    assert.equal(JSON.parse(storage.getItem(portfolioStorageKey) ?? '').version, 2)
     assert.equal(JSON.stringify(input).includes('batches'), false)
   })
 })
@@ -96,23 +78,26 @@ test('exposes one public persistence seam for loading and saving portfolio facts
   })
 })
 
-test('loads daily plans and keeps old weekly and monthly plan shapes readable', () => {
-  withStorage(() => {
-    const input = portfolio({
-      plans: [
-        plan({ cycle: 'weekly', executionDay: 1 }),
-        plan({ cycle: 'monthly', executionDay: 31, id: 'plan-2' }),
-        plan({ cycle: 'daily', executionDay: 1, id: 'plan-3' }),
-      ],
-    })
-    savePortfolio(input)
-    assert.deepEqual(loadPortfolio(), input)
+test('uses a new storage key without reading the retired schema', () => {
+  withStorage((storage) => {
+    const retiredKey = 'pure-hold:portfolio:v1'
+    storage.setItem(retiredKey, JSON.stringify({ version: 1, ...portfolio() }))
+
+    assert.deepEqual(loadPortfolio(), emptyPortfolio())
+    assert.notEqual(storage.getItem(retiredKey), null)
+
+    savePortfolio(portfolio())
+    assert.equal(JSON.parse(storage.getItem(portfolioStorageKey) ?? '').version, 2)
   })
 })
 
-test('rejects invalid portfolio shape, unknown fields, duplicate IDs, precision, dates, and references', () => {
+test('rejects invalid portfolio shape, retired fields, unknown fields, duplicate IDs, precision, and dates', () => {
   withStorage(() => {
-    assert.throws(() => savePortfolio({ ...portfolio(), unexpected: true } as never), /unknown/i)
+    assert.throws(
+      () => savePortfolio({ ...portfolio(), unexpected: true } as never),
+      /unknown|portfolio/i,
+    )
+    assert.throws(() => savePortfolio({ ...portfolio(), plans: [] } as never), /unknown|portfolio/i)
     assert.throws(
       () => savePortfolio({ ...portfolio(), events: [buyEvent(), buyEvent({ id: 'event-1' })] }),
       /duplicate/i,
@@ -128,14 +113,6 @@ test('rejects invalid portfolio shape, unknown fields, duplicate IDs, precision,
     assert.throws(
       () => savePortfolio({ ...portfolio(), events: [buyEvent({ confirmedDate: '2026-02-30' })] }),
       /date/i,
-    )
-    assert.throws(
-      () =>
-        savePortfolio({
-          ...portfolio(),
-          events: [buyEvent({ installmentId: 'installment-1', planId: 'plan-1', source: 'plan' })],
-        }),
-      /unknown|association/i,
     )
   })
 })
@@ -175,7 +152,7 @@ test('keeps startup available when storage cannot be read and surfaces write fai
 })
 
 function emptyPortfolio(): Portfolio {
-  return { events: [], fundCodes: [], installments: [], plans: [] }
+  return { events: [], fundCodes: [] }
 }
 
 function withoutWarnings(callback: () => void): void {

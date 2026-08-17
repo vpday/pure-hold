@@ -30,7 +30,7 @@ export function loadPortfolio(): Portfolio {
 }
 
 export function createEmptyPortfolio(): Portfolio {
-  return { events: [], fundCodes: [], installments: [], plans: [] }
+  return { events: [], fundCodes: [] }
 }
 
 function persistRecovery(portfolio: Portfolio): void {

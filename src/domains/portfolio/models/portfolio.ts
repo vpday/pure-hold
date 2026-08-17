@@ -18,15 +18,9 @@ export type PortfolioValueSource =
 
 export type PortfolioEventSource =
   | 'manual'
-  | 'plan'
   | 'dividend-reinvestment'
   | 'initial-holding'
   | 'adjustment'
-
-export type PortfolioPlanCycle = 'weekly' | 'monthly' | 'daily'
-export type PortfolioPlanStatus = 'active' | 'paused'
-export type PortfolioExecutionMode = 'manual' | 'local-draft'
-export type PortfolioInstallmentStatus = 'pending' | 'executed' | 'skipped' | 'cancelled'
 
 export interface FieldValue<T> {
   readonly value: T | null
@@ -48,8 +42,6 @@ interface PortfolioEventBase {
   readonly auditedAt: string
   readonly createdAt: string
   readonly updatedAt: string
-  readonly planId?: string
-  readonly installmentId?: string
 }
 
 export interface PortfolioBuyEvent extends PortfolioEventBase {
@@ -112,35 +104,7 @@ export interface PortfolioBatch {
   readonly costAmount: MoneyFieldValue
 }
 
-export interface PortfolioPlan {
-  readonly id: string
-  readonly fundCode: string
-  readonly amountCents: number
-  readonly cycle: PortfolioPlanCycle
-  readonly executionDay: number
-  readonly startDate: string
-  readonly endDate?: string
-  readonly status: PortfolioPlanStatus
-  readonly executionMode: PortfolioExecutionMode
-  readonly purchaseFeeRate?: number
-  readonly createdAt: string
-  readonly updatedAt: string
-}
-
-export interface PortfolioInstallment {
-  readonly id: string
-  readonly planId: string
-  readonly fundCode: string
-  readonly plannedDate: string
-  readonly confirmedDate?: string
-  readonly status: PortfolioInstallmentStatus
-  readonly createdAt: string
-  readonly updatedAt: string
-}
-
 export interface Portfolio {
   readonly fundCodes: readonly string[]
   readonly events: readonly PortfolioEvent[]
-  readonly plans: readonly PortfolioPlan[]
-  readonly installments: readonly PortfolioInstallment[]
 }

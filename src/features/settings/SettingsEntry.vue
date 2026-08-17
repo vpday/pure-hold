@@ -43,12 +43,7 @@ const overwriteSections = computed(() => {
   if (selection.value.funds && fundStore.fundOrder.length > 0) sections.push('基金')
   if (selection.value.portfolio && selection.value.portfolioMode === 'replace') {
     const current = props.portfolio.getPortfolio()
-    if (
-      current.events.length > 0 ||
-      current.fundCodes.length > 0 ||
-      current.installments.length > 0 ||
-      current.plans.length > 0
-    ) {
+    if (current.events.length > 0 || current.fundCodes.length > 0) {
       sections.push('投资账本')
     }
   }

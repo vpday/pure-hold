@@ -1,13 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type {
-  FieldValue,
-  Portfolio,
-  PortfolioEvent,
-  PortfolioInstallment,
-  PortfolioPlan,
-} from '../models/index.ts'
+import type { FieldValue, Portfolio, PortfolioEvent } from '../models/index.ts'
 import { createPortfolioStore } from './createPortfolioStore.ts'
 
 const actual = (value: number): FieldValue<number> => ({
@@ -42,37 +36,8 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
   } as PortfolioEvent
 }
 
-function plan(overrides: Partial<PortfolioPlan> = {}): PortfolioPlan {
-  return {
-    amountCents: 10000,
-    createdAt: '2026-08-13T09:00:00.000Z',
-    cycle: 'monthly',
-    executionDay: 15,
-    executionMode: 'manual',
-    fundCode: '000001',
-    id: 'plan-1',
-    startDate: '2026-09-01',
-    status: 'active',
-    updatedAt: '2026-08-13T09:00:00.000Z',
-    ...overrides,
-  }
-}
-
-function installment(overrides: Partial<PortfolioInstallment> = {}): PortfolioInstallment {
-  return {
-    createdAt: '2026-08-13T09:00:00.000Z',
-    fundCode: '000001',
-    id: 'installment-1',
-    planId: 'plan-1',
-    plannedDate: '2026-09-15',
-    status: 'pending',
-    updatedAt: '2026-08-13T09:00:00.000Z',
-    ...overrides,
-  }
-}
-
 function emptyPortfolio(): Portfolio {
-  return { events: [], fundCodes: [], installments: [], plans: [] }
+  return { events: [], fundCodes: [] }
 }
 
 test('enables funds and executes idempotent event add, edit, settle, and delete commands', () => {
@@ -129,25 +94,6 @@ test('validates duplicate commands before applying ID idempotence', () => {
   assert.deepEqual(store.getPortfolio().events, [buyEvent()])
 })
 
-test('commits plan and installment facts independently while preserving their associations', () => {
-  const store = createPortfolioStore(emptyPortfolio(), () => {})
-
-  assert.equal(store.addPlan(plan()).ok, true)
-  assert.equal(store.addInstallment(installment()).ok, true)
-  assert.equal(
-    store.addEvent(buyEvent({ installmentId: 'installment-1', planId: 'plan-1', source: 'plan' }))
-      .ok,
-    true,
-  )
-  assert.equal(store.updatePlan(plan({ status: 'paused' })).ok, true)
-  assert.equal(store.updateInstallment(installment({ status: 'skipped' })).ok, true)
-  assert.equal(store.deleteInstallment('installment-1').reason, 'invalid-portfolio')
-  assert.equal(store.deleteEvent('event-1').ok, true)
-  assert.equal(store.deleteInstallment('installment-1').ok, true)
-  assert.equal(store.deletePlan('plan-1').ok, true)
-  assert.deepEqual(store.getPortfolio(), emptyPortfolio())
-})
-
 test('keeps old memory and storage when candidate validation or persistence fails', () => {
   let persisted = emptyPortfolio()
   let failWrites = false
@@ -185,8 +131,6 @@ test('returns detached command results and merges stable IDs without caching cal
   const merged = store.mergeCandidate({
     events: [event, buyEvent({ id: 'event-2', confirmedDate: '2026-08-14' })],
     fundCodes: ['000002'],
-    installments: [],
-    plans: [],
   })
   assert.equal(merged.ok, true)
   assert.deepEqual(store.getPortfolio().fundCodes, ['000002'])
@@ -203,8 +147,6 @@ test('rejects merge conflicts and does not create new IDs', () => {
   const result = store.mergeCandidate({
     events: [buyEvent({ totalAmount: actual(20000) })],
     fundCodes: [],
-    installments: [],
-    plans: [],
   })
   assert.equal(result.ok, false)
   assert.equal(result.reason, 'conflict')

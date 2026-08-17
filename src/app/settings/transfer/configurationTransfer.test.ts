@@ -46,8 +46,6 @@ const portfolio: Portfolio = {
     },
   ],
   fundCodes: ['000001'],
-  installments: [],
-  plans: [],
 }
 
 test('configuration transfer round trips both domains without refresh preferences', () => {
@@ -210,7 +208,7 @@ test('configuration transfer routes explicit portfolio replacement through the r
     currentPortfolio = candidate
   })
   const portfolioAdapter = createPortfolioTransferAdapter(portfolioStore)
-  const replacement: Portfolio = { events: [], fundCodes: ['000002'], installments: [], plans: [] }
+  const replacement: Portfolio = { events: [], fundCodes: ['000002'] }
   const coordinator = createConfigurationTransferCoordinator({
     commitIndexGroups: (groups) => ({ groups, ok: true }),
     getFundSettings: () => fundSettings,

@@ -8,11 +8,6 @@ import type {
   SellTransactionIssueViewModel,
   SellTransactionViewModel,
 } from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
-import type {
-  PlanExecutionRequest,
-  PlanInstallmentActionRequest,
-  PortfolioPlanViewModel,
-} from '@/features/fund-plan/presenters/toPortfolioPlanViewModel.ts'
 import FundDetailHeader from './FundDetailHeader.vue'
 import FundTradingRules from './FundTradingRules.vue'
 
@@ -25,7 +20,6 @@ defineProps<{
   error: string
   isLoading: boolean
   ledgerEnabled: boolean
-  planViewModels: readonly PortfolioPlanViewModel[]
   remainingBatches: readonly RemainingBatchViewModel[]
   sellIssues: readonly SellTransactionIssueViewModel[]
   size: string
@@ -34,12 +28,9 @@ defineProps<{
   visible: boolean
 }>()
 const emit = defineEmits<{
-  cancelPlan: [request: PlanInstallmentActionRequest]
   close: []
   edit: [code: string]
   enableLedger: []
-  executePlan: [request: PlanExecutionRequest]
-  skipPlan: [request: PlanInstallmentActionRequest]
   retry: []
   selectSection: [section: string]
 }>()
@@ -54,7 +45,6 @@ const sections = [
 ] as const
 
 const scrollContainer = ref<HTMLElement>()
-const transactionTab = ref<'recent' | 'plans'>('recent')
 const sectionTargetOffset = 64
 
 function trendClass(trend: FundDetailTrend): string {
@@ -294,8 +284,8 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                 <p class="mt-1 text-sm text-(--td-text-color-secondary)">
                   {{
                     ledgerEnabled
-                      ? '已启用，可记录交易、查看 FIFO 和管理定投。'
-                      : '启用后可记录交易、查看 FIFO 和管理定投。'
+                      ? '已启用，可记录交易和查看 FIFO。'
+                      : '启用后可记录交易和查看 FIFO。'
                   }}
                 </p>
               </div>
@@ -350,44 +340,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             class="detail-section pt-4"
           >
             <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
-            <div class="mt-4 border-b border-(--td-component-border)">
-              <div class="flex gap-4" role="tablist" aria-label="成交记录视图">
-                <t-button
-                  class="border-b-2 px-1 pb-2 text-sm"
-                  type="button"
-                  variant="text"
-                  :class="
-                    transactionTab === 'recent'
-                      ? 'border-(--td-brand-color) text-(--td-brand-color)'
-                      : 'border-transparent text-(--td-text-color-secondary)'
-                  "
-                  role="tab"
-                  :aria-selected="transactionTab === 'recent'"
-                  @click="transactionTab = 'recent'"
-                >
-                  最近成交
-                </t-button>
-                <t-button
-                  class="border-b-2 px-1 pb-2 text-sm"
-                  type="button"
-                  variant="text"
-                  :class="
-                    transactionTab === 'plans'
-                      ? 'border-(--td-brand-color) text-(--td-brand-color)'
-                      : 'border-transparent text-(--td-text-color-secondary)'
-                  "
-                  role="tab"
-                  :aria-selected="transactionTab === 'plans'"
-                  @click="transactionTab = 'plans'"
-                >
-                  定投计划
-                </t-button>
-              </div>
-            </div>
-            <div
-              v-if="transactionTab === 'recent' && transactions.length"
-              class="mt-4 overflow-x-auto"
-            >
+            <div v-if="transactions.length" class="mt-4 overflow-x-auto">
               <table class="w-full min-w-[54rem] text-sm">
                 <thead>
                   <tr class="text-left text-(--td-text-color-secondary)">
@@ -490,10 +443,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                 </tbody>
               </table>
             </div>
-            <div
-              v-if="transactionTab === 'recent' && remainingBatches.length"
-              class="mt-4 overflow-x-auto"
-            >
+            <div v-if="remainingBatches.length" class="mt-4 overflow-x-auto">
               <h3 class="mb-2 text-sm font-medium">剩余批次</h3>
               <table class="w-full min-w-[30rem] text-sm">
                 <thead>
@@ -519,7 +469,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </table>
             </div>
             <div
-              v-if="transactionTab === 'recent' && sellIssues.length"
+              v-if="sellIssues.length"
               class="mt-4 rounded-md bg-(--td-error-color-light-9) p-3 text-(--td-error-color)"
             >
               <p class="font-medium">卖出校验问题</p>
@@ -527,117 +477,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                 <li v-for="issue in sellIssues" :key="issue.eventId">{{ issue.text }}</li>
               </ul>
             </div>
-            <p
-              v-if="transactionTab === 'recent' && !transactions.length"
-              class="section-placeholder"
-            >
-              暂无交易记录
-            </p>
-            <div v-else-if="transactionTab === 'plans'" class="mt-4 flex flex-col gap-4">
-              <article
-                v-for="plan in planViewModels"
-                :key="plan.id"
-                class="rounded-md border border-(--td-component-border) p-4"
-              >
-                <div class="flex flex-wrap items-start gap-3">
-                  <div class="min-w-0 flex-1">
-                    <h3 class="font-medium">定投计划</h3>
-                    <p class="mt-1 text-sm text-(--td-text-color-secondary)">
-                      {{ plan.cycleText }} · {{ plan.executionModeText }} · {{ plan.statusText }}
-                    </p>
-                  </div>
-                  <t-tag size="small" variant="light">{{ plan.statusText }}</t-tag>
-                </div>
-                <dl class="plan-summary-grid">
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">每期含费总额</dt>
-                    <dd class="mt-1 font-mono tabular-nums">{{ plan.amountText }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">下一期计划日期</dt>
-                    <dd class="mt-1 font-mono tabular-nums">{{ plan.nextDateText }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">申购费率快照</dt>
-                    <dd class="mt-1 font-mono tabular-nums">{{ plan.feeRateText }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">历史期次数</dt>
-                    <dd class="mt-1 font-mono tabular-nums">{{ plan.installmentCount }}</dd>
-                  </div>
-                </dl>
-                <div
-                  v-if="plan.nextInstallment && plan.status === 'active'"
-                  class="plan-next-panel"
-                >
-                  <div class="text-sm">
-                    <p class="font-medium">下一期：{{ plan.nextInstallment.plannedDateText }}</p>
-                    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
-                      {{ plan.nextInstallment.detailText }} · 不会自动扣款
-                    </p>
-                  </div>
-                  <t-button
-                    theme="primary"
-                    size="small"
-                    @click="
-                      emit('executePlan', {
-                        fundCode: viewModel.code,
-                        installmentId: plan.nextInstallment.id,
-                        planId: plan.id,
-                        plannedDate: plan.nextInstallment.plannedDate,
-                      })
-                    "
-                  >
-                    处理本期
-                  </t-button>
-                </div>
-                <div v-if="plan.installments.length" class="mt-4 flex flex-col gap-2">
-                  <div
-                    v-for="installment in plan.installments"
-                    :key="installment.id"
-                    class="flex flex-wrap items-center gap-2 text-sm"
-                  >
-                    <span class="font-mono tabular-nums">{{ installment.plannedDateText }}</span>
-                    <t-tag size="small" variant="light">{{ installment.statusText }}</t-tag>
-                    <span class="text-(--td-text-color-secondary)">{{
-                      installment.detailText
-                    }}</span>
-                    <span
-                      v-if="installment.confirmedDateText !== '--'"
-                      class="text-xs text-(--td-text-color-secondary)"
-                    >
-                      实际确认 {{ installment.confirmedDateText }}
-                    </span>
-                    <template v-if="installment.status === 'pending' && !installment.isVirtual">
-                      <t-button
-                        size="small"
-                        variant="text"
-                        @click="
-                          emit('skipPlan', {
-                            fundCode: viewModel.code,
-                            installmentId: installment.id,
-                          })
-                        "
-                      >
-                        跳过
-                      </t-button>
-                      <t-popconfirm
-                        content="取消后不会生成关联买入，确认继续？"
-                        @confirm="
-                          emit('cancelPlan', {
-                            fundCode: viewModel.code,
-                            installmentId: installment.id,
-                          })
-                        "
-                      >
-                        <t-button size="small" theme="danger" variant="text">取消</t-button>
-                      </t-popconfirm>
-                    </template>
-                  </div>
-                </div>
-              </article>
-              <p v-if="!planViewModels.length" class="section-placeholder">暂无定投计划</p>
-            </div>
+            <p v-if="!transactions.length" class="section-placeholder">暂无交易记录</p>
           </section>
         </main>
       </div>
@@ -708,14 +548,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 
 .ledger-status-panel {
   @apply mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-(--td-component-border) pt-4;
-}
-
-.plan-summary-grid {
-  @apply mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4;
-}
-
-.plan-next-panel {
-  @apply mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md bg-(--td-bg-color-secondarycontainer) p-3;
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {

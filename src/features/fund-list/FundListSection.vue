@@ -10,26 +10,15 @@ import {
 import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
-import {
-  ensurePlanInstallment,
-  updatePlanInstallmentStatus,
-} from '@/domains/portfolio/services/portfolioPlanService.ts'
 import FundEditEntry from '@/features/fund-edit/FundEditEntry.vue'
 import FundDetailEntry from '@/features/fund-detail/FundDetailEntry.vue'
-import FundPlanEntry from '@/features/fund-plan/FundPlanEntry.vue'
-import FundTransactionEntry, {
-  type BuyTransactionOpenOptions,
-} from '@/features/fund-transaction/FundTransactionEntry.vue'
+import FundTransactionEntry from '@/features/fund-transaction/FundTransactionEntry.vue'
 import FundGroupSettingsEntry from '@/features/fund-group-settings/FundGroupSettingsEntry.vue'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDesktopTable from './components/FundDesktopTable.vue'
 import FundEmptyState from './components/FundEmptyState.vue'
 import FundMobileList from './components/FundMobileList.vue'
 import { useFundListSession } from './composables/useFundListSession'
-import type {
-  PlanExecutionRequest,
-  PlanInstallmentActionRequest,
-} from '@/features/fund-plan/presenters/toPortfolioPlanViewModel.ts'
 
 const emit = defineEmits<{ searchFunds: [] }>()
 const props = defineProps<{ portfolio: PortfolioStore }>()
@@ -49,10 +38,9 @@ const { preferences } = storeToRefs(appSettingsStore)
 const groupSettings = ref<{ open: () => void }>()
 const mobileList = ref<{ openSortDrawer: () => void }>()
 const fundEdit = ref<{ open: (code: string) => void }>()
-const fundPlan = ref<{ open: (code: string, name: string) => void }>()
 const fundDetail = ref<{ open: (code: string) => void }>()
 const fundTransaction = ref<{
-  open: (code: string, name: string, options?: BuyTransactionOpenOptions) => void
+  open: (code: string, name: string) => void
   openSell: (code: string, name: string) => void
 }>()
 const deletionPreview = ref<FundDeletionPreview>()
@@ -181,63 +169,6 @@ function openSell(code: string): void {
   const row = model.value.rows.find((candidate) => candidate.code === code)
   if (row) fundTransaction.value?.openSell(code, row.name)
 }
-
-function openPlan(code: string): void {
-  const row = model.value.rows.find((candidate) => candidate.code === code)
-  if (row) fundPlan.value?.open(code, row.name)
-}
-
-function openPlanExecution(request: PlanExecutionRequest): void {
-  const row = model.value.rows.find((candidate) => candidate.code === request.fundCode)
-  if (!row) return
-  const portfolio = props.portfolio.getPortfolio()
-  const plan = portfolio.plans.find(({ id }) => id === request.planId)
-  if (!plan) {
-    MessagePlugin.error('定投计划不存在')
-    return
-  }
-  const ensured = ensurePlanInstallment(
-    props.portfolio,
-    plan,
-    request.plannedDate,
-    new Date().toISOString(),
-  )
-  if (!ensured.ok) {
-    MessagePlugin.error('定投期次保存失败')
-    return
-  }
-  const event = props.portfolio
-    .getPortfolio()
-    .events.find(
-      (candidate) =>
-        candidate.kind === 'buy' &&
-        candidate.planId === request.planId &&
-        candidate.installmentId === ensured.installment.id,
-    )
-  fundTransaction.value?.open(row.code, row.name, {
-    existingEvent: event?.kind === 'buy' ? event : undefined,
-    installment: ensured.installment,
-    plan,
-    plannedDate: request.plannedDate,
-  })
-}
-
-function updatePlanInstallment(
-  request: PlanInstallmentActionRequest,
-  status: 'cancelled' | 'skipped',
-): void {
-  const result = updatePlanInstallmentStatus(
-    props.portfolio,
-    request.installmentId,
-    status,
-    new Date().toISOString(),
-  )
-  if (!result.ok) {
-    MessagePlugin.error('定投期次状态保存失败')
-    return
-  }
-  MessagePlugin.success(status === 'skipped' ? '本期定投已跳过' : '本期定投已取消')
-}
 </script>
 
 <template>
@@ -314,7 +245,6 @@ function updatePlanInstallment(
           @delete="deleteFund"
           @detail="fundDetail?.open($event)"
           @edit="fundEdit?.open($event)"
-          @plan="openPlan"
           @sell="openSell"
           @sort-change="setSort"
         />
@@ -330,7 +260,6 @@ function updatePlanInstallment(
           @delete="deleteFund"
           @detail="fundDetail?.open($event)"
           @edit="fundEdit?.open($event)"
-          @plan="openPlan"
           @sell="openSell"
           @sort-change="setSort"
         />
@@ -343,12 +272,8 @@ function updatePlanInstallment(
       :enable-ledger="enableLedger"
       :portfolio="props.portfolio"
       @edit="fundEdit?.open($event)"
-      @execute-plan="openPlanExecution"
-      @skip-plan="updatePlanInstallment($event, 'skipped')"
-      @cancel-plan="updatePlanInstallment($event, 'cancelled')"
     />
     <FundEditEntry ref="fundEdit" />
-    <FundPlanEntry ref="fundPlan" :portfolio="props.portfolio" />
     <FundTransactionEntry ref="fundTransaction" :portfolio="props.portfolio" />
 
     <t-dialog
@@ -382,13 +307,9 @@ function updatePlanInstallment(
           </dd>
           <dt>修正事件</dt>
           <dd class="font-mono tabular-nums">{{ deletionPreview.stats.adjustmentCount }}</dd>
-          <dt>定投计划</dt>
-          <dd class="font-mono tabular-nums">{{ deletionPreview.stats.planCount }}</dd>
-          <dt>定投期次</dt>
-          <dd class="font-mono tabular-nums">{{ deletionPreview.stats.installmentCount }}</dd>
         </dl>
         <p class="text-sm text-(--td-warning-color)">
-          删除后不可恢复，包含交易、分红、修正、定投计划和期次。建议先导出配置 JSON。
+          删除后不可恢复，包含交易、分红和修正。建议先导出配置 JSON。
         </p>
         <p v-if="deletionError" class="text-sm text-(--td-error-color)">
           {{ deletionError }}

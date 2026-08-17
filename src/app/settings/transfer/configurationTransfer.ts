@@ -150,8 +150,6 @@ function createPortfolioWarnings(
 ): ConfigurationTransferWarning[] {
   const orphanedFundCodes = new Set<string>(portfolio.fundCodes)
   for (const event of portfolio.events) orphanedFundCodes.add(event.fundCode)
-  for (const plan of portfolio.plans) orphanedFundCodes.add(plan.fundCode)
-  for (const installment of portfolio.installments) orphanedFundCodes.add(installment.fundCode)
 
   const missingFundCodes = [...orphanedFundCodes]
     .filter((fundCode) => !knownFundCodes.has(fundCode))

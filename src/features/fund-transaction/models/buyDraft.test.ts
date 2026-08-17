@@ -59,14 +59,12 @@ test('keeps explicitly entered actual units, fee and NAV as actual fields', () =
   assert.equal(result.draft.purchaseFeeRate.source, 'manual')
 })
 
-test('keeps plan and installment associations on plan buy drafts', () => {
+test('creates ordinary buy drafts without external associations', () => {
   const result = createBuyDraft(
     {
       confirmedDate: '2026-08-14',
       fundCode: '161725',
-      id: 'plan-buy-1',
-      installmentId: 'installment-1',
-      planId: 'plan-1',
+      id: 'buy-1',
       purchaseFeePercent: null,
       totalAmountYuan: '500',
     },
@@ -75,9 +73,7 @@ test('keeps plan and installment associations on plan buy drafts', () => {
 
   assert.equal(result.ok, true)
   if (!result.ok) return
-  assert.equal(result.draft.source, 'plan')
-  assert.equal(result.draft.planId, 'plan-1')
-  assert.equal(result.draft.installmentId, 'installment-1')
+  assert.equal(result.draft.source, 'manual')
 })
 
 test('rejects invalid amount precision, unit precision, dates and non-trustworthy values', () => {

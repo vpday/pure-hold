@@ -1,9 +1,4 @@
-import {
-  type Portfolio,
-  type PortfolioEvent,
-  type PortfolioInstallment,
-  type PortfolioPlan,
-} from '../models/index.ts'
+import { type Portfolio, type PortfolioEvent } from '../models/index.ts'
 import {
   calculatePortfolio,
   type CurrentNavByFund,
@@ -25,20 +20,14 @@ export type PortfolioCommandResult =
 
 export interface PortfolioStore {
   readonly addEvent: (event: PortfolioEvent) => PortfolioCommandResult
-  readonly addInstallment: (installment: PortfolioInstallment) => PortfolioCommandResult
-  readonly addPlan: (plan: PortfolioPlan) => PortfolioCommandResult
   readonly calculate: (input: PortfolioCalculationInput) => PortfolioCalculation
   readonly deleteEvent: (eventId: string) => PortfolioCommandResult
-  readonly deleteInstallment: (installmentId: string) => PortfolioCommandResult
-  readonly deletePlan: (planId: string) => PortfolioCommandResult
   readonly disableFund: (fundCode: string) => PortfolioCommandResult
   readonly enableFund: (fundCode: string) => PortfolioCommandResult
   readonly getPortfolio: () => Portfolio
   readonly mergeCandidate: (candidate: Portfolio) => PortfolioCommandResult
   readonly settleEvent: (event: PortfolioEvent) => PortfolioCommandResult
   readonly updateEvent: (event: PortfolioEvent) => PortfolioCommandResult
-  readonly updateInstallment: (installment: PortfolioInstallment) => PortfolioCommandResult
-  readonly updatePlan: (plan: PortfolioPlan) => PortfolioCommandResult
 }
 
 export interface PortfolioCalculationInput {
@@ -85,39 +74,6 @@ export function createPortfolioStore(
     return deleteById(eventId, current.events, (events) => ({ ...current, events }))
   }
 
-  function addPlan(plan: PortfolioPlan): PortfolioCommandResult {
-    return addById('plans', plan, current.plans, (plans) => ({ ...current, plans }))
-  }
-
-  function updatePlan(plan: PortfolioPlan): PortfolioCommandResult {
-    return updateById('plans', plan, current.plans, (plans) => ({ ...current, plans }))
-  }
-
-  function deletePlan(planId: string): PortfolioCommandResult {
-    return deleteById(planId, current.plans, (plans) => ({ ...current, plans }))
-  }
-
-  function addInstallment(installment: PortfolioInstallment): PortfolioCommandResult {
-    return addById('installments', installment, current.installments, (installments) => ({
-      ...current,
-      installments,
-    }))
-  }
-
-  function updateInstallment(installment: PortfolioInstallment): PortfolioCommandResult {
-    return updateById('installments', installment, current.installments, (installments) => ({
-      ...current,
-      installments,
-    }))
-  }
-
-  function deleteInstallment(installmentId: string): PortfolioCommandResult {
-    return deleteById(installmentId, current.installments, (installments) => ({
-      ...current,
-      installments,
-    }))
-  }
-
   function mergeCandidate(candidate: Portfolio): PortfolioCommandResult {
     let validated: Portfolio
     try {
@@ -128,16 +84,10 @@ export function createPortfolioStore(
 
     const merged = mergeCollection(current.events, validated.events)
     if (!merged.ok) return failure(merged.reason, merged.error)
-    const plans = mergeCollection(current.plans, validated.plans)
-    if (!plans.ok) return failure(plans.reason, plans.error)
-    const installments = mergeCollection(current.installments, validated.installments)
-    if (!installments.ok) return failure(installments.reason, installments.error)
 
     return commit({
       events: merged.items,
       fundCodes: unique([...current.fundCodes, ...validated.fundCodes]),
-      installments: installments.items,
-      plans: plans.items,
     })
   }
 
@@ -166,20 +116,14 @@ export function createPortfolioStore(
 
   return {
     addEvent,
-    addInstallment,
-    addPlan,
     calculate,
     deleteEvent,
-    deleteInstallment,
-    deletePlan,
     disableFund,
     enableFund,
     getPortfolio,
     mergeCandidate,
     settleEvent,
     updateEvent,
-    updateInstallment,
-    updatePlan,
   }
 
   function addById<T extends { readonly id: string }>(
