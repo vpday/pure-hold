@@ -2,9 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
+import type { PortfolioCoordinator } from '@/app/portfolio/portfolioCoordinator.ts'
 import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
-import type { PortfolioBuyEvent, PortfolioSellEvent } from '@/domains/portfolio/models/index.ts'
+import type { CurrentNavByFund } from '@/domains/portfolio/services/calculatePortfolio.ts'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { subscribeGlobalRefresh } from '@/shared/services/globalRefreshCoordinator'
 import FundDetailDrawer from './components/FundDetailDrawer.vue'
@@ -18,20 +19,12 @@ import { useFundHoldings } from './composables/useFundHoldings'
 import { useFundMetrics } from './composables/useFundMetrics'
 import type { FundMetricsRequestResult } from './composables/useFundMetrics'
 import { useFundPerformance } from './composables/useFundPerformance'
+import { toFundLedgerViewModel, toLedgerRecordViewModels } from './presenters/toFundLedgerViewModel'
 import { toFundDetailViewModel } from './presenters/toFundDetailViewModel'
-import { toBuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
-import {
-  toSellTransactionIssueViewModels,
-  toSellTransactionViewModel,
-} from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
-import type {
-  SellTransactionIssueViewModel,
-  SellTransactionViewModel,
-} from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
-import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 
 const props = defineProps<{
   portfolio: PortfolioStore
+  portfolioCoordinator: PortfolioCoordinator
   portfolioRevision: number
 }>()
 const emit = defineEmits<{
@@ -41,13 +34,10 @@ const emit = defineEmits<{
   recordBuy: [code: string]
   recordSell: [code: string]
 }>()
-type FundTransactionViewModel =
-  | (BuyTransactionViewModel & { readonly kind: 'buy' })
-  | (SellTransactionViewModel & { readonly kind: 'sell' })
 const store = useFundsStore()
 const detail = useFundDetail()
 const activeSection = ref('overview')
-const ledgerEnabled = ref(false)
+const ledgerRevision = ref(0)
 const historyDataSource = useFundHistoryDataSource()
 const benchmarkDataSource = useFundBenchmarkDataSource()
 const performance = useFundPerformance(
@@ -79,42 +69,44 @@ const viewModel = computed(() => {
     ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value, holdingMetrics.value)
     : undefined
 })
-const calculation = computed(() => {
+const currentNavByFund = computed<CurrentNavByFund>(() => {
+  const code = detail.currentCode.value
+  const currentSnapshot = snapshot.value
+  if (
+    !code ||
+    !currentSnapshot ||
+    currentSnapshot.navDate === null ||
+    currentSnapshot.nav === null
+  ) {
+    return {}
+  }
+  return {
+    [code]: {
+      date: currentSnapshot.navDate,
+      unitNav: { confidence: 'actual', source: 'platform', value: currentSnapshot.nav },
+    },
+  }
+})
+const reconciliation = computed(() => {
   const code = detail.currentCode.value
   if (!code) return undefined
-  // PortfolioStore is deliberately not reactive; this token invalidates the derived calculation.
   void props.portfolioRevision
-  return props.portfolio.calculate({ asOfDate: shanghaiDate(), currentNavByFund: {} })
+  void ledgerRevision.value
+  return props.portfolioCoordinator.reconcileFund({
+    asOfDate: shanghaiDate(),
+    currentNavByFund: currentNavByFund.value,
+    fundCode: code,
+  })
 })
-const transactions = computed<readonly FundTransactionViewModel[]>(() => {
+const ledger = computed(() => {
+  const currentReconciliation = reconciliation.value
+  return currentReconciliation ? toFundLedgerViewModel(currentReconciliation) : undefined
+})
+const transactions = computed(() => {
   const code = detail.currentCode.value
-  const currentCalculation = calculation.value
+  const currentCalculation = reconciliation.value?.calculation
   if (!code || !currentCalculation) return []
-  return props.portfolio
-    .getPortfolio()
-    .events.filter(
-      (event): event is PortfolioBuyEvent | PortfolioSellEvent =>
-        event.fundCode === code && (event.kind === 'buy' || event.kind === 'sell'),
-    )
-    .sort((left, right) => {
-      const leftPending = left.settlementStatus === 'pending-settlement'
-      const rightPending = right.settlementStatus === 'pending-settlement'
-      if (leftPending !== rightPending) return leftPending ? -1 : 1
-      return right.submittedAt.localeCompare(left.submittedAt) || right.id.localeCompare(left.id)
-    })
-    .map((event) => {
-      if (event.kind === 'buy') {
-        return { kind: 'buy' as const, ...toBuyTransactionViewModel(event, currentCalculation) }
-      }
-      return { kind: 'sell' as const, ...toSellTransactionViewModel(event, currentCalculation) }
-    })
-})
-const sellIssues = computed<readonly SellTransactionIssueViewModel[]>(() => {
-  const code = detail.currentCode.value
-  const currentCalculation = calculation.value
-  return code && currentCalculation
-    ? toSellTransactionIssueViewModels(currentCalculation, code)
-    : []
+  return toLedgerRecordViewModels(props.portfolio.getPortfolio().events, currentCalculation, code)
 })
 watch([detail.visible, detail.currentCode, detail.basicInfo], ([visible, code, basicInfo]) => {
   if (visible && code && basicInfo) {
@@ -148,7 +140,6 @@ function open(code: string): void {
     return
   }
   activeSection.value = 'overview'
-  ledgerEnabled.value = props.portfolio.getPortfolio().fundCodes.includes(code)
   performance.open(code)
   metrics.open(code)
   holdings.open(code)
@@ -213,14 +204,26 @@ function deleteTransaction(eventId: string): void {
 
 function recordBuy(): void {
   const code = detail.currentCode.value
-  if (!code || !ledgerEnabled.value) return
+  if (!code || !ledger.value?.ledgerEnabled) return
   emit('recordBuy', code)
 }
 
 function recordSell(): void {
   const code = detail.currentCode.value
-  if (!code || !ledgerEnabled.value) return
+  if (!code || !ledger.value?.ledgerEnabled) return
   emit('recordSell', code)
+}
+
+function retryLedger(): void {
+  const code = detail.currentCode.value
+  if (!code || !ledger.value?.retryAvailable) return
+  const result = props.portfolioCoordinator.ensureFundLedger({ fundCode: code })
+  ledgerRevision.value += 1
+  if (!result.ok) {
+    MessagePlugin.error('投资账本自动建立仍未完成，请稍后重试。')
+    return
+  }
+  MessagePlugin.success('投资账本已建立')
 }
 
 defineExpose({ open })
@@ -228,12 +231,11 @@ defineExpose({ open })
 
 <template>
   <FundDetailDrawer
-    v-if="viewModel"
+    v-if="viewModel && ledger"
     :active-section="activeSection"
-    :ledger-enabled="ledgerEnabled"
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
-    :sell-issues="sellIssues"
+    :ledger="ledger"
     :transactions="transactions"
     size="100dvh"
     :view-model="viewModel"
@@ -244,6 +246,7 @@ defineExpose({ open })
     @edit-transaction="editTransaction"
     @record-buy="recordBuy"
     @record-sell="recordSell"
+    @retry-ledger="retryLedger"
     @retry="detail.retry"
     @select-section="activeSection = $event"
   >

@@ -2,27 +2,21 @@
 import { ref } from 'vue'
 
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
-import type { BuyTransactionViewModel } from '@/features/fund-transaction/presenters/toBuyTransactionViewModel.ts'
 import type {
-  SellTransactionIssueViewModel,
-  SellTransactionViewModel,
-} from '@/features/fund-transaction/presenters/toSellTransactionViewModel.ts'
+  FundLedgerViewModel,
+  LedgerRecordViewModel,
+} from '../presenters/toFundLedgerViewModel'
 import FundDetailHeader from './FundDetailHeader.vue'
 import FundTradingRules from './FundTradingRules.vue'
 import FundTransactionsSection from './FundTransactionsSection.vue'
-
-type FundTransactionViewModel =
-  | (BuyTransactionViewModel & { readonly kind: 'buy' })
-  | (SellTransactionViewModel & { readonly kind: 'sell' })
 
 defineProps<{
   activeSection: string
   error: string
   isLoading: boolean
-  ledgerEnabled: boolean
-  sellIssues: readonly SellTransactionIssueViewModel[]
+  ledger: FundLedgerViewModel
   size: string
-  transactions: readonly FundTransactionViewModel[]
+  transactions: readonly LedgerRecordViewModel[]
   viewModel: FundDetailViewModel
   visible: boolean
 }>()
@@ -33,6 +27,7 @@ const emit = defineEmits<{
   editTransaction: [eventId: string]
   recordBuy: [code: string]
   recordSell: [code: string]
+  retryLedger: []
   retry: []
   selectSection: [section: string]
 }>()
@@ -43,7 +38,7 @@ const sections = [
   { href: '#fund-detail-metrics', label: '数据指标', value: 'metrics' },
   { href: '#fund-detail-holdings', label: '持仓构成', value: 'holdings' },
   { href: '#fund-detail-trading-rules', label: '交易规则', value: 'trading-rules' },
-  { href: '#fund-detail-transactions', label: '成交记录', value: 'transactions' },
+  { href: '#fund-detail-transactions', label: '账本记录', value: 'transactions' },
 ] as const
 
 const scrollContainer = ref<HTMLElement>()
@@ -285,14 +280,32 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                 <p class="font-medium">投资账本</p>
                 <p class="mt-1 text-sm text-(--td-text-color-secondary)">
                   {{
-                    ledgerEnabled
-                      ? '已启用，可记录交易和查看移动平均成本。'
-                      : '首次保存有效持仓后自动建立，可记录交易和查看移动平均成本。'
+                    ledger.ledgerEnabled
+                      ? '已建立，可记录交易和查看移动加权平均成本。'
+                      : ledger.retryAvailable
+                        ? '持仓信息已保存，但账本自动建立未完成。'
+                        : '首次保存有效持仓后自动建立账本。'
                   }}
                 </p>
               </div>
-              <t-tag v-if="ledgerEnabled" theme="success" variant="light">已启用</t-tag>
-              <t-tag v-else variant="light">未建立</t-tag>
+              <div class="flex items-center gap-2">
+                <t-tag
+                  :theme="
+                    ledger.ledgerEnabled ? 'success' : ledger.retryAvailable ? 'warning' : 'default'
+                  "
+                  variant="light"
+                >
+                  {{ ledger.ledgerEnabled ? '已建立' : ledger.availabilityText }}
+                </t-tag>
+                <t-button
+                  v-if="ledger.retryAvailable"
+                  size="small"
+                  variant="outline"
+                  @click="emit('retryLedger')"
+                >
+                  重试自动建账
+                </t-button>
+              </div>
             </div>
           </section>
 
@@ -335,9 +348,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           </section>
 
           <FundTransactionsSection
-            :code="viewModel.code"
-            :ledger-enabled="ledgerEnabled"
-            :sell-issues="sellIssues"
+            :ledger="ledger"
             :transactions="transactions"
             @delete-transaction="emit('deleteTransaction', $event)"
             @edit-transaction="emit('editTransaction', $event)"

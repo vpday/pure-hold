@@ -31,6 +31,10 @@ const transactionSectionSource = await readFile(
   new URL('../fund-detail/components/FundTransactionsSection.vue', import.meta.url),
   'utf8',
 )
+const ledgerPresenterSource = await readFile(
+  new URL('../fund-detail/presenters/toFundLedgerViewModel.ts', import.meta.url),
+  'utf8',
+)
 
 test('feeds the same session-owned rows to desktop and mobile views', () => {
   assert.equal(sectionSource.match(/:rows="model\.rows"/g)?.length, 2)
@@ -87,6 +91,7 @@ test('uses the portfolio coordinator for a counted second deletion confirmation'
 test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(sectionSource, /portfolioCoordinator\.ensureFundLedger\(\{/)
   assert.match(sectionSource, /:ensure-fund-ledger="ensureFundLedger"/)
+  assert.match(sectionSource, /:portfolio-coordinator="props\.portfolioCoordinator"/)
   assert.doesNotMatch(sectionSource, /:enable-ledger=/)
   assert.doesNotMatch(sectionSource, /portfolioCoordinator\.enableFund\(\{/)
   assert.match(sectionSource, /:portfolio-revision="portfolioRevision"/)
@@ -96,19 +101,31 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(sectionSource, /@record-buy="openBuy"/)
   assert.match(sectionSource, /@record-sell="openSell"/)
   assert.match(detailEntrySource, /portfolioRevision/)
-  assert.match(detailEntrySource, /ledgerEnabled\.value = props\.portfolio\.getPortfolio\(\)/)
+  assert.match(detailEntrySource, /portfolioCoordinator: PortfolioCoordinator/)
+  assert.match(detailEntrySource, /props\.portfolioCoordinator\.reconcileFund\(/)
+  assert.match(detailEntrySource, /toLedgerRecordViewModels/)
   assert.doesNotMatch(detailEntrySource, /handleEnableLedger|@enable-ledger/)
-  assert.match(detailDrawerSource, /ledgerEnabled: boolean/)
+  assert.match(detailDrawerSource, /ledger: FundLedgerViewModel/)
+  assert.match(detailDrawerSource, /retryAvailable/)
   assert.doesNotMatch(detailDrawerSource, /启用账本|enableLedger/)
   assert.match(detailDrawerSource, /FundTransactionsSection/)
+  assert.match(transactionSectionSource, /ledger: FundLedgerViewModel/)
   assert.match(transactionSectionSource, /<t-table/)
   assert.doesNotMatch(transactionSectionSource, /<table\b/)
   assert.match(transactionSectionSource, /submittedAtText/)
   assert.match(transactionSectionSource, /<t-popconfirm/)
   assert.match(transactionSectionSource, /记录买入/)
   assert.match(transactionSectionSource, /记录卖出/)
-  assert.match(transactionSectionSource, /costBasisAmount/)
-  assert.doesNotMatch(detailEntrySource, /toRemainingBatchViewModels|initialHoldingDatesByEventId/)
+  assert.match(transactionSectionSource, /row\.canEdit/)
+  assert.match(transactionSectionSource, /row\.canDelete/)
+  assert.match(transactionSectionSource, /平均成本/)
+  for (const label of ['期初持仓', '买入', '卖出', '现金分红', '红利再投资', '调仓']) {
+    assert.match(ledgerPresenterSource, new RegExp(label))
+  }
+  assert.doesNotMatch(
+    detailEntrySource + detailDrawerSource + transactionSectionSource,
+    /toRemainingBatchViewModels|initialHoldingDatesByEventId|remainingBatches|sellAllocations|FIFO/,
+  )
 })
 
 test('keeps the detail drawer open while launching transaction actions', () => {

@@ -285,6 +285,7 @@ function deleteTransaction(eventId: string): void {
     <FundDetailEntry
       ref="fundDetail"
       :portfolio="props.portfolio"
+      :portfolio-coordinator="props.portfolioCoordinator"
       :portfolio-revision="portfolioRevision"
       @delete-transaction="deleteTransaction"
       @edit="fundEdit?.open($event)"
