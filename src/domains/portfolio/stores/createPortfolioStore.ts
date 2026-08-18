@@ -67,16 +67,9 @@ export function createPortfolioStore(
   }
 
   function settleEvent(event: PortfolioEvent): PortfolioCommandResult {
-    if (event.kind !== 'buy' && event.kind !== 'sell') {
-      return updateEvent({ ...event, settlementStatus: 'settled' })
-    }
-    const isSettled =
-      event.confirmedDate !== undefined &&
-      event.units.value !== null &&
-      event.units.confidence === 'actual'
     return updateEvent({
       ...event,
-      settlementStatus: isSettled ? 'settled' : 'pending-settlement',
+      settlementStatus: canSettleEvent(event) ? 'settled' : 'pending-settlement',
     })
   }
 
@@ -180,6 +173,29 @@ export function createPortfolioStore(
     if (!items.some((item) => item.id === id)) return success(current)
     return commit(createCandidate(items.filter((item) => item.id !== id)))
   }
+}
+
+function canSettleEvent(event: PortfolioEvent): boolean {
+  switch (event.kind) {
+    case 'buy':
+    case 'sell':
+      return event.confirmedDate !== undefined && hasActualValue(event.units)
+    case 'cash-dividend':
+      return hasActualValue(event.cashAmount)
+    case 'dividend-reinvestment':
+      return hasActualValue(event.dividendAmount) && hasActualValue(event.units)
+    case 'initial-holding':
+      return hasActualValue(event.units) && hasActualValue(event.costAmount)
+    case 'adjustment':
+      return hasActualValue(event.targetUnits) && hasActualValue(event.targetCostAmount)
+  }
+}
+
+function hasActualValue(field: {
+  readonly confidence: 'actual' | 'estimated' | 'unknown'
+  readonly value: number | null
+}): boolean {
+  return field.value !== null && field.confidence === 'actual'
 }
 
 function mergeCollection<T extends { readonly id: string }>(

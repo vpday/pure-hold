@@ -135,7 +135,7 @@ function adjustmentEvent(
   return {
     auditedAt: '2026-08-13T09:00:00.000Z',
     confirmedDate: '2026-08-11',
-    costAmountDelta: actual(200, 'platform'),
+    targetCostAmount: actual(10200, 'platform'),
     createdAt: '2026-08-13T09:00:00.000Z',
     fundCode: '000001',
     id: 'adjustment-1',
@@ -143,7 +143,7 @@ function adjustmentEvent(
     reason: '平台对账修正',
     settlementStatus: 'settled',
     source: 'adjustment',
-    unitsDelta: actual(2, 'platform'),
+    targetUnits: actual(12, 'platform'),
     updatedAt: '2026-08-13T09:00:00.000Z',
     ...overrides,
   }
@@ -273,7 +273,7 @@ test('does not apply a sell that exceeds available units', () => {
   assert.equal(aggregate(result).costAmount.value, 10000)
 })
 
-test('replays same-day events in saved order', () => {
+test('replays same-day events in stable ID order', () => {
   const buy = buyEvent({ confirmedDate: '2026-08-12', id: 'buy-same-day' })
   const sell = sellEvent({
     confirmedDate: '2026-08-12',
@@ -282,23 +282,23 @@ test('replays same-day events in saved order', () => {
     requestedUnits: actual(5),
   })
 
-  const sellFirst = calculate([sell, buy])
-  const buyFirst = calculate([buy, sell])
-  assert.equal(sellFirst.issues[0]?.code, 'insufficient-units')
-  assert.equal(aggregate(sellFirst).units.value, 10)
-  assert.equal(buyFirst.issues.length, 0)
-  assert.equal(aggregate(buyFirst).units.value, 5)
+  const first = calculate([sell, buy])
+  const second = calculate([buy, sell])
+  assert.equal(first.issues.length, 0)
+  assert.equal(second.issues.length, 0)
+  assert.equal(aggregate(first).units.value, 5)
+  assert.equal(aggregate(second).units.value, 5)
 })
 
-test('applies valid adjustments directly to the aggregate', () => {
+test('applies target adjustments directly to the aggregate', () => {
   const result = calculate([
     initialHoldingEvent(),
-    adjustmentEvent({ id: 'add', unitsDelta: actual(2), costAmountDelta: actual(200) }),
+    adjustmentEvent({ id: 'add', targetCostAmount: actual(10200), targetUnits: actual(12) }),
     adjustmentEvent({
       confirmedDate: '2026-08-12',
-      costAmountDelta: actual(-100),
+      targetCostAmount: actual(10100),
       id: 'remove',
-      unitsDelta: actual(-1),
+      targetUnits: actual(11),
     }),
   ])
 
@@ -310,23 +310,57 @@ test('applies valid adjustments directly to the aggregate', () => {
   )
 })
 
-test('rejects adjustments that would make units or cost negative', () => {
+test('reports invalid target adjustments without changing the aggregate', () => {
   const result = calculate([
     initialHoldingEvent(),
     adjustmentEvent({
-      costAmountDelta: actual(-11000),
+      targetCostAmount: actual(-1000),
       id: 'invalid-adjustment',
-      unitsDelta: actual(-11),
+      targetUnits: actual(-1),
     }),
   ])
 
   assert.deepEqual(
     result.issues.map((issue) => issue.code),
-    ['insufficient-adjustment-units', 'insufficient-adjustment-cost'],
+    ['invalid-adjustment-target'],
   )
   assert.equal(result.adjustmentEvents[0]?.settlementStatus, 'pending-settlement')
   assert.equal(aggregate(result).units.value, 10)
   assert.equal(aggregate(result).costAmount.value, 10000)
+})
+
+test('puts incomplete or estimated target adjustments in pending settlement', () => {
+  const result = calculate([
+    initialHoldingEvent(),
+    adjustmentEvent({
+      id: 'pending-adjustment',
+      targetCostAmount: unknown(),
+      targetUnits: estimated(12),
+    }),
+  ])
+
+  assert.equal(result.adjustmentEvents[0]?.settlementStatus, 'pending-settlement')
+  assert.deepEqual(result.pendingSettlement, [
+    {
+      eventId: 'pending-adjustment',
+      fundCode: '000001',
+      missingFacts: ['adjustment-target-units', 'adjustment-target-cost-amount'],
+    },
+  ])
+  assert.equal(aggregate(result).units.value, 10)
+  assert.equal(aggregate(result).costAmount.value, 10000)
+})
+
+test('always replays an initial holding before later events for the same fund', () => {
+  const result = calculate([
+    buyEvent({ confirmedDate: '2026-08-01', id: 'buy-before-initial', units: actual(5) }),
+    initialHoldingEvent({ confirmedDate: '2026-08-12', id: 'initial-holding:000001' }),
+    sellEvent({ confirmedDate: '2026-08-13', id: 'sell-after-initial', units: actual(3) }),
+  ])
+
+  assert.equal(result.issues.length, 0)
+  assert.equal(aggregate(result).units.value, 12)
+  assert.equal(aggregate(result).costAmount.value, 16000)
 })
 
 test('counts cash dividends without changing aggregate cost or units', () => {

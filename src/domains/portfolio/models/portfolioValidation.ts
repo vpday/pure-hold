@@ -256,26 +256,38 @@ function validateAdjustmentEvent(record: Record<string, unknown>): PortfolioAdju
       ...EVENT_COMMON_KEYS,
       'confirmedDate',
       'kind',
-      'unitsDelta',
-      'costAmountDelta',
+      'targetUnits',
+      'targetCostAmount',
       'reason',
     ]),
   )
   const reason = requireString(record.reason, 'adjustment reason').trim()
   if (reason.length === 0) throw new TypeError('Adjustment reason must not be empty')
+  const targetCostAmount = validateField(record.targetCostAmount, 'target cost amount', {
+    allowNegative: false,
+    maxDecimals: 0,
+  })
+  const targetUnits = validateField(record.targetUnits, 'target units', {
+    allowNegative: false,
+    maxDecimals: 4,
+  })
+  validateTargetAggregate(targetUnits, targetCostAmount)
   return {
     ...eventBase(record, 'adjustment'),
-    costAmountDelta: validateField(record.costAmountDelta, 'cost amount delta', {
-      allowNegative: true,
-      maxDecimals: 0,
-    }),
+    targetCostAmount,
     kind: 'adjustment',
     reason,
-    unitsDelta: validateField(record.unitsDelta, 'units delta', {
-      allowNegative: true,
-      maxDecimals: 4,
-    }),
+    targetUnits,
   } as unknown as PortfolioAdjustmentEvent
+}
+
+function validateTargetAggregate(units: FieldValue<number>, costAmount: FieldValue<number>): void {
+  if (units.value === null || costAmount.value === null) return
+  const unitsAreZero = units.value === 0
+  const costAmountIsZero = costAmount.value === 0
+  if (unitsAreZero !== costAmountIsZero) {
+    throw new TypeError('Adjustment target units and cost amount must be zero together')
+  }
 }
 
 function eventBase(

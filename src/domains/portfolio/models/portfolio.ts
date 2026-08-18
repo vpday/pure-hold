@@ -94,8 +94,8 @@ export interface PortfolioInitialHoldingEvent extends PortfolioConfirmedEventBas
 
 export interface PortfolioAdjustmentEvent extends PortfolioConfirmedEventBase {
   readonly kind: 'adjustment'
-  readonly unitsDelta: UnitsFieldValue
-  readonly costAmountDelta: MoneyFieldValue
+  readonly targetUnits: UnitsFieldValue
+  readonly targetCostAmount: MoneyFieldValue
   readonly reason: string
 }
 

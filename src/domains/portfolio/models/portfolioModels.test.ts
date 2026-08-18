@@ -76,10 +76,10 @@ function event(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
     case 'adjustment':
       return {
         ...common,
-        costAmountDelta: unknown(),
         kind: 'adjustment',
         reason: 'reason',
-        unitsDelta: unknown(),
+        targetCostAmount: unknown(),
+        targetUnits: unknown(),
         ...overrides,
       } as PortfolioEvent
     default:
@@ -134,12 +134,12 @@ test('constructs a portfolio with every event kind and independent event objects
       units: actual(50),
     }),
     event({
-      costAmountDelta: actual(-100),
+      targetCostAmount: actual(0),
       id: 'event-6',
       kind: 'adjustment',
       reason: '平台对账修正',
       source: 'adjustment',
-      unitsDelta: actual(-1),
+      targetUnits: actual(0),
     }),
   ]
   const input: Portfolio = {
@@ -228,6 +228,30 @@ test('rejects inconsistent transaction modes, dates and statuses', () => {
 test('rejects negative values, excessive precision, and invalid calendar or audit dates', () => {
   assert.throws(() => createPortfolioEvent(event({ totalAmount: actual(-1) })), /amount/i)
   assert.throws(() => createPortfolioEvent(event({ units: actual(1.23456) })), /units/i)
+  assert.throws(
+    () =>
+      createPortfolioEvent(
+        event({
+          kind: 'adjustment',
+          source: 'adjustment',
+          targetCostAmount: actual(-1),
+          targetUnits: actual(1),
+        }),
+      ),
+    /target cost/i,
+  )
+  assert.throws(
+    () =>
+      createPortfolioEvent(
+        event({
+          kind: 'adjustment',
+          source: 'adjustment',
+          targetCostAmount: actual(100),
+          targetUnits: actual(0),
+        }),
+      ),
+    /zero together/i,
+  )
   assert.throws(() => createPortfolioEvent(event({ confirmedDate: '2026-02-30' })), /date/i)
   assert.throws(
     () => createPortfolioEvent(event({ auditedAt: '2026-02-30T09:00:00.000Z' })),
@@ -260,6 +284,18 @@ test('rejects duplicate IDs, invalid states, retired fields, and kind-incompatib
   assert.throws(
     () => createPortfolioEvent(event({ cashAmount: actual(1), kind: 'buy' } as never)),
     /kind|field/i,
+  )
+  assert.throws(
+    () =>
+      createPortfolioEvent(
+        event({
+          costAmountDelta: actual(1),
+          kind: 'adjustment',
+          source: 'adjustment',
+          unitsDelta: actual(1),
+        } as never),
+      ),
+    /field|structure/i,
   )
 })
 

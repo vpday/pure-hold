@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FieldValue, Portfolio, PortfolioEvent } from '../models/index.ts'
+import type {
+  FieldValue,
+  Portfolio,
+  PortfolioAdjustmentEvent,
+  PortfolioEvent,
+} from '../models/index.ts'
 import { createPortfolioStore } from './createPortfolioStore.ts'
 
 const actual = (value: number): FieldValue<number> => ({
@@ -39,6 +44,26 @@ function buyEvent(overrides: Partial<PortfolioEvent> = {}): PortfolioEvent {
   } as PortfolioEvent
 }
 
+function adjustmentEvent(
+  overrides: Partial<PortfolioAdjustmentEvent> = {},
+): PortfolioAdjustmentEvent {
+  return {
+    auditedAt: '2026-08-13T09:00:00.000Z',
+    confirmedDate: '2026-08-12',
+    createdAt: '2026-08-13T09:00:00.000Z',
+    fundCode: '000001',
+    id: 'adjustment-1',
+    kind: 'adjustment',
+    reason: '平台对账修正',
+    settlementStatus: 'pending-settlement',
+    source: 'adjustment',
+    targetCostAmount: unknown(),
+    targetUnits: unknown(),
+    updatedAt: '2026-08-13T09:00:00.000Z',
+    ...overrides,
+  }
+}
+
 function emptyPortfolio(): Portfolio {
   return { events: [], fundCodes: [] }
 }
@@ -67,6 +92,24 @@ test('enables funds and executes idempotent event add, edit, settle, and delete 
   assert.equal(store.deleteEvent('event-1').ok, true)
   assert.deepEqual(store.getPortfolio(), { ...emptyPortfolio(), fundCodes: ['000001'] })
   assert.equal(writes.length, 5)
+})
+
+test('settles adjustments only when both target facts are actual', () => {
+  const store = createPortfolioStore(emptyPortfolio(), () => {})
+  const pending = adjustmentEvent()
+  assert.equal(store.addEvent(pending).ok, true)
+
+  const stillPending = store.settleEvent(pending)
+  assert.equal(stillPending.ok, true)
+  assert.equal(store.getPortfolio().events[0]?.settlementStatus, 'pending-settlement')
+
+  const complete = adjustmentEvent({
+    targetCostAmount: actual(10000),
+    targetUnits: actual(10),
+  })
+  const settled = store.settleEvent(complete)
+  assert.equal(settled.ok, true)
+  assert.equal(store.getPortfolio().events[0]?.settlementStatus, 'settled')
 })
 
 test('disables a fund idempotently and keeps the old state when persistence fails', () => {

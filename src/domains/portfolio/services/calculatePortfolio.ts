@@ -20,8 +20,8 @@ export interface PortfolioNavPoint {
 export type CurrentNavByFund = Readonly<Record<string, PortfolioNavPoint | undefined>>
 
 export type PortfolioPendingFact =
-  | 'adjustment-cost-amount'
-  | 'adjustment-units'
+  | 'adjustment-target-cost-amount'
+  | 'adjustment-target-units'
   | 'cash-amount'
   | 'confirmed-date'
   | 'dividend-amount'
@@ -32,8 +32,7 @@ export type PortfolioPendingFact =
   | 'units'
 
 export type PortfolioCalculationIssueCode =
-  | 'insufficient-adjustment-units'
-  | 'insufficient-adjustment-cost'
+  | 'invalid-adjustment-target'
   | 'insufficient-units'
   | 'missing-sell-units'
 
@@ -69,8 +68,8 @@ export interface PortfolioAdjustmentCalculation {
   readonly eventId: string
   readonly fundCode: string
   readonly settlementStatus: 'pending-settlement' | 'settled'
-  readonly unitsDelta: UnitsFieldValue
-  readonly costAmountDelta: MoneyFieldValue
+  readonly targetUnits: UnitsFieldValue
+  readonly targetCostAmount: MoneyFieldValue
   readonly reason: string
 }
 
@@ -106,16 +105,16 @@ export type PortfolioCalculationIssue =
   | {
       readonly eventId: string
       readonly fundCode: string
-      readonly code: Exclude<PortfolioCalculationIssueCode, 'insufficient-adjustment-cost'>
+      readonly code: 'insufficient-units' | 'missing-sell-units'
       readonly requestedUnits: UnitsFieldValue
       readonly availableUnits: UnitsFieldValue
     }
   | {
       readonly eventId: string
       readonly fundCode: string
-      readonly code: 'insufficient-adjustment-cost'
-      readonly requestedCostAmount: MoneyFieldValue
-      readonly availableCostAmount: MoneyFieldValue
+      readonly code: 'invalid-adjustment-target'
+      readonly targetUnits: UnitsFieldValue
+      readonly targetCostAmount: MoneyFieldValue
     }
 
 export interface PortfolioCalculation {
@@ -177,10 +176,7 @@ interface WorkingAggregate {
 
 interface AdjustmentApplication {
   readonly applied: boolean
-  readonly insufficientUnits: boolean
-  readonly insufficientCost: boolean
-  readonly availableUnits: number
-  readonly availableCostAmount: number
+  readonly invalidTarget: boolean
 }
 
 interface FieldAccumulator {
@@ -276,26 +272,13 @@ export function calculatePortfolio({
       if (calculated?.settlementStatus === 'settled' && event.settlementStatus === 'settled') {
         const application = applyAdjustment(workingAggregates, calculated)
         if (!application.applied) {
-          if (application.insufficientUnits) {
+          if (application.invalidTarget) {
             issues.push({
-              availableUnits: valueField(application.availableUnits, 'estimated', FORMULA_SOURCE),
-              code: 'insufficient-adjustment-units',
+              code: 'invalid-adjustment-target',
               eventId: calculated.eventId,
               fundCode: calculated.fundCode,
-              requestedUnits: cloneField(calculated.unitsDelta),
-            })
-          }
-          if (application.insufficientCost) {
-            issues.push({
-              availableCostAmount: valueField(
-                application.availableCostAmount,
-                'estimated',
-                FORMULA_SOURCE,
-              ),
-              code: 'insufficient-adjustment-cost',
-              eventId: calculated.eventId,
-              fundCode: calculated.fundCode,
-              requestedCostAmount: cloneField(calculated.costAmountDelta),
+              targetCostAmount: cloneField(calculated.targetCostAmount),
+              targetUnits: cloneField(calculated.targetUnits),
             })
           }
           adjustmentsById.set(event.id, {
@@ -304,12 +287,7 @@ export function calculatePortfolio({
           })
           continue
         }
-        if (
-          calculated.unitsDelta.confidence === 'actual' &&
-          calculated.costAmountDelta.confidence === 'actual'
-        ) {
-          applyAdjustment(confirmedAggregates, calculated)
-        }
+        applyAdjustment(confirmedAggregates, calculated)
       }
       continue
     }
@@ -450,9 +428,18 @@ function orderEvents(events: readonly PortfolioEvent[]) {
     .map((event, index) => ({ event, index }))
     .sort(
       (left, right) =>
+        left.event.fundCode.localeCompare(right.event.fundCode) ||
+        initialHoldingOrder(left.event, right.event) ||
         eventOrderDate(left.event).localeCompare(eventOrderDate(right.event)) ||
+        left.event.id.localeCompare(right.event.id) ||
         left.index - right.index,
     )
+}
+
+function initialHoldingOrder(left: PortfolioEvent, right: PortfolioEvent): number {
+  if (left.kind === 'initial-holding' && right.kind !== 'initial-holding') return -1
+  if (left.kind !== 'initial-holding' && right.kind === 'initial-holding') return 1
+  return 0
 }
 
 function eventOrderDate(event: PortfolioEvent): string {
@@ -524,17 +511,17 @@ function calculateDividendReinvestment(
 
 function calculateAdjustment(event: PortfolioAdjustmentEvent): PortfolioAdjustmentCalculation {
   return {
-    costAmountDelta: cloneField(event.costAmountDelta),
+    targetCostAmount: cloneField(event.targetCostAmount),
     eventId: event.id,
     fundCode: event.fundCode,
     reason: event.reason,
     settlementStatus:
       event.settlementStatus === 'settled' &&
-      event.unitsDelta.value !== null &&
-      event.costAmountDelta.value !== null
+      isActualField(event.targetUnits) &&
+      isActualField(event.targetCostAmount)
         ? 'settled'
         : 'pending-settlement',
-    unitsDelta: cloneField(event.unitsDelta),
+    targetUnits: cloneField(event.targetUnits),
   }
 }
 
@@ -683,76 +670,65 @@ function applyAdjustment(
   aggregates: Map<string, WorkingAggregate>,
   event: PortfolioAdjustmentCalculation,
 ): AdjustmentApplication {
-  const unitsDelta = event.unitsDelta.value
-  const costAmountDelta = event.costAmountDelta.value
+  const targetUnits = event.targetUnits.value
+  const targetCostAmount = event.targetCostAmount.value
+  if (targetUnits === null || targetCostAmount === null) {
+    return {
+      applied: false,
+      invalidTarget: false,
+    }
+  }
+  if (!isValidTargetAggregate(targetUnits, targetCostAmount)) {
+    return {
+      applied: false,
+      invalidTarget: true,
+    }
+  }
+
   const current = aggregates.get(event.fundCode)
-  const availableUnits = current?.units ?? 0
-  const availableCostAmount = current?.costAmount ?? 0
-  if (unitsDelta === null || costAmountDelta === null) {
-    return {
-      applied: false,
-      availableCostAmount,
-      availableUnits,
-      insufficientCost: false,
-      insufficientUnits: false,
-    }
-  }
-
-  const nextUnits = availableUnits + unitsDelta
-  const nextCostAmount = availableCostAmount + costAmountDelta
-  const insufficientUnits = nextUnits < -UNIT_EPSILON
-  const insufficientCost = nextCostAmount < -UNIT_EPSILON
-  if (insufficientUnits || insufficientCost) {
-    return {
-      applied: false,
-      availableCostAmount,
-      availableUnits,
-      insufficientCost,
-      insufficientUnits,
-    }
-  }
-
   if (current === undefined) {
-    if (Math.abs(nextUnits) <= UNIT_EPSILON && Math.abs(nextCostAmount) <= UNIT_EPSILON) {
+    if (targetUnits === 0 && targetCostAmount === 0) {
       return {
         applied: true,
-        availableCostAmount,
-        availableUnits,
-        insufficientCost: false,
-        insufficientUnits: false,
+        invalidTarget: false,
       }
     }
     aggregates.set(event.fundCode, {
-      costAmount: Math.max(0, nextCostAmount),
-      costConfidence: event.costAmountDelta.confidence,
-      costSource: event.costAmountDelta.source,
+      costAmount: targetCostAmount,
+      costConfidence: event.targetCostAmount.confidence,
+      costSource: event.targetCostAmount.source,
       fundCode: event.fundCode,
-      units: Math.max(0, nextUnits),
-      unitsConfidence: event.unitsDelta.confidence,
-      unitsSource: event.unitsDelta.source,
+      units: targetUnits,
+      unitsConfidence: event.targetUnits.confidence,
+      unitsSource: event.targetUnits.source,
     })
     return {
       applied: true,
-      availableCostAmount,
-      availableUnits,
-      insufficientCost: false,
-      insufficientUnits: false,
+      invalidTarget: false,
     }
   }
 
-  current.units = Math.max(0, nextUnits)
-  current.costAmount = Math.max(0, nextCostAmount)
-  current.unitsConfidence = mergeConfidence(current.unitsConfidence, event.unitsDelta.confidence)
-  current.unitsSource = FORMULA_SOURCE
-  current.costConfidence = mergeConfidence(current.costConfidence, event.costAmountDelta.confidence)
-  current.costSource = FORMULA_SOURCE
+  current.units = targetUnits
+  current.costAmount = targetCostAmount
+  current.unitsConfidence = event.targetUnits.confidence
+  current.unitsSource = event.targetUnits.source
+  current.costConfidence = event.targetCostAmount.confidence
+  current.costSource = event.targetCostAmount.source
   return {
     applied: true,
-    availableCostAmount,
-    availableUnits,
-    insufficientCost: false,
-    insufficientUnits: false,
+    invalidTarget: false,
   }
+}
+
+function isValidTargetAggregate(units: number, costAmount: number): boolean {
+  return (
+    Number.isFinite(units) &&
+    Number.isFinite(costAmount) &&
+    Number.isInteger(costAmount) &&
+    units >= 0 &&
+    costAmount >= 0 &&
+    ((units === 0 && costAmount === 0) || (units > 0 && costAmount > 0))
+  )
 }
 
 function applyAverageSell(
@@ -924,8 +900,10 @@ function toPendingAdjustmentSettlement(
   event: PortfolioAdjustmentCalculation,
 ): PortfolioPendingSettlement {
   const missingFacts: PortfolioPendingFact[] = []
-  if (event.unitsDelta.value === null) missingFacts.push('adjustment-units')
-  if (event.costAmountDelta.value === null) missingFacts.push('adjustment-cost-amount')
+  if (!isActualField(event.targetUnits)) missingFacts.push('adjustment-target-units')
+  if (!isActualField(event.targetCostAmount)) {
+    missingFacts.push('adjustment-target-cost-amount')
+  }
   return {
     eventId: event.eventId,
     fundCode: event.fundCode,
@@ -1099,6 +1077,10 @@ function deriveSum(fields: readonly FieldValue<number>[]): MoneyFieldValue {
 
 function cloneField<T>(field: FieldValue<T>): FieldValue<T> {
   return { confidence: field.confidence, source: field.source, value: field.value }
+}
+
+function isActualField<T>(field: FieldValue<T>): field is FieldValue<T> & { readonly value: T } {
+  return field.value !== null && field.confidence === 'actual'
 }
 
 function valueField<T>(
