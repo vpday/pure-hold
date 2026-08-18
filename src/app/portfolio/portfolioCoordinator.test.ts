@@ -21,9 +21,9 @@ const actual = (value: number, source: FieldValue<number>['source'] = 'manual') 
 function holding(overrides: Partial<FundHolding> = {}): FundHolding {
   return {
     code: '000001',
-    costPrice: 1.2,
     dividendMode: 'cash',
     purchaseDate: '2024-01-01',
+    totalCostCents: 12000,
     units: 100,
     ...overrides,
   }
@@ -85,7 +85,6 @@ function adjustmentEvent(fundCode: string, id: string): PortfolioEvent {
   return {
     auditedAt: '2026-08-14T09:00:00.000Z',
     confirmedDate: '2024-03-01',
-    costAmountDelta: actual(0),
     createdAt: '2026-08-14T09:00:00.000Z',
     fundCode,
     id,
@@ -93,7 +92,8 @@ function adjustmentEvent(fundCode: string, id: string): PortfolioEvent {
     reason: '平台对账',
     settlementStatus: 'settled',
     source: 'adjustment',
-    unitsDelta: actual(1),
+    targetCostAmount: actual(12000),
+    targetUnits: actual(101),
     updatedAt: '2026-08-14T09:00:00.000Z',
   }
 }
@@ -136,6 +136,51 @@ function pendingBuyEvent(fundCode: string, id: string): PortfolioEvent {
   } as PortfolioEvent
 }
 
+function confirmedBuyEvent(fundCode: string, id: string): PortfolioEvent {
+  return {
+    auditedAt: '2026-08-14T09:00:00.000Z',
+    confirmedDate: '2026-08-14',
+    createdAt: '2026-08-14T09:00:00.000Z',
+    entryMode: 'historical',
+    fundCode,
+    id,
+    kind: 'buy',
+    navDate: '2026-08-14',
+    purchaseFee: actual(0),
+    purchaseFeeRate: actual(0),
+    settlementStatus: 'settled',
+    source: 'manual',
+    submittedAt: '2026-08-14 09:00',
+    totalAmount: actual(1000),
+    unitNav: actual(100),
+    units: actual(10),
+    updatedAt: '2026-08-14T09:00:00.000Z',
+  }
+}
+
+function fullSellEvent(fundCode: string, id: string): PortfolioEvent {
+  return {
+    auditedAt: '2026-08-14T09:00:00.000Z',
+    confirmedDate: '2026-08-14',
+    createdAt: '2026-08-14T09:00:00.000Z',
+    entryMode: 'historical',
+    fundCode,
+    grossAmount: actual(10000),
+    id,
+    kind: 'sell',
+    navDate: '2026-08-14',
+    netAmount: actual(10000),
+    redemptionFee: actual(0),
+    requestedUnits: actual(100),
+    settlementStatus: 'settled',
+    source: 'manual',
+    submittedAt: '2026-08-14 09:00',
+    unitNav: actual(1),
+    units: actual(100),
+    updatedAt: '2026-08-14T09:00:00.000Z',
+  }
+}
+
 function insufficientSellEvent(fundCode: string, id: string): PortfolioEvent {
   return {
     auditedAt: '2026-08-14T09:00:00.000Z',
@@ -163,7 +208,11 @@ type TestFundsFacade = FundsPortfolioFacade & {
   readonly setHolding: (holding: FundHolding) => void
 }
 
-function createFundsFacade(initial: FundSettings, failDelete = false): TestFundsFacade {
+function createFundsFacade(
+  initial: FundSettings,
+  failDelete = false,
+  failProjection = false,
+): TestFundsFacade {
   let current = structuredClone(initial)
   return {
     deleteFund(code) {
@@ -185,6 +234,27 @@ function createFundsFacade(initial: FundSettings, failDelete = false): TestFunds
     getSettingsSnapshot() {
       return structuredClone(current)
     },
+    replaceHoldingProjection(nextHolding: FundHolding) {
+      if (failProjection) {
+        return {
+          error: new Error('projection quota exceeded'),
+          ok: false,
+          reason: 'persistence-failed' as const,
+        }
+      }
+      current = {
+        ...current,
+        holdingOrder: current.holdingOrder.includes(nextHolding.code)
+          ? current.holdingOrder
+          : [...current.holdingOrder, nextHolding.code],
+        holdingsByCode: { ...current.holdingsByCode, [nextHolding.code]: nextHolding },
+      }
+      return { ok: true as const }
+    },
+    replaceSettingsPersisted(nextSettings: FundSettings) {
+      current = structuredClone(nextSettings)
+      return { ok: true as const }
+    },
     setHolding(nextHolding: FundHolding) {
       current = {
         ...current,
@@ -193,6 +263,24 @@ function createFundsFacade(initial: FundSettings, failDelete = false): TestFunds
           : [...current.holdingOrder, nextHolding.code],
         holdingsByCode: { ...current.holdingsByCode, [nextHolding.code]: nextHolding },
       }
+    },
+    updateHoldingMetadata(input) {
+      const existing = current.holdingsByCode[input.code]
+      current = {
+        ...current,
+        holdingOrder: existing ? current.holdingOrder : [...current.holdingOrder, input.code],
+        holdingsByCode: {
+          ...current.holdingsByCode,
+          [input.code]: {
+            code: input.code,
+            dividendMode: input.dividendMode,
+            purchaseDate: input.purchaseDate,
+            totalCostCents: existing?.totalCostCents ?? 0,
+            units: existing?.units ?? 0,
+          },
+        },
+      }
+      return { ok: true as const }
     },
   }
 }
@@ -203,10 +291,11 @@ function createCoordinator(
   options: {
     readonly failDeleteFund?: boolean
     readonly failPortfolioWrites?: boolean
+    readonly failProjection?: boolean
     readonly now?: () => string
   } = {},
 ) {
-  const funds = createFundsFacade(initialSettings, options.failDeleteFund)
+  const funds = createFundsFacade(initialSettings, options.failDeleteFund, options.failProjection)
   const writes: Portfolio[] = []
   const portfolio = createPortfolioStore(initial, (candidate) => {
     if (options.failPortfolioWrites) throw new Error('quota exceeded')
@@ -234,7 +323,7 @@ test('automatically creates and updates one stable initial-holding event', () =>
 
   const first = coordinator.ensureFundLedger({ fundCode: '000001' })
   now = '2026-08-15T09:00:00.000Z'
-  funds.setHolding(holding({ costPrice: 9, units: 9 }))
+  funds.setHolding(holding({ totalCostCents: 8100, units: 9 }))
   const second = coordinator.ensureFundLedger({ fundCode: '000001' })
 
   assert.equal(first.ok, true)
@@ -305,7 +394,7 @@ test('locks the initial event for every saved follow-up event, including unusabl
       events: [initial, followUp],
       fundCodes: ['000001'],
     })
-    funds.setHolding(holding({ costPrice: 9, units: 9 }))
+    funds.setHolding(holding({ totalCostCents: 8100, units: 9 }))
 
     const result = coordinator.ensureFundLedger({ fundCode: '000001' })
 
@@ -351,7 +440,7 @@ test('reconciles confirmed ledger units and cost without writing either facade',
 
 test('reports explicit reconciliation differences and missing-data availability', () => {
   const { coordinator } = createCoordinator(
-    settings({ holdingsByCode: { '000001': holding({ costPrice: 1.3 }) } }),
+    settings({ holdingsByCode: { '000001': holding({ totalCostCents: 13000 }) } }),
     { events: [initialHoldingEvent('000001')], fundCodes: ['000001'] },
   )
   const changed = coordinator.reconcileFund({
@@ -503,4 +592,125 @@ test('returns a verifiable partial-persistence result when rollback also fails',
   assert.equal(result.partialPersistence, true)
   assert.equal(result.portfolio.events.length, 0)
   assert.equal(result.portfolio.fundCodes.includes('000001'), true)
+})
+
+test('commits a correction through one seam and projects exact total cost cents', () => {
+  const { coordinator, funds, portfolio } = createCoordinator()
+
+  const result = coordinator.commitHoldingCorrection({
+    asOfDate: '2026-08-14',
+    confirmedDate: '2026-08-14',
+    eventId: 'correction-1',
+    fundCode: '000001',
+    reason: '平台对账',
+    targetUnits: 120,
+    totalCostCents: 15001,
+  })
+
+  assert.equal(result.status, 'synced')
+  assert.equal(result.partialPersistence, false)
+  assert.equal(result.holding?.units, 120)
+  assert.equal(result.holding?.totalCostCents, 15001)
+  assert.deepEqual(
+    portfolio.getPortfolio().events.map(({ id }) => id),
+    ['initial-holding:000001', 'correction-1'],
+  )
+  assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.totalCostCents, 15001)
+})
+
+test('keeps the last valid projection while a pending event awaits confirmation', () => {
+  const { coordinator, funds, portfolio } = createCoordinator()
+  const result = coordinator.commitEvent({
+    asOfDate: '2026-08-14',
+    event: pendingBuyEvent('000001', 'pending-1'),
+  })
+
+  assert.equal(result.status, 'pending-confirmation')
+  assert.equal(result.ok, false)
+  assert.equal(result.holding?.units, 100)
+  assert.equal(result.holding?.totalCostCents, 12000)
+  assert.equal(
+    portfolio.getPortfolio().events.some(({ id }) => id === 'pending-1'),
+    true,
+  )
+  assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.units, 100)
+})
+
+test('does not invent an initial event for a new fund first bought through the coordinator', () => {
+  const { coordinator, funds, portfolio } = createCoordinator(settings({ holdingsByCode: {} }))
+  const result = coordinator.commitEvent({
+    asOfDate: '2026-08-14',
+    event: confirmedBuyEvent('000002', 'buy-1'),
+  })
+
+  assert.equal(result.status, 'synced')
+  assert.deepEqual(
+    portfolio.getPortfolio().events.map(({ id }) => id),
+    ['buy-1'],
+  )
+  assert.deepEqual(funds.getSettingsSnapshot().holdingsByCode['000002'], {
+    code: '000002',
+    dividendMode: 'cash',
+    purchaseDate: '2026-08-14',
+    totalCostCents: 1000,
+    units: 10,
+  })
+})
+
+test('keeps a zero projection and metadata after a full sell', () => {
+  const { coordinator, funds } = createCoordinator(settings(), {
+    events: [initialHoldingEvent('000001')],
+    fundCodes: ['000001'],
+  })
+
+  const result = coordinator.commitEvent({
+    asOfDate: '2026-08-14',
+    event: fullSellEvent('000001', 'sell-all'),
+  })
+
+  assert.equal(result.status, 'synced')
+  assert.deepEqual(funds.getSettingsSnapshot().holdingsByCode['000001'], {
+    code: '000001',
+    dividendMode: 'cash',
+    purchaseDate: '2024-01-01',
+    totalCostCents: 0,
+    units: 0,
+  })
+  assert.equal(result.holding?.purchaseDate, '2024-01-01')
+})
+
+test('rolls back portfolio facts when projection persistence fails', () => {
+  const { coordinator, portfolio } = createCoordinator(settings(), emptyPortfolio(), {
+    failProjection: true,
+  })
+
+  const result = coordinator.commitHoldingCorrection({
+    asOfDate: '2026-08-14',
+    confirmedDate: '2026-08-14',
+    eventId: 'correction-fails',
+    fundCode: '000001',
+    reason: '失败重试',
+    targetUnits: 120,
+    totalCostCents: 15000,
+  })
+
+  assert.equal(result.status, 'holding-sync-failed')
+  assert.equal(result.retryable, true)
+  assert.equal(result.partialPersistence, false)
+  assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
+})
+
+test('rebuilding projections is idempotent and preserves a full-sell zero state', () => {
+  const { coordinator, funds } = createCoordinator(settings(), {
+    events: [initialHoldingEvent('000001'), fullSellEvent('000001', 'sell-all')],
+    fundCodes: ['000001'],
+  })
+
+  const first = coordinator.rebuildHoldingProjections({ asOfDate: '2026-08-14' })
+  const second = coordinator.rebuildHoldingProjections({ asOfDate: '2026-08-14' })
+
+  assert.equal(first.status, 'synced')
+  assert.equal(second.status, 'synced')
+  assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.units, 0)
+  assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.totalCostCents, 0)
 })

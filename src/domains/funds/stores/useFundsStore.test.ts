@@ -151,9 +151,9 @@ test('fund addition persists atomically and refreshes only the new funds', async
             code: '000001',
             holding: {
               code: '000001',
-              costPrice: 2,
               dividendMode: 'cash',
               purchaseDate: '2020-01-01',
+              totalCostCents: 2000,
               units: 10,
             },
             name: ' 新增基金 ',
@@ -193,9 +193,9 @@ test('single holding update covers replacement, first creation and failures', as
     const store = useFundsStore()
     const replacement = {
       code: '161726',
-      costPrice: 2,
       dividendMode: 'cash' as const,
       purchaseDate: '2021-01-01',
+      totalCostCents: 40000,
       units: 200,
     }
     assert.deepEqual(store.updateFundHolding(replacement), {})
@@ -308,9 +308,9 @@ function createTestFundSettings(): FundSettings {
     holdingsByCode: {
       '161726': {
         code: '161726',
-        costPrice: 1.2345,
         dividendMode: 'reinvest',
         purchaseDate: '2020-01-01',
+        totalCostCents: 12345,
         units: 100,
       },
     },

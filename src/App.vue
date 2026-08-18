@@ -25,6 +25,9 @@ const portfolioCoordinator = createPortfolioCoordinator({
   funds: {
     deleteFund: fundsStore.deleteFund,
     getSettingsSnapshot: fundsStore.getSettingsSnapshot,
+    replaceHoldingProjection: fundsStore.replaceHoldingProjection,
+    replaceSettingsPersisted: fundsStore.replaceSettingsPersisted,
+    updateHoldingMetadata: fundsStore.updateHoldingMetadata,
   },
   portfolio,
 })

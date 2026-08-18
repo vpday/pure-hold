@@ -19,9 +19,9 @@ test('aggregates holding values and weighted income rates', () => {
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     metrics: {
@@ -58,9 +58,9 @@ test('aggregates holding values and weighted income rates', () => {
     },
     holding: {
       code: '000001',
-      costPrice: 1.5,
       dividendMode: 'reinvest',
       purchaseDate: '2026-07-01',
+      totalCostCents: 7500,
       units: 50,
     },
     metrics: {
@@ -101,9 +101,9 @@ test('returns empty statistics when no item has usable values', () => {
     currentSnapshot: createTestFundSnapshot('161726'),
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     metrics: {

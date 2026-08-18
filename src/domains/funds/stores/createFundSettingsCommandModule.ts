@@ -1,6 +1,10 @@
 import type { FundAddition } from '../models/fundAddition.ts'
 import type { FundGroupDefinition } from '../models/fundGroupDefinition.ts'
-import type { FundHolding } from '../models/fundHolding.ts'
+import {
+  createFundHolding,
+  holdingTotalCostCents,
+  type FundHolding,
+} from '../models/fundHolding.ts'
 import type { FundSetting, FundSettings } from '../models/fundSettings.ts'
 import { validateAndCloneFundSettings } from '../services/persistence/validateFundSettings.ts'
 
@@ -15,6 +19,13 @@ export type FundSettingsCommand =
       readonly fundOrder: readonly string[]
       readonly groups: readonly FundGroupDefinition[]
       readonly holdingOrder: readonly string[]
+    }
+  | { readonly kind: 'replace-holding-projection'; readonly holding: FundHolding }
+  | {
+      readonly kind: 'update-holding-metadata'
+      readonly code: string
+      readonly dividendMode: FundHolding['dividendMode']
+      readonly purchaseDate: string
     }
   | { readonly kind: 'update-fund-holding'; readonly holding: FundHolding }
   | {
@@ -159,6 +170,10 @@ function createCandidate(
       }
     case 'replace-fund-organization':
       return createOrganizationCandidate(command, current)
+    case 'replace-holding-projection':
+      return createHoldingCandidate(command.holding, current)
+    case 'update-holding-metadata':
+      return createHoldingMetadataCandidate(command, current)
     case 'update-fund-holding':
       return createHoldingCandidate(command.holding, current)
     case 'update-fund-group-membership':
@@ -214,7 +229,11 @@ function createAddCandidate(
 
   const nextHoldings = { ...current.holdingsByCode }
   for (const addition of normalizedAdditions) {
-    if (addition.holding) nextHoldings[addition.code] = addition.holding
+    if (addition.holding) {
+      const normalizedHolding = normalizeHolding(addition.holding)
+      if (normalizedHolding === null) return { ok: false, reason: 'invalid-additions' }
+      nextHoldings[addition.code] = normalizedHolding
+    }
   }
 
   return {
@@ -290,6 +309,8 @@ function createHoldingCandidate(
   if (!current.funds.some((fund) => fund.code === holding.code)) {
     return { ok: false, reason: 'unknown-fund' }
   }
+  const normalizedHolding = normalizeHolding(holding)
+  if (normalizedHolding === null) return { ok: false, reason: 'invalid-settings' }
 
   return {
     changed: true,
@@ -299,7 +320,33 @@ function createHoldingCandidate(
       holdingOrder: current.holdingsByCode[holding.code]
         ? current.holdingOrder
         : [...current.holdingOrder, holding.code],
-      holdingsByCode: { ...current.holdingsByCode, [holding.code]: holding },
+      holdingsByCode: { ...current.holdingsByCode, [holding.code]: normalizedHolding },
+    },
+  }
+}
+
+function createHoldingMetadataCandidate(
+  command: Extract<FundSettingsCommand, { readonly kind: 'update-holding-metadata' }>,
+  current: FundSettings,
+): CandidateResult | { readonly ok: false; readonly reason: FundSettingsCommandFailure } {
+  if (!current.funds.some((fund) => fund.code === command.code)) {
+    return { ok: false, reason: 'unknown-fund' }
+  }
+  const existing = current.holdingsByCode[command.code]
+  const normalizedHolding = createFundHolding({
+    code: command.code,
+    dividendMode: command.dividendMode,
+    purchaseDate: command.purchaseDate,
+    totalCostCents: existing === undefined ? 0 : (holdingTotalCostCents(existing) ?? 0),
+    units: existing?.units ?? 0,
+  })
+  return {
+    changed: true,
+    ok: true,
+    settings: {
+      ...current,
+      holdingOrder: existing ? current.holdingOrder : [...current.holdingOrder, command.code],
+      holdingsByCode: { ...current.holdingsByCode, [command.code]: normalizedHolding },
     },
   }
 }
@@ -337,6 +384,18 @@ function createMembershipCandidate(
 
 function cloneSettings(settings: FundSettings): FundSettings {
   return validateAndCloneFundSettings(settings)
+}
+
+function normalizeHolding(holding: FundHolding): FundHolding | null {
+  const totalCostCents = holdingTotalCostCents(holding)
+  if (totalCostCents === null) return null
+  return createFundHolding({
+    code: holding.code,
+    dividendMode: holding.dividendMode,
+    purchaseDate: holding.purchaseDate,
+    totalCostCents,
+    units: holding.units,
+  })
 }
 
 function haveSameItems(first: readonly string[], second: readonly string[]): boolean {

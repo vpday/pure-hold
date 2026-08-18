@@ -22,7 +22,9 @@ export function loadFundSettings(): FundSettings {
     if (!isRecord(parsed) || parsed.version !== FUND_SETTINGS_SCHEMA_VERSION) {
       throw new TypeError('Persisted fund settings have an incompatible version')
     }
-    const settings = validateAndCloneFundSettings(parsed, true)
+    // Existing v1 data is intentionally not migrated. A legacy costPrice shape
+    // is backed up and replaced by the empty settings fallback.
+    const settings = validateAndCloneFundSettings(parsed, true, false)
     if (
       JSON.stringify(settings.funds) !== JSON.stringify(parsed.funds) ||
       JSON.stringify(settings.groups) !== JSON.stringify(parsed.groups) ||

@@ -110,6 +110,56 @@ export const useFundsStore = defineStore('funds', () => {
     return { ok: true }
   }
 
+  function replaceHoldingProjection(holding: FundHolding):
+    | { readonly ok: true }
+    | {
+        readonly ok: false
+        readonly reason: 'invalid-settings' | 'persistence-failed' | 'unknown-fund'
+      } {
+    const result = settingsCommands.commit({ holding, kind: 'replace-holding-projection' })
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason:
+          result.reason === 'unknown-fund'
+            ? 'unknown-fund'
+            : result.reason === 'invalid-settings'
+              ? 'invalid-settings'
+              : 'persistence-failed',
+      }
+    }
+    applySettings(result.settings)
+    marketRuntime.applySettingsEffect(result.effect)
+    return { ok: true }
+  }
+
+  function updateHoldingMetadata(input: {
+    readonly code: string
+    readonly dividendMode: FundHolding['dividendMode']
+    readonly purchaseDate: string
+  }):
+    | { readonly ok: true }
+    | {
+        readonly ok: false
+        readonly reason: 'invalid-settings' | 'persistence-failed' | 'unknown-fund'
+      } {
+    const result = settingsCommands.commit({ ...input, kind: 'update-holding-metadata' })
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason:
+          result.reason === 'unknown-fund'
+            ? 'unknown-fund'
+            : result.reason === 'invalid-settings'
+              ? 'invalid-settings'
+              : 'persistence-failed',
+      }
+    }
+    applySettings(result.settings)
+    marketRuntime.applySettingsEffect(result.effect)
+    return { ok: true }
+  }
+
   function setPollingConfiguration(configuration: FundPollingConfiguration): void {
     marketRuntime.setPollingConfiguration(configuration)
   }
@@ -175,6 +225,7 @@ export const useFundsStore = defineStore('funds', () => {
     previousSnapshotsByCode: marketRuntime.previousSnapshotsByCode,
     refreshAll,
     replaceFundOrganization,
+    replaceHoldingProjection,
     replaceSettingsPersisted,
     replaceGroups,
     setPollingConfiguration,
@@ -182,6 +233,7 @@ export const useFundsStore = defineStore('funds', () => {
     stopPolling: marketRuntime.stopPolling,
     snapshotsByCode: marketRuntime.snapshotsByCode,
     updateFundGroupMembership,
+    updateHoldingMetadata,
     updateFundHolding,
   }
 })

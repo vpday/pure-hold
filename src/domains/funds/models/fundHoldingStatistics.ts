@@ -1,5 +1,5 @@
 import type { FundHoldingMetrics, FundCurrentIncomeSource } from './fundHoldingMetrics.ts'
-import type { FundHolding } from './fundHolding.ts'
+import { holdingTotalCostCents, type FundHolding } from './fundHolding.ts'
 import type { FundSnapshot } from './fundSnapshot.ts'
 
 export type FundHoldingStatisticsIncomeSource = FundCurrentIncomeSource | 'mixed'
@@ -52,7 +52,8 @@ export function calculateFundHoldingStatistics(
       yesterdayIncomePairs.push(yesterdayIncome)
     }
 
-    const costAmount = positiveFiniteNumber(holding.costPrice * holding.units)
+    const totalCostCents = holdingTotalCostCents(holding)
+    const costAmount = positiveFiniteNumber(totalCostCents === null ? null : totalCostCents / 100)
     if (metrics.holdingIncome !== null && costAmount !== null) {
       holdingIncomeAmounts.push(metrics.holdingIncome)
       holdingIncomePairs.push({ amount: metrics.holdingIncome, base: costAmount })

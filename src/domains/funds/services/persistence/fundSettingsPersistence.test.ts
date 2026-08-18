@@ -64,9 +64,9 @@ test('loadFundSettings filters unknown group and holding references', () => {
       holdingsByCode: {
         missing: {
           code: 'missing',
-          costPrice: 1,
           dividendMode: 'cash',
           purchaseDate: '2020-01-01',
+          totalCostCents: 100,
           units: 1,
         },
       },
@@ -93,16 +93,16 @@ test('fund settings round trip without persisting runtime snapshots', () => {
       holdingsByCode: {
         '000001': {
           code: '000001',
-          costPrice: 1.2345,
           dividendMode: 'reinvest',
           purchaseDate: '2020-02-29',
+          totalCostCents: 12345,
           units: 100.5,
         },
         '000002': {
           code: '000002',
-          costPrice: 2,
           dividendMode: 'cash',
           purchaseDate: '2021-01-01',
+          totalCostCents: 4000,
           units: 20,
         },
       },
@@ -111,6 +111,49 @@ test('fund settings round trip without persisting runtime snapshots', () => {
     assert.deepEqual(loadFundSettings(), settings)
     const raw = storage.getItem(fundSettingsStorageKey) ?? ''
     assert.equal(raw.includes('snapshotsByCode'), false)
+  })
+})
+
+test('allows a zero projection while rejecting legacy persisted costPrice data', () => {
+  withStorage((storage) => {
+    const zeroSettings: FundSettings = {
+      funds: [{ code: '000001', name: '基金' }],
+      groups: [],
+      holdingOrder: ['000001'],
+      holdingsByCode: {
+        '000001': {
+          code: '000001',
+          dividendMode: 'cash',
+          purchaseDate: '2020-01-01',
+          totalCostCents: 0,
+          units: 0,
+        },
+      },
+    }
+    saveFundSettings(zeroSettings)
+    assert.deepEqual(loadFundSettings(), zeroSettings)
+
+    storage.setItem(
+      fundSettingsStorageKey,
+      JSON.stringify({
+        ...zeroSettings,
+        holdingsByCode: {
+          '000001': {
+            code: '000001',
+            costPrice: 1,
+            dividendMode: 'cash',
+            purchaseDate: '2020-01-01',
+            units: 1,
+          },
+        },
+        version: FUND_SETTINGS_SCHEMA_VERSION,
+      }),
+    )
+    withoutWarnings(() => assert.deepEqual(loadFundSettings(), emptyFundSettings))
+    assert.equal(
+      storage.keys().some((key) => key.startsWith(corruptFundSettingsStorageKeyPrefix)),
+      true,
+    )
   })
 })
 
@@ -125,9 +168,9 @@ test('holding order must contain every holding exactly once and only known held 
     holdingsByCode: {
       '000001': {
         code: '000001',
-        costPrice: 1,
         dividendMode: 'cash',
         purchaseDate: '2020-01-01',
+        totalCostCents: 10000,
         units: 1,
       },
     },
@@ -157,29 +200,41 @@ test('fund settings reject invalid codes, names, numbers, dates and dividend mod
     [[{ code: '000001', name: ' ' }], undefined],
     [
       base.funds,
-      { code: '000001', costPrice: 0, dividendMode: 'cash', purchaseDate: '2020-01-01', units: 1 },
+      {
+        code: '000001',
+        dividendMode: 'cash',
+        purchaseDate: '2020-01-01',
+        totalCostCents: 0,
+        units: 1,
+      },
     ],
     [
       base.funds,
       {
         code: '000001',
-        costPrice: 1,
         dividendMode: 'cash',
         purchaseDate: '2020-01-01',
+        totalCostCents: 10000,
         units: 1.23456,
       },
     ],
     [
       base.funds,
-      { code: '000001', costPrice: 1, dividendMode: 'cash', purchaseDate: '2020-02-30', units: 1 },
+      {
+        code: '000001',
+        dividendMode: 'cash',
+        purchaseDate: '2020-02-30',
+        totalCostCents: 10000,
+        units: 1,
+      },
     ],
     [
       base.funds,
       {
         code: '000001',
-        costPrice: 1,
         dividendMode: 'unknown',
         purchaseDate: '2020-01-01',
+        totalCostCents: 10000,
         units: 1,
       },
     ],

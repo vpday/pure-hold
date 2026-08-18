@@ -1,10 +1,11 @@
 import type { FundGroupDefinition } from '../../models/fundGroupDefinition.ts'
-import type { FundHolding } from '../../models/fundHolding.ts'
+import { createFundHolding, type FundHolding } from '../../models/fundHolding.ts'
 import type { FundSettings } from '../../models/fundSettings.ts'
 
 export function validateAndCloneFundSettings(
   value: unknown,
   filterUnknownGroupCodes = false,
+  allowLegacyCostPrice = true,
 ): FundSettings {
   if (
     !isRecord(value) ||
@@ -19,7 +20,12 @@ export function validateAndCloneFundSettings(
   const funds = validateFunds(value.funds)
   const knownCodes = new Set(funds.map(({ code }) => code))
   const groups = validateGroups(value.groups, knownCodes, filterUnknownGroupCodes)
-  const holdingsByCode = validateHoldings(value.holdingsByCode, knownCodes, filterUnknownGroupCodes)
+  const holdingsByCode = validateHoldings(
+    value.holdingsByCode,
+    knownCodes,
+    filterUnknownGroupCodes,
+    allowLegacyCostPrice,
+  )
   const holdingOrder = validateHoldingOrder(
     value.holdingOrder,
     knownCodes,
@@ -70,6 +76,7 @@ function validateHoldings(
   values: Record<string, unknown>,
   knownCodes: ReadonlySet<string>,
   filterUnknownCodes: boolean,
+  allowLegacyCostPrice: boolean,
 ): Record<string, FundHolding> {
   const holdings: Record<string, FundHolding> = {}
   for (const [code, value] of Object.entries(values)) {
@@ -77,25 +84,49 @@ function validateHoldings(
       if (filterUnknownCodes) continue
       throw new TypeError('Fund holding references an unknown fund')
     }
+    const record = isRecord(value) ? value : null
+    const totalCostCents = isNonNegativeIntegerCents(record?.totalCostCents)
+      ? record.totalCostCents
+      : allowLegacyCostPrice
+        ? legacyTotalCostCents(value)
+        : null
     if (
       !isRecord(value) ||
       value.code !== code ||
-      !isPositiveNumberWithFourDecimals(value.units) ||
-      !isPositiveNumberWithFourDecimals(value.costPrice) ||
+      (!allowLegacyCostPrice && record !== null && Object.hasOwn(record, 'costPrice')) ||
+      !isNonNegativeNumberWithFourDecimals(value.units) ||
+      totalCostCents === null ||
+      !hasConsistentHoldingCost(value.units, totalCostCents) ||
       (value.dividendMode !== 'cash' && value.dividendMode !== 'reinvest') ||
       !isValidPurchaseDate(value.purchaseDate)
     ) {
       throw new TypeError(`Fund holding ${code} has an invalid shape`)
     }
-    holdings[code] = {
+    holdings[code] = createFundHolding({
       code,
-      costPrice: value.costPrice,
       dividendMode: value.dividendMode,
       purchaseDate: value.purchaseDate,
+      totalCostCents,
       units: value.units,
-    }
+    })
   }
   return holdings
+}
+
+function legacyTotalCostCents(value: unknown): number | null {
+  if (!isRecord(value)) return null
+  if (
+    typeof value.costPrice !== 'number' ||
+    !Number.isFinite(value.costPrice) ||
+    value.costPrice < 0 ||
+    typeof value.units !== 'number' ||
+    !Number.isFinite(value.units) ||
+    value.units < 0
+  ) {
+    return null
+  }
+  const totalCostCents = Math.round(value.costPrice * value.units * 100)
+  return Number.isSafeInteger(totalCostCents) && totalCostCents >= 0 ? totalCostCents : null
 }
 
 function validateGroups(
@@ -152,10 +183,18 @@ function isFundCode(value: unknown): value is string {
   return typeof value === 'string' && /^\d{6}$/.test(value)
 }
 
-function isPositiveNumberWithFourDecimals(value: unknown): value is number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return false
+function isNonNegativeNumberWithFourDecimals(value: unknown): value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return false
   const scaled = value * 10_000
   return Math.abs(scaled - Math.round(scaled)) < 1e-8
+}
+
+function isNonNegativeIntegerCents(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function hasConsistentHoldingCost(units: number, totalCostCents: number): boolean {
+  return (units === 0 && totalCostCents === 0) || (units > 0 && totalCostCents > 0)
 }
 
 function isValidPurchaseDate(value: unknown): value is string {

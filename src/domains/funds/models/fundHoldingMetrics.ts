@@ -1,4 +1,4 @@
-import type { FundHolding } from './fundHolding.ts'
+import { holdingTotalCostCents, type FundHolding } from './fundHolding.ts'
 import type { FundSnapshot } from './fundSnapshot.ts'
 
 export type FundCurrentIncomeSource = 'actual' | 'estimated' | 'none'
@@ -34,7 +34,8 @@ export function calculateFundHoldingMetrics({
 }: CalculateFundHoldingMetricsInput): FundHoldingMetrics {
   const nav = positiveFiniteNumber(currentSnapshot.nav)
   const units = positiveFiniteNumber(holding.units)
-  const costPrice = positiveFiniteNumber(holding.costPrice)
+  const totalCostCents = holdingTotalCostCents(holding)
+  const totalCost = positiveFiniteNumber(totalCostCents === null ? null : totalCostCents / 100)
   const hasCurrentNav = nav !== null && currentSnapshot.navDate === today
   const estimatedNav = positiveFiniteNumber(currentSnapshot.estimatedNav)
   const currentEstimateNav =
@@ -77,8 +78,11 @@ export function calculateFundHoldingMetrics({
     holdingAmount: nav !== null && units !== null ? nav * units : null,
     holdingDays: calendarDayDifference(holding.purchaseDate, today),
     holdingIncome:
-      nav !== null && units !== null && costPrice !== null ? (nav - costPrice) * units : null,
-    holdingIncomePercent: nav !== null && costPrice !== null ? (nav / costPrice - 1) * 100 : null,
+      nav !== null && units !== null && totalCost !== null ? nav * units - totalCost : null,
+    holdingIncomePercent:
+      nav !== null && units !== null && totalCost !== null && totalCost > 0
+        ? ((nav * units - totalCost) / totalCost) * 100
+        : null,
     todayIncome,
     todayIncomePercent,
     yesterdayIncome: hasYesterdayIncome

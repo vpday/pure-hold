@@ -17,9 +17,9 @@ test('calculates confirmed current-day and cumulative holding income', () => {
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'reinvest',
       purchaseDate: '2026-08-10',
+      totalCostCents: 10000,
       units: 100,
     },
     today: '2026-08-10',
@@ -36,6 +36,28 @@ test('calculates confirmed current-day and cumulative holding income', () => {
   assert.equal(metrics.yesterdayIncome, null)
 })
 
+test('derives cumulative cost from exact cents instead of a rounded average price', () => {
+  const metrics = calculateFundHoldingMetrics({
+    currentSnapshot: {
+      ...createTestFundSnapshot('161726'),
+      nav: 1.5,
+      navDate: '2026-08-10',
+    },
+    holding: {
+      code: '161726',
+      costPrice: 1,
+      dividendMode: 'cash',
+      purchaseDate: '2026-08-01',
+      totalCostCents: 12_345,
+      units: 100,
+    },
+    today: '2026-08-10',
+  })
+
+  assert.ok(Math.abs((metrics.holdingIncome ?? 0) - 26.55) < 0.000001)
+  assert.ok(Math.abs((metrics.holdingIncomePercent ?? 0) - (26.55 / 123.45) * 100) < 0.000001)
+})
+
 test('uses only a current Shanghai-day estimate before confirmed NAV arrives', () => {
   const metrics = calculateFundHoldingMetrics({
     currentSnapshot: {
@@ -48,9 +70,9 @@ test('uses only a current Shanghai-day estimate before confirmed NAV arrives', (
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     today: '2026-08-10',
@@ -79,9 +101,9 @@ test('keeps the previous confirmed trading-day income after current NAV arrives'
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     previousConfirmedSnapshot,
@@ -103,9 +125,9 @@ test('does not produce holding values from invalid NAV, units or cost inputs', (
     },
     holding: {
       code: '161726',
-      costPrice: 0,
       dividendMode: 'cash',
       purchaseDate: 'invalid',
+      totalCostCents: 0,
       units: -100,
     },
     today: '2026-08-10',
@@ -131,9 +153,9 @@ test('uses the latest confirmed snapshot as yesterday on a non-trading day', () 
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     today: '2026-08-10',
@@ -157,9 +179,9 @@ test('derives an estimate percentage only when the provider percentage is missin
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'reinvest',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     today: '2026-08-10',
@@ -178,9 +200,9 @@ test('rejects a daily change that makes the previous NAV denominator zero', () =
     },
     holding: {
       code: '161726',
-      costPrice: 1,
       dividendMode: 'cash',
       purchaseDate: '2026-08-01',
+      totalCostCents: 10000,
       units: 100,
     },
     today: '2026-08-10',
