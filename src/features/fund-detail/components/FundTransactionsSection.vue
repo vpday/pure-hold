@@ -35,11 +35,7 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
 </script>
 
 <template>
-  <section
-    id="fund-detail-transactions"
-    aria-labelledby="fund-detail-transactions-title"
-    class="detail-section pt-4"
-  >
+  <div>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
       <div v-if="ledger.ledgerEnabled" class="flex items-center gap-2">
@@ -161,15 +157,11 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
         </template>
       </t-table>
     </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
 @reference '@/style.css';
-
-.detail-section {
-  @apply mt-4 border-t border-(--td-component-border);
-}
 
 .section-title {
   @apply text-lg font-medium text-(--td-text-color-primary);

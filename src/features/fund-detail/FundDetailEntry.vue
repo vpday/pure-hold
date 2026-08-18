@@ -12,6 +12,7 @@ import FundDetailDrawer from './components/FundDetailDrawer.vue'
 import FundHoldingsSection from './components/FundHoldingsSection.vue'
 import FundMetricsSection from './components/FundMetricsSection.vue'
 import FundPerformanceSection from './components/FundPerformanceSection.vue'
+import FundTransactionsSection from './components/FundTransactionsSection.vue'
 import { useFundBenchmarkDataSource } from './composables/useFundBenchmarkDataSource'
 import { useFundDetail } from './composables/useFundDetail'
 import { useFundHistoryDataSource } from './composables/useFundHistoryDataSource'
@@ -236,16 +237,11 @@ defineExpose({ open })
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
     :ledger="ledger"
-    :transactions="transactions"
     size="100dvh"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"
-    @delete-transaction="deleteTransaction"
     @edit="edit"
-    @edit-transaction="editTransaction"
-    @record-buy="recordBuy"
-    @record-sell="recordSell"
     @retry-ledger="retryLedger"
     @retry="detail.retry"
     @select-section="activeSection = $event"
@@ -278,6 +274,16 @@ defineExpose({ open })
         @retry-quotes="holdings.retryQuotes"
         @select-report-date="holdings.selectReportDate"
         @select-view="holdings.selectView"
+      />
+    </template>
+    <template #transactions>
+      <FundTransactionsSection
+        :ledger="ledger"
+        :transactions="transactions"
+        @delete-transaction="deleteTransaction"
+        @edit-transaction="editTransaction"
+        @record-buy="recordBuy"
+        @record-sell="recordSell"
       />
     </template>
   </FundDetailDrawer>

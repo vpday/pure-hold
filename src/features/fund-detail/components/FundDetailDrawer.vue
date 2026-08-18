@@ -2,10 +2,9 @@
 import { ref } from 'vue'
 
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
-import type { FundLedgerViewModel, LedgerRecordViewModel } from '../presenters/toFundLedgerViewModel'
+import type { FundLedgerViewModel } from '../presenters/toFundLedgerViewModel'
 import FundDetailHeader from './FundDetailHeader.vue'
 import FundTradingRules from './FundTradingRules.vue'
-import FundTransactionsSection from './FundTransactionsSection.vue'
 
 defineProps<{
   activeSection: string
@@ -13,17 +12,12 @@ defineProps<{
   isLoading: boolean
   ledger: FundLedgerViewModel
   size: string
-  transactions: readonly LedgerRecordViewModel[]
   viewModel: FundDetailViewModel
   visible: boolean
 }>()
 const emit = defineEmits<{
   close: []
-  deleteTransaction: [eventId: string]
   edit: [code: string]
-  editTransaction: [eventId: string]
-  recordBuy: [code: string]
-  recordSell: [code: string]
   retryLedger: []
   retry: []
   selectSection: [section: string]
@@ -362,7 +356,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
           <section
             id="fund-detail-trading-rules"
             aria-labelledby="fund-detail-trading-rules-title"
-            class="detail-section pt-4"
+            class="detail-section min-w-0 pt-4"
           >
             <h2 id="fund-detail-trading-rules-title" class="section-title">交易规则</h2>
             <FundTradingRules
@@ -373,14 +367,13 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             <p v-else class="section-placeholder">暂无交易规则</p>
           </section>
 
-          <FundTransactionsSection
-            :ledger="ledger"
-            :transactions="transactions"
-            @delete-transaction="emit('deleteTransaction', $event)"
-            @edit-transaction="emit('editTransaction', $event)"
-            @record-buy="emit('recordBuy', $event)"
-            @record-sell="emit('recordSell', $event)"
-          />
+          <section
+            id="fund-detail-transactions"
+            aria-labelledby="fund-detail-transactions-title"
+            class="detail-section min-w-0 pt-4"
+          >
+            <slot name="transactions" />
+          </section>
         </main>
       </div>
 

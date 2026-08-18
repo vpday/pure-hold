@@ -108,7 +108,8 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(detailDrawerSource, /ledger: FundLedgerViewModel/)
   assert.match(detailDrawerSource, /retryAvailable/)
   assert.doesNotMatch(detailDrawerSource, /启用账本|enableLedger/)
-  assert.match(detailDrawerSource, /FundTransactionsSection/)
+  assert.match(detailEntrySource, /FundTransactionsSection/)
+  assert.doesNotMatch(detailDrawerSource, /FundTransactionsSection/)
   assert.match(transactionSectionSource, /ledger: FundLedgerViewModel/)
   assert.match(transactionSectionSource, /<t-table/)
   assert.doesNotMatch(transactionSectionSource, /<table\b/)
@@ -131,8 +132,13 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
 
 test('uses transaction records as the detail section and keeps comparison in ledger status', () => {
   assert.match(detailDrawerSource, /label: '成交记录'/)
+  assert.match(
+    detailDrawerSource,
+    /id="fund-detail-transactions"[\s\S]*<slot name="transactions" \/>/,
+  )
   assert.match(transactionSectionSource, />成交记录<\/h2>/)
   assert.match(transactionSectionSource, /empty="暂无成交记录"/)
+  assert.doesNotMatch(transactionSectionSource, /<section\b/)
   assert.match(detailDrawerSource, /ledger\.difference\.status/)
   assert.match(detailDrawerSource, /ledger\.difference\.directionText/)
   assert.doesNotMatch(
