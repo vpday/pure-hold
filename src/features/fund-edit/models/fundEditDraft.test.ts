@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import type { PortfolioCoordinationResult } from '@/app/portfolio/portfolioCoordinator.ts'
+import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
 import type { FundEditSubmitters } from './fundEditDraft.ts'
 import { createFundEditDraft, submitFundEditDraft } from './fundEditDraft.ts'
 
@@ -11,9 +13,9 @@ test('edit draft fills current holding and custom group memberships', () => {
       '测试基金',
       {
         code: '000001',
-        costPrice: 1.5,
         dividendMode: 'cash',
         purchaseDate: '2020-01-01',
+        totalCostCents: 3000,
         units: 20,
       },
       [
@@ -24,10 +26,10 @@ test('edit draft fills current holding and custom group memberships', () => {
     {
       code: '000001',
       holding: {
-        costPrice: '1.5',
         dividendMode: 'cash',
         holdingDays: '',
         purchaseDate: '2020-01-01',
+        totalCostYuan: '30',
         timeMode: 'date',
         units: '20',
       },
@@ -41,9 +43,9 @@ test('reopening creates a fresh draft from the latest store values', () => {
   const groups = [{ fundCodes: ['000001'], id: 'one', name: '一组' }]
   const holding = {
     code: '000001',
-    costPrice: 1,
     dividendMode: 'cash' as const,
     purchaseDate: '2020-01-01',
+    totalCostCents: 1000,
     units: 10,
   }
   const first = createFundEditDraft('000001', '测试基金', holding, groups)
@@ -97,15 +99,21 @@ test('reports a retryable ledger failure after the holding is persisted', () => 
   const submitters = createSubmitters(calls)
   submitters.ensureFundLedger = (code) => {
     calls.push(`ledger:${code}`)
-    return { error: new Error('quota exceeded'), ok: false, retryable: true }
+    return {
+      error: new Error('quota exceeded'),
+      ok: false,
+      partialPersistence: true,
+      retryable: true,
+    }
   }
 
   const result = submitFundEditDraft(draft, submitters, new Date(2026, 6, 27))
 
   assert.deepEqual(result, {
-    error: '持仓信息已保存，但投资账本自动建立失败，请重试',
+    error: '持仓信息已保存，但投资账本可能已部分持久化，请重试并检查账本',
     fieldErrors: {},
     holdingSaved: true,
+    partialPersistence: true,
     reason: 'ledger-persistence-failed',
     retryable: true,
     success: false,
@@ -144,9 +152,9 @@ test('successful submit preserves holding then group call order', () => {
 test('submits numeric values emitted by the holding number inputs', () => {
   const draft = createFundEditDraft('000001', '测试基金', undefined, [])
   Object.assign(draft.holding, {
-    costPrice: 0.8984,
     dividendMode: 'cash',
     holdingDays: 1000,
+    totalCostYuan: 0.89,
     timeMode: 'days',
     units: 6817.77,
   })
@@ -158,11 +166,50 @@ test('submits numeric values emitted by the holding number inputs', () => {
   assert.deepEqual(calls, ['holding', 'groups:'])
 })
 
+test('saves only metadata after a fund ledger has been created', () => {
+  const draft = createFundEditDraft(
+    '000001',
+    '测试基金',
+    {
+      code: '000001',
+      dividendMode: 'cash',
+      purchaseDate: '2020-01-01',
+      totalCostCents: 1000,
+      units: 10,
+    },
+    [],
+  )
+  draft.holding.dividendMode = 'reinvest'
+  const calls: string[] = []
+  const result = submitFundEditDraft(
+    draft,
+    {
+      holdingFactsReadonly: true,
+      updateFundGroupMembership() {
+        calls.push('groups')
+        return {}
+      },
+      updateFundHolding() {
+        calls.push('holding')
+        return {}
+      },
+      updateHoldingMetadata(input) {
+        calls.push(`metadata:${input.dividendMode}:${input.purchaseDate}`)
+        return coordinationResult('pending-exact-data')
+      },
+    },
+    new Date(2026, 6, 27),
+  )
+
+  assert.deepEqual(result, { fieldErrors: {}, status: 'pending-exact-data', success: true })
+  assert.deepEqual(calls, ['metadata:reinvest:2020-01-01', 'groups'])
+})
+
 function fillValidHolding(draft: ReturnType<typeof createFundEditDraft>): void {
   Object.assign(draft.holding, {
-    costPrice: '1',
     dividendMode: 'reinvest',
     purchaseDate: '2026-07-27',
+    totalCostYuan: '1',
     units: '10',
   })
 }
@@ -177,5 +224,20 @@ function createSubmitters(calls: string[], failGroups = false): FundEditSubmitte
       calls.push('holding')
       return {}
     },
+  }
+}
+
+function coordinationResult(
+  status: PortfolioCoordinationResult['status'],
+): PortfolioCoordinationResult {
+  return {
+    fundCode: '000001',
+    holding: null,
+    ledger: null,
+    ok: status === 'synced',
+    partialPersistence: false,
+    portfolio: createEmptyPortfolio(),
+    retryable: status !== 'synced',
+    status,
   }
 }

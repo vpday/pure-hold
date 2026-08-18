@@ -10,6 +10,7 @@ import type {
   PortfolioInitialHoldingEvent,
   PortfolioSellEvent,
 } from '@/domains/portfolio/models/index.ts'
+import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
 import { calculatePortfolio } from '@/domains/portfolio/services/calculatePortfolio.ts'
 import { toFundLedgerViewModel, toLedgerRecordViewModels } from './toFundLedgerViewModel.ts'
 
@@ -90,7 +91,6 @@ const dividendReinvestment: PortfolioDividendReinvestmentEvent = {
 const adjustment: PortfolioAdjustmentEvent = {
   auditedAt: '2026-08-08T00:00:00.000Z',
   confirmedDate: '2026-08-08',
-  costAmountDelta: actual(1000),
   createdAt: '2026-08-08T00:00:00.000Z',
   fundCode,
   id: 'adjustment',
@@ -98,7 +98,8 @@ const adjustment: PortfolioAdjustmentEvent = {
   reason: '手工对账修正',
   settlementStatus: 'settled',
   source: 'adjustment',
-  unitsDelta: actual(1),
+  targetCostAmount: actual(101000),
+  targetUnits: actual(101),
   updatedAt: '2026-08-08T00:00:00.000Z',
 }
 
@@ -199,7 +200,7 @@ test('keeps an insufficient sell visible as an issue while preserving edit and d
   assert.equal(row?.costBasisAmount.text, '--')
 })
 
-test('presents aggregate position and signed reconciliation differences', () => {
+test('presents aggregate position and stable coordination status', () => {
   const events = [initial, sell, cashDividend]
   const calculation = calculatePortfolio({
     asOfDate: '2026-08-10',
@@ -209,62 +210,66 @@ test('presents aggregate position and signed reconciliation differences', () => 
     events,
   })
   const model = toFundLedgerViewModel({
-    availability: 'available',
-    calculation,
-    difference: { costAmountCents: 100, units: 1 },
+    canCorrect: true,
+    canRecord: true,
     fundCode,
-    fundHolding: { costAmountCents: 100000, units: 100 },
-    initialEvent: initial,
-    initialEventLocked: true,
-    ledger: { costAmount: actual(98000), units: actual(98) },
-    ledgerEnabled: true,
+    holding: null,
+    ledger: { costAmount: actual(98000), fundCode, units: actual(98) },
+    partialPersistence: false,
+    portfolio: createEmptyPortfolio(),
+    retryable: false,
+    status: 'synced',
+    ok: true,
+    calculation,
   })
 
-  assert.equal(model.ledgerEnabled, true)
-  assert.equal(model.position?.averageCost.text, '¥10.0000')
-  assert.equal(model.difference.units.text, '+1.0000')
-  assert.equal(model.difference.costAmount.text, '+¥1.00')
-  assert.equal(model.difference.directionText, '成交记录计算结果 − 当前持仓设置')
-  assert.equal(model.difference.status, 'different')
-  assert.equal(model.difference.statusText, '存在差异')
+  assert.equal(model.status, 'synced')
+  assert.equal(model.statusText, '已同步')
+  assert.equal(model.statusTone, 'success')
+  assert.equal(model.position?.averageCost.text, '¥10')
+  assert.equal(model.position?.costAmount.text, '¥980.00')
+  assert.equal(model.position?.units.text, '98')
 })
 
-test('marks matching ledger and current holding values as consistent', () => {
-  const calculation = calculate([initial])
+test('keeps correction available while exact facts are pending', () => {
   const model = toFundLedgerViewModel({
-    availability: 'available',
-    calculation,
-    difference: { costAmountCents: 0, units: 0 },
+    canCorrect: true,
+    canRecord: true,
     fundCode,
-    fundHolding: { costAmountCents: 100000, units: 100 },
-    initialEvent: initial,
-    initialEventLocked: false,
-    ledger: { costAmount: actual(100000), units: actual(100) },
-    ledgerEnabled: true,
+    holding: null,
+    ledger: { costAmount: unknown(), fundCode, units: unknown() },
+    partialPersistence: false,
+    portfolio: createEmptyPortfolio(),
+    retryable: true,
+    status: 'pending-exact-data',
+    ok: false,
   })
 
-  assert.equal(model.difference.status, 'consistent')
-  assert.equal(model.difference.statusText, '一致')
-  assert.equal(model.difference.statusTone, 'success')
+  assert.equal(model.status, 'pending-exact-data')
+  assert.equal(model.statusText, '待精确数据')
+  assert.equal(model.statusTone, 'warning')
+  assert.equal(model.canCorrect, true)
+  assert.equal(model.retryAvailable, true)
+  assert.equal(model.position?.averageCost.text, '--')
 })
 
-test('marks an unavailable comparison as insufficient data instead of consistent', () => {
-  const calculation = calculate([initial])
+test('does not present a ledger error as a synchronized projection', () => {
   const model = toFundLedgerViewModel({
-    availability: 'missing-ledger',
-    calculation,
-    difference: { costAmountCents: null, units: null },
+    canCorrect: false,
+    canRecord: false,
     fundCode,
-    fundHolding: { costAmountCents: 100000, units: 100 },
-    initialEvent: null,
-    initialEventLocked: false,
+    holding: null,
     ledger: null,
-    ledgerEnabled: false,
+    partialPersistence: true,
+    portfolio: createEmptyPortfolio(),
+    retryable: true,
+    status: 'ledger-error',
+    ok: false,
   })
 
-  assert.equal(model.difference.status, 'insufficient-data')
-  assert.equal(model.difference.statusText, '信息不足')
-  assert.equal(model.difference.statusTone, 'default')
-  assert.equal(model.difference.units.text, '--')
-  assert.equal(model.difference.costAmount.text, '--')
+  assert.equal(model.status, 'ledger-error')
+  assert.equal(model.statusText, '账本异常')
+  assert.equal(model.statusTone, 'error')
+  assert.equal(model.partialPersistence, true)
+  assert.equal(model.position, null)
 })

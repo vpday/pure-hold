@@ -88,9 +88,9 @@ test('uses the portfolio coordinator for a counted second deletion confirmation'
   assert.doesNotMatch(desktopSource, /<t-popconfirm/)
 })
 
-test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
-  assert.match(sectionSource, /portfolioCoordinator\.ensureFundLedger\(\{/)
-  assert.match(sectionSource, /:ensure-fund-ledger="ensureFundLedger"/)
+test('keeps transaction facts and recovery inside the portfolio coordinator', () => {
+  assert.doesNotMatch(sectionSource, /:ensure-fund-ledger="ensureFundLedger"/)
+  assert.match(sectionSource, /portfolioCoordinator\.deleteEvent\(\{/)
   assert.match(sectionSource, /:portfolio-coordinator="props\.portfolioCoordinator"/)
   assert.doesNotMatch(sectionSource, /:enable-ledger=/)
   assert.doesNotMatch(sectionSource, /portfolioCoordinator\.enableFund\(\{/)
@@ -102,7 +102,8 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(sectionSource, /@record-sell="openSell"/)
   assert.match(detailEntrySource, /portfolioRevision/)
   assert.match(detailEntrySource, /portfolioCoordinator: PortfolioCoordinator/)
-  assert.match(detailEntrySource, /props\.portfolioCoordinator\.reconcileFund\(/)
+  assert.match(detailEntrySource, /props\.portfolioCoordinator\.getFundLedgerState\(/)
+  assert.match(detailEntrySource, /props\.portfolioCoordinator\.rebuildHoldingProjections\(/)
   assert.match(detailEntrySource, /toLedgerRecordViewModels/)
   assert.doesNotMatch(detailEntrySource, /handleEnableLedger|@enable-ledger/)
   assert.match(detailDrawerSource, /ledger: FundLedgerViewModel/)
@@ -121,7 +122,7 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(transactionSectionSource, /row\.canDelete/)
   assert.match(transactionSectionSource, /row\.costBasisLabel/)
   assert.match(ledgerPresenterSource, /移动平均成本/)
-  for (const label of ['期初持仓', '买入', '卖出', '现金分红', '红利再投资', '调仓']) {
+  for (const label of ['期初持仓', '买入', '卖出', '现金分红', '红利再投资', '手工修正']) {
     assert.match(ledgerPresenterSource, new RegExp(label))
   }
   assert.doesNotMatch(
@@ -130,7 +131,7 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   )
 })
 
-test('uses transaction records as the detail section and keeps comparison in ledger status', () => {
+test('uses transaction records as the detail section and keeps status in the ledger panel', () => {
   assert.match(detailDrawerSource, /label: '成交记录'/)
   assert.match(
     detailDrawerSource,
@@ -139,8 +140,9 @@ test('uses transaction records as the detail section and keeps comparison in led
   assert.match(transactionSectionSource, />成交记录<\/h2>/)
   assert.match(transactionSectionSource, /empty="暂无成交记录"/)
   assert.doesNotMatch(transactionSectionSource, /<section\b/)
-  assert.match(detailDrawerSource, /ledger\.difference\.status/)
-  assert.match(detailDrawerSource, /ledger\.difference\.directionText/)
+  assert.match(detailDrawerSource, /ledger\.statusText/)
+  assert.match(detailDrawerSource, /ledger\.statusTone/)
+  assert.match(detailDrawerSource, /ledger\.partialPersistence/)
   assert.doesNotMatch(
     detailDrawerSource + transactionSectionSource,
     /账本记录|账本汇总|聚合持仓与收益|持仓对账/,

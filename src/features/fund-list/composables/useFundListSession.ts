@@ -51,10 +51,14 @@ export function useFundListSession(inputs: UseFundListSessionInputs): FundListSe
   const activeCategoryId = ref('all')
   const sortByCategory = ref<Record<string, FundSort | null>>({})
   const now = inputs.now ?? (() => new Date())
+  const activeHoldingOrder = computed(() => {
+    const holdingsByCode = toValue(inputs.holdingsByCode)
+    return toValue(inputs.holdingOrder).filter((code) => (holdingsByCode[code]?.units ?? 0) > 0)
+  })
   const categories = computed(() =>
     buildFundCategories(
       toValue(inputs.fundOrder),
-      toValue(inputs.holdingOrder),
+      activeHoldingOrder.value,
       toValue(inputs.groups),
     ),
   )

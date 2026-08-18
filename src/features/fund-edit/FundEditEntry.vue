@@ -2,6 +2,10 @@
 import { ref } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
+import type {
+  PortfolioCoordinationStatus,
+  PortfolioCoordinator,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints'
 import FundEditContent from './components/FundEditContent.vue'
@@ -15,13 +19,14 @@ import {
 } from './models/fundEditDraft'
 import type { FundHoldingDraftErrors } from '../fund-holding-form/models/fundHoldingDraft'
 
-const props = defineProps<{ ensureFundLedger?: EnsureFundLedger }>()
+const props = defineProps<{ portfolioCoordinator: PortfolioCoordinator }>()
 const store = useFundsStore()
 const { isSmUp } = useBreakpoints()
 const visible = ref(false)
 const draft = ref<FundEditDraft>()
 const errors = ref<FundHoldingDraftErrors>({})
 const submitError = ref('')
+const holdingFactsReadonly = ref(false)
 
 function open(code: string): void {
   close()
@@ -30,6 +35,7 @@ function open(code: string): void {
     MessagePlugin.error('基金不存在，无法编辑')
     return
   }
+  holdingFactsReadonly.value = props.portfolioCoordinator.getPortfolio().fundCodes.includes(code)
   draft.value = createFundEditDraft(code, snapshot.name, store.holdingsByCode[code], store.groups)
   visible.value = true
 }
@@ -39,20 +45,48 @@ function close(): void {
   draft.value = undefined
   errors.value = {}
   submitError.value = ''
+  holdingFactsReadonly.value = false
 }
 
 function confirm(): void {
   if (!draft.value) return
   const result = submitFundEditDraft(draft.value, {
-    ensureFundLedger: props.ensureFundLedger,
+    ensureFundLedger: createEnsureFundLedger(props.portfolioCoordinator),
     updateFundGroupMembership: store.updateFundGroupMembership,
     updateFundHolding: store.updateFundHolding,
+    updateHoldingMetadata: props.portfolioCoordinator.updateHoldingMetadata,
+    holdingFactsReadonly: holdingFactsReadonly.value,
   })
   errors.value = result.fieldErrors
   submitError.value = result.error ?? ''
   if (!result.success) return
-  MessagePlugin.success('基金信息已保存')
+  if (result.status === 'synced' || result.status === undefined) {
+    MessagePlugin.success('基金信息已保存')
+  } else {
+    MessagePlugin.warning(`基金信息已保存，当前状态：${coordinationStatusText(result.status)}`)
+  }
   close()
+}
+
+function coordinationStatusText(status: PortfolioCoordinationStatus): string {
+  if (status === 'pending-confirmation') return '待确认'
+  if (status === 'pending-exact-data') return '待精确数据'
+  if (status === 'ledger-error') return '账本异常'
+  if (status === 'portfolio-persistence-failed') return '账本记录保存失败'
+  if (status === 'holding-sync-failed') return '持仓同步失败'
+  return '已同步'
+}
+
+function createEnsureFundLedger(coordinator: PortfolioCoordinator): EnsureFundLedger {
+  return (fundCode) => {
+    const result = coordinator.ensureFundLedger({ fundCode })
+    return {
+      error: result.ok ? undefined : result.error,
+      ok: result.ok,
+      partialPersistence: result.ok ? undefined : result.partialPersistence,
+      retryable: result.ok ? false : result.retryable,
+    }
+  }
 }
 
 defineExpose({ open })
@@ -65,6 +99,7 @@ defineExpose({ open })
       :draft="draft"
       :errors="errors"
       :groups="store.groups"
+      :holding-facts-readonly="holdingFactsReadonly"
       :submit-error="submitError"
     />
   </FundEditDesktopDialog>
@@ -74,6 +109,7 @@ defineExpose({ open })
       :draft="draft"
       :errors="errors"
       :groups="store.groups"
+      :holding-facts-readonly="holdingFactsReadonly"
       :submit-error="submitError"
     />
   </FundEditMobileDrawer>

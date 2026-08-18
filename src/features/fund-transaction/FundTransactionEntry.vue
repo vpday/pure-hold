@@ -3,6 +3,10 @@ import { computed, ref } from 'vue'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { fetchTiantianFundBasicInfo } from '@/domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
+import type {
+  PortfolioCoordinationStatus,
+  PortfolioCoordinator,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import {
   lookupExactUnitNav,
   type FundValue,
@@ -18,7 +22,6 @@ import {
   getShanghaiMinute,
   isValidShanghaiMinute,
 } from '@/domains/portfolio/services/tradingCalendar.ts'
-import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 import { useBreakpoints } from '@/shared/composables/useBreakpoints.ts'
 import { createBuyDraft } from './models/buyDraft.ts'
 import { createSellDraft } from './models/sellDraft.ts'
@@ -39,7 +42,7 @@ type TransactionMode = 'buy' | 'sell'
 type TransactionEvent = PortfolioBuyEvent | PortfolioSellEvent
 type NavStatus = 'idle' | 'loading' | 'ready' | 'missing' | 'error'
 
-const props = defineProps<{ portfolio: PortfolioStore }>()
+const props = defineProps<{ portfolioCoordinator: PortfolioCoordinator }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const mode = ref<TransactionMode>('buy')
@@ -259,7 +262,7 @@ function persistExactNav(
   requestNavDate: string,
   value: FundValue,
 ): void {
-  const event = props.portfolio.getPortfolio().events.find(({ id }) => id === eventId)
+  const event = props.portfolioCoordinator.getPortfolio().events.find(({ id }) => id === eventId)
   if (
     event === undefined ||
     (event.kind !== 'buy' && event.kind !== 'sell') ||
@@ -271,9 +274,17 @@ function persistExactNav(
   const now = new Date().toISOString()
   const result =
     event.kind === 'buy'
-      ? completeBuyEventWithExactNav(props.portfolio, event, value, now)
-      : completeSellEventWithExactNav(props.portfolio, event, value, now)
-  if (result.ok) emit('saved')
+      ? completeBuyEventWithExactNav(props.portfolioCoordinator, event, value, now)
+      : completeSellEventWithExactNav(props.portfolioCoordinator, event, value, now)
+  if ('reason' in result) {
+    navError.value = '历史净值与交易日期不匹配，请重新查询。'
+    return
+  }
+  if (isBlockingCoordinationStatus(result.status)) {
+    navError.value = coordinationFailureText(result.status, result.partialPersistence)
+    return
+  }
+  emit('saved')
 }
 
 function retryNav(): void {
@@ -315,13 +326,18 @@ function saveBuy(): void {
 
   const draft = preserveBuyFacts(result.draft, existing)
   const saveResult = existing
-    ? updateBuyDraft(props.portfolio, draft)
-    : saveBuyDraft(props.portfolio, draft)
-  if (!saveResult.ok) {
-    errors.value = { form: '保存失败，原有账本和当前草稿均未改变' }
+    ? updateBuyDraft(props.portfolioCoordinator, draft)
+    : saveBuyDraft(props.portfolioCoordinator, draft)
+  if (isBlockingCoordinationStatus(saveResult.status)) {
+    errors.value = {
+      form: coordinationFailureText(saveResult.status, saveResult.partialPersistence),
+    }
     return
   }
-  completeSave(findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft)
+  completeSave(
+    findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft,
+    saveResult.status,
+  )
 }
 
 function saveSell(): void {
@@ -347,13 +363,18 @@ function saveSell(): void {
 
   const draft = preserveSellFacts(result.draft, existing)
   const saveResult = existing
-    ? updateSellDraft(props.portfolio, draft)
-    : saveSellDraft(props.portfolio, draft)
-  if (!saveResult.ok) {
-    errors.value = { form: '保存失败，原有账本和当前草稿均未改变' }
+    ? updateSellDraft(props.portfolioCoordinator, draft)
+    : saveSellDraft(props.portfolioCoordinator, draft)
+  if (isBlockingCoordinationStatus(saveResult.status)) {
+    errors.value = {
+      form: coordinationFailureText(saveResult.status, saveResult.partialPersistence),
+    }
     return
   }
-  completeSave(findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft)
+  completeSave(
+    findTransactionEvent(saveResult.portfolio.events, draft.id) ?? draft,
+    saveResult.status,
+  )
 }
 
 async function saveCurrentTransaction(): Promise<void> {
@@ -368,10 +389,11 @@ async function saveCurrentTransaction(): Promise<void> {
   }
 }
 
-function completeSave(event: TransactionEvent): void {
+function completeSave(event: TransactionEvent, status: PortfolioCoordinationStatus): void {
   editingEvent.value = event
   errors.value = {}
-  MessagePlugin.success('交易记录已保存')
+  if (status === 'synced') MessagePlugin.success('交易记录已保存，持仓已同步')
+  else MessagePlugin.warning(coordinationStatusText(status))
   visible.value = false
   openGeneration += 1
   navRequestGeneration += 1
@@ -501,6 +523,37 @@ function parseMoneyYuan(value: string): number | null {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function isBlockingCoordinationStatus(status: PortfolioCoordinationStatus): boolean {
+  return (
+    status === 'ledger-error' ||
+    status === 'portfolio-persistence-failed' ||
+    status === 'holding-sync-failed'
+  )
+}
+
+function coordinationStatusText(status: PortfolioCoordinationStatus): string {
+  if (status === 'pending-confirmation') return '交易记录已保存，等待确认事实后同步持仓。'
+  if (status === 'pending-exact-data') return '交易记录已保存，精确数据待补全。'
+  if (status === 'ledger-error') return '账本异常，交易事实未能完成投影，请重试。'
+  if (status === 'holding-sync-failed') return '持仓同步失败，请重试。'
+  return '交易记录已保存，持仓已同步。'
+}
+
+function coordinationFailureText(
+  status: PortfolioCoordinationStatus,
+  partialPersistence: boolean,
+): string {
+  if (status === 'ledger-error') return '账本异常，交易事实未能完成投影，请重试。'
+  if (status === 'holding-sync-failed') {
+    return partialPersistence
+      ? '持仓同步失败，数据可能已部分持久化，请重试并检查账本。'
+      : '持仓同步失败，请重试。'
+  }
+  return partialPersistence
+    ? '交易记录可能已部分保存，请重试并检查账本。'
+    : '交易记录保存失败，账本未改变，请重试。'
 }
 
 defineExpose({ open, openBuy: open, openEdit, openSell })

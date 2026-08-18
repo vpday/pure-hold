@@ -11,6 +11,7 @@ defineProps<{
   transactions: readonly LedgerRecordViewModel[]
 }>()
 const emit = defineEmits<{
+  correct: []
   deleteTransaction: [eventId: string]
   editTransaction: [eventId: string]
   recordBuy: [code: string]
@@ -38,8 +39,9 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
   <div>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
-      <div v-if="ledger.ledgerEnabled" class="flex items-center gap-2">
+      <div v-if="ledger.canRecord || ledger.canCorrect" class="flex items-center gap-2">
         <t-button
+          v-if="ledger.canRecord"
           size="small"
           theme="default"
           variant="outline"
@@ -48,12 +50,22 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
           记录买入
         </t-button>
         <t-button
+          v-if="ledger.canRecord"
           size="small"
           theme="default"
           variant="outline"
           @click="emit('recordSell', ledger.fundCode)"
         >
           记录卖出
+        </t-button>
+        <t-button
+          v-if="ledger.canCorrect"
+          size="small"
+          theme="primary"
+          variant="outline"
+          @click="emit('correct')"
+        >
+          手工修正
         </t-button>
       </div>
     </div>

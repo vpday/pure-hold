@@ -59,20 +59,20 @@ test('owns holding-step creation, validation and rebuilding', () => {
   assert.deepEqual(Object.keys(invalidContent.holdings.errors), ['000001'])
 
   Object.assign(draft.holding, {
-    costPrice: '1.25',
     dividendMode: 'cash',
     purchaseDate: '2026-07-29',
+    totalCostYuan: '1.25',
     units: '10',
   })
   assert.equal(session.confirmHoldings(), 1)
-  assert.equal(additions[0]?.[0]?.holding?.costPrice, 1.25)
+  assert.equal(additions[0]?.[0]?.holding?.totalCostCents, 125)
 
   session.backToSearch()
   session.enterHoldings()
   const rebuilt = session.model.value.content
   assert.equal(rebuilt.step, 'holdings')
   if (rebuilt.step !== 'holdings') assert.fail('expected holdings step')
-  assert.equal(rebuilt.holdings.drafts[0]?.holding.costPrice, '')
+  assert.equal(rebuilt.holdings.drafts[0]?.holding.totalCostYuan, '')
   scope.stop()
 })
 
@@ -102,9 +102,9 @@ test('saves holdings before automatic ledger setup and exposes an idempotent ret
   const content = session.model.value.content
   if (content.step !== 'holdings') assert.fail('expected holdings step')
   Object.assign(content.holdings.drafts[0]!.holding, {
-    costPrice: '1.25',
     dividendMode: 'cash',
     purchaseDate: '2026-07-29',
+    totalCostYuan: '1.25',
     units: '10',
   })
 

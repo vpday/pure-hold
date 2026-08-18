@@ -12,10 +12,13 @@ const store = useFundsStore()
 const { holdingOrder, holdingsByCode, isRefreshing, previousSnapshotsByCode, snapshotsByCode } =
   storeToRefs(store)
 
-const visible = computed(() => holdingOrder.value.length > 0)
+const activeHoldingOrder = computed(() =>
+  holdingOrder.value.filter((code) => (holdingsByCode.value[code]?.units ?? 0) > 0),
+)
+const visible = computed(() => activeHoldingOrder.value.length > 0)
 const viewModel = computed(() => {
   const today = shanghaiDate()
-  const items = holdingOrder.value.flatMap((code) => {
+  const items = activeHoldingOrder.value.flatMap((code) => {
     const currentSnapshot = snapshotsByCode.value[code]
     const holding = holdingsByCode.value[code]
     if (!currentSnapshot || !holding) return []
@@ -37,7 +40,7 @@ const viewModel = computed(() => {
   })
 
   return toFundHoldingStatisticsViewModel({
-    fundCount: holdingOrder.value.length,
+    fundCount: activeHoldingOrder.value.length,
     statistics: calculateFundHoldingStatistics(items),
   })
 })

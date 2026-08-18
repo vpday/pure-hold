@@ -20,6 +20,7 @@ const props = defineProps<{
   draft: FundHoldingDraft
   errors: FundHoldingDraftErrors
   groupOptions?: readonly FundHoldingGroupOption[]
+  holdingFactsReadonly?: boolean
 }>()
 const selectedGroupIds = defineModel<string[]>('selectedGroupIds', { default: () => [] })
 const formRef = ref<FormInstance>()
@@ -30,14 +31,16 @@ const dividendOptions = [
   { label: '现金分红', value: 'cash' },
 ]
 const latestPurchaseDate = formatLocalDate(new Date())
-const rules = {
-  costPrice: [
-    {
-      message: '请输入大于 0、最多 4 位小数的成本价',
-      required: true,
-      validator: (value: unknown) => isPositiveDecimal(value, 4),
-    },
-  ],
+const rules = computed(() => ({
+  totalCostYuan: props.holdingFactsReadonly
+    ? []
+    : [
+        {
+          message: '请输入大于 0、最多 2 位小数的总成本',
+          required: true,
+          validator: (value: unknown) => isPositiveDecimal(value, 2),
+        },
+      ],
   dividendMode: [{ enum: ['cash', 'reinvest'], message: '请选择分红方式', required: true }],
   holdingDays: [
     {
@@ -53,14 +56,16 @@ const rules = {
       validator: (value: unknown) => isValidPurchaseDate(value),
     },
   ],
-  units: [
-    {
-      message: '请输入大于 0、最多 4 位小数的份额',
-      required: true,
-      validator: (value: unknown) => isPositiveDecimal(value, 4),
-    },
-  ],
-}
+  units: props.holdingFactsReadonly
+    ? []
+    : [
+        {
+          message: '请输入大于 0、最多 4 位小数的份额',
+          required: true,
+          validator: (value: unknown) => isPositiveDecimal(value, 4),
+        },
+      ],
+}))
 
 function changeMode(mode: FundHoldingTimeMode): void {
   props.draft.timeMode = mode
@@ -68,7 +73,8 @@ function changeMode(mode: FundHoldingTimeMode): void {
   else props.draft.purchaseDate = ''
 }
 
-function updateDraftValue(key: 'costPrice' | 'holdingDays' | 'units', value: unknown): void {
+function updateDraftValue(key: 'holdingDays' | 'totalCostYuan' | 'units', value: unknown): void {
+  if (props.holdingFactsReadonly && (key === 'totalCostYuan' || key === 'units')) return
   props.draft[key] = toDraftValue(value)
 }
 
@@ -127,6 +133,12 @@ defineExpose({ validate })
 
 <template>
   <t-form ref="formRef" label-align="top" layout="vertical" :data="formData" :rules="rules">
+    <t-alert
+      v-if="holdingFactsReadonly"
+      class="mb-4"
+      theme="info"
+      message="该基金已建账，份额和总成本由成交记录投影，只能通过交易或手工修正改变。"
+    />
     <t-form-item v-if="groupOptions" label="自定义分组">
       <t-select
         v-if="groupOptions.length > 0"
@@ -156,25 +168,27 @@ defineExpose({ validate })
           step="0.0001"
           suffix="份"
           theme="normal"
+          :readonly="holdingFactsReadonly"
           @change="updateDraftValue('units', $event)"
         />
       </t-form-item>
       <t-form-item
-        label="持仓成本价"
-        name="costPrice"
-        :status="errors.costPrice ? 'error' : undefined"
-        :tips="errors.costPrice"
+        label="总成本"
+        name="totalCostYuan"
+        :status="errors.totalCostYuan ? 'error' : undefined"
+        :tips="errors.totalCostYuan"
       >
         <t-input-number
-          :value="draft.costPrice"
+          :value="draft.totalCostYuan"
           align="right"
-          :decimal-places="4"
-          :min="0.0001"
-          placeholder="0.0000"
-          step="0.0001"
+          :decimal-places="2"
+          :min="holdingFactsReadonly ? undefined : 0.01"
+          placeholder="0.00"
+          step="0.01"
+          :readonly="holdingFactsReadonly"
           suffix="元"
           theme="normal"
-          @change="updateDraftValue('costPrice', $event)"
+          @change="updateDraftValue('totalCostYuan', $event)"
         />
       </t-form-item>
       <t-form-item

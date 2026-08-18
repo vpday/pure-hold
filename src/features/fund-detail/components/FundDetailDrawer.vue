@@ -266,66 +266,35 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </dl>
             </div>
 
-            <div
-              class="ledger-status-panel"
-              v-if="ledger.retryAvailable || ledger.difference.status === 'different'"
-            >
-              <div class="ledger-status-header" v-if="ledger.retryAvailable">
+            <div class="ledger-status-panel">
+              <div class="ledger-status-header">
                 <div>
                   <p class="font-medium">投资账本</p>
                   <p class="mt-1 text-sm text-(--td-text-color-secondary)">
                     {{
-                      ledger.ledgerEnabled
-                        ? '已建立，可记录交易和查看移动加权平均成本。'
-                        : ledger.retryAvailable
-                          ? '持仓信息已保存，但账本自动建立未完成。'
-                          : '首次保存有效持仓后自动建立账本。'
+                      ledger.status === 'synced'
+                        ? '交易记录和持仓投影已同步。'
+                        : '交易记录已保留，请按状态补全或重试同步。'
                     }}
                   </p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <t-tag
-                    :theme="
-                      ledger.ledgerEnabled
-                        ? 'success'
-                        : ledger.retryAvailable
-                          ? 'warning'
-                          : 'default'
-                    "
-                    variant="light"
-                  >
-                    {{ ledger.ledgerEnabled ? '已建立' : ledger.availabilityText }}
+                  <t-tag :theme="ledger.statusTone" variant="light">
+                    {{ ledger.statusText }}
                   </t-tag>
-                  <t-button size="small" variant="outline" @click="emit('retryLedger')">
-                    重试自动建账
+                  <t-button
+                    v-if="ledger.retryAvailable"
+                    size="small"
+                    variant="outline"
+                    @click="emit('retryLedger')"
+                  >
+                    重试同步
                   </t-button>
                 </div>
               </div>
-              <div class="ledger-comparison-panel" v-if="ledger.difference.status === 'different'">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p class="font-medium">当前持仓设置与成交记录</p>
-                    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
-                      {{ ledger.difference.directionText }}
-                    </p>
-                  </div>
-                  <t-tag :theme="ledger.difference.statusTone" variant="light">
-                    {{ ledger.difference.statusText }}
-                  </t-tag>
-                </div>
-                <div class="ledger-comparison-grid">
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">份额差异</dt>
-                    <dd class="mt-1 font-mono tabular-nums">{{ ledger.difference.units.text }}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs text-(--td-text-color-secondary)">成本差异</dt>
-                    <dd class="mt-1 font-mono tabular-nums">
-                      {{ ledger.difference.costAmount.text }}
-                    </dd>
-                  </div>
-                </div>
-              </div>
+              <p v-if="ledger.partialPersistence" class="mt-2 text-sm text-(--td-warning-color)">
+                本次操作可能已部分持久化，请通过重试或导出配置检查结果。
+              </p>
             </div>
           </section>
 

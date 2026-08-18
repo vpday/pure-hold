@@ -1,16 +1,20 @@
 import type { FundValue } from '@/domains/funds/services/tiantian/lookupExactUnitNav.ts'
 import type {
+  CommitEventInput,
+  PortfolioCoordinationResult,
+  PortfolioCoordinator,
+} from '@/app/portfolio/portfolioCoordinator.ts'
+import type {
   MoneyFieldValue,
   PortfolioBuyEvent,
   UnitsFieldValue,
 } from '@/domains/portfolio/models/index.ts'
 import { getShanghaiDate } from '@/domains/portfolio/services/tradingCalendar.ts'
-import type { PortfolioCommandResult, PortfolioStore } from '@/domains/portfolio/stores/index.ts'
 
 export type BuyTransactionFailureReason = 'exact-nav-mismatch'
 
 export type BuyTransactionResult =
-  | PortfolioCommandResult
+  | PortfolioCoordinationResult
   | { readonly ok: false; readonly reason: BuyTransactionFailureReason }
 
 export interface BuyActualFacts {
@@ -20,44 +24,51 @@ export interface BuyActualFacts {
 }
 
 export function saveBuyDraft(
-  store: Pick<PortfolioStore, 'addEvent'>,
+  coordinator: Pick<PortfolioCoordinator, 'commitEvent'>,
   draft: PortfolioBuyEvent,
-): PortfolioCommandResult {
-  return store.addEvent(draft)
+  options?: Omit<CommitEventInput, 'event'>,
+): PortfolioCoordinationResult {
+  return coordinator.commitEvent({ ...options, event: draft })
 }
 
 export function updateBuyDraft(
-  store: Pick<PortfolioStore, 'updateEvent'>,
+  coordinator: Pick<PortfolioCoordinator, 'commitEvent'>,
   draft: PortfolioBuyEvent,
-): PortfolioCommandResult {
-  return store.updateEvent(draft)
+  options?: Omit<CommitEventInput, 'event'>,
+): PortfolioCoordinationResult {
+  return coordinator.commitEvent({ ...options, event: draft })
 }
 
 export function completeBuyEventWithActualFacts(
-  store: Pick<PortfolioStore, 'updateEvent'>,
+  coordinator: Pick<PortfolioCoordinator, 'commitEvent'>,
   event: PortfolioBuyEvent,
   facts: BuyActualFacts,
   now: string,
-): PortfolioCommandResult {
+  options?: Omit<CommitEventInput, 'event'>,
+): PortfolioCoordinationResult {
   const nextConfirmedDate = facts.confirmedDate ?? event.confirmedDate
   const nextUnits = facts.units ?? event.units
-  return store.updateEvent({
-    ...event,
-    ...(facts.confirmedDate === undefined ? {} : { confirmedDate: facts.confirmedDate }),
-    expectedConfirmationDate:
-      nextConfirmedDate === undefined ? event.expectedConfirmationDate : undefined,
-    ...(facts.purchaseFee === undefined ? {} : { purchaseFee: facts.purchaseFee }),
-    ...(facts.units === undefined ? {} : { units: facts.units }),
-    settlementStatus: isSettled(nextConfirmedDate, nextUnits) ? 'settled' : 'pending-settlement',
-    updatedAt: now,
+  return coordinator.commitEvent({
+    ...options,
+    event: {
+      ...event,
+      ...(facts.confirmedDate === undefined ? {} : { confirmedDate: facts.confirmedDate }),
+      expectedConfirmationDate:
+        nextConfirmedDate === undefined ? event.expectedConfirmationDate : undefined,
+      ...(facts.purchaseFee === undefined ? {} : { purchaseFee: facts.purchaseFee }),
+      ...(facts.units === undefined ? {} : { units: facts.units }),
+      settlementStatus: isSettled(nextConfirmedDate, nextUnits) ? 'settled' : 'pending-settlement',
+      updatedAt: now,
+    },
   })
 }
 
 export function completeBuyEventWithExactNav(
-  store: Pick<PortfolioStore, 'updateEvent'>,
+  coordinator: Pick<PortfolioCoordinator, 'commitEvent'>,
   event: PortfolioBuyEvent,
   value: FundValue,
   now: string,
+  options?: Omit<CommitEventInput, 'event'>,
 ): BuyTransactionResult {
   if (
     value.date !== event.navDate ||
@@ -68,13 +79,16 @@ export function completeBuyEventWithExactNav(
     return { ok: false, reason: 'exact-nav-mismatch' }
   }
 
-  return store.updateEvent({
-    ...event,
-    settlementStatus: isSettled(event.confirmedDate, event.units)
-      ? 'settled'
-      : 'pending-settlement',
-    unitNav: { confidence: 'actual', source: value.source, value: value.unitNav },
-    updatedAt: now,
+  return coordinator.commitEvent({
+    ...options,
+    event: {
+      ...event,
+      settlementStatus: isSettled(event.confirmedDate, event.units)
+        ? 'settled'
+        : 'pending-settlement',
+      unitNav: { confidence: 'actual', source: value.source, value: value.unitNav },
+      updatedAt: now,
+    },
   })
 }
 

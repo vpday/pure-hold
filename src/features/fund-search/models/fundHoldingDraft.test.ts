@@ -9,14 +9,13 @@ test('validates every holding before creating atomic additions', () => {
     { code: '000002', name: '二号' },
   ]).map((draft) => ({ ...draft }))
   Object.assign(drafts[0]!.holding, {
-    costPrice: '1.2345',
     dividendMode: 'reinvest',
     purchaseDate: '2026-07-27',
+    totalCostYuan: '1.23',
     units: '100',
   })
   Object.assign(drafts[1]!.holding, {
-    costPrice: '0',
-    dividendMode: '',
+    totalCostYuan: '0',
     holdingDays: '2',
     timeMode: 'days',
     units: '1.23456',
@@ -27,7 +26,7 @@ test('validates every holding before creating atomic additions', () => {
   assert.deepEqual(Object.keys(invalid.errors), ['000002'])
 
   Object.assign(drafts[1]!.holding, {
-    costPrice: '2',
+    totalCostYuan: '2',
     dividendMode: 'cash',
     units: '1.2345',
   })
@@ -37,16 +36,16 @@ test('validates every holding before creating atomic additions', () => {
     [
       {
         code: '000001',
-        costPrice: 1.2345,
         dividendMode: 'reinvest',
         purchaseDate: '2026-07-27',
+        totalCostCents: 123,
         units: 100,
       },
       {
         code: '000002',
-        costPrice: 2,
         dividendMode: 'cash',
         purchaseDate: '2026-07-25',
+        totalCostCents: 200,
         units: 1.2345,
       },
     ],
@@ -58,8 +57,8 @@ test('rejects future and impossible purchase dates', () => {
     ...value,
     holding: {
       ...value.holding,
-      costPrice: '1',
       dividendMode: 'cash' as const,
+      totalCostYuan: '1',
       units: '1',
     },
   }))

@@ -10,6 +10,7 @@ const props = defineProps<{
   draft: FundEditDraft
   errors: FundHoldingDraftErrors
   groups: readonly FundGroupDefinition[]
+  holdingFactsReadonly: boolean
   submitError: string
 }>()
 
@@ -31,6 +32,7 @@ const groupOptions = computed(() =>
       :draft="draft.holding"
       :errors="errors"
       :group-options="groupOptions"
+      :holding-facts-readonly="holdingFactsReadonly"
     />
   </div>
 </template>

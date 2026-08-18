@@ -157,6 +157,28 @@ test('uses the injected Shanghai date for display and holding days', () => {
   assert.equal(session.model.value.rows[0]?.holding?.holdingDaysText, '1 天')
 })
 
+test('excludes zero-unit projections from the active holdings category', () => {
+  const state = createState({
+    fundOrder: ['zero', 'active'],
+    holdingOrder: ['zero', 'active'],
+    holdingsByCode: {
+      active: holding('active', 2, 1),
+      zero: holding('zero', 0, 10),
+    },
+    snapshotsByCode: {
+      active: snapshot('active'),
+      zero: snapshot('zero'),
+    },
+  })
+  const session = useFundListSession(state.inputs)
+
+  session.selectCategory('holdings')
+  assert.deepEqual(
+    session.model.value.rows.map(({ code }) => code),
+    ['active'],
+  )
+})
+
 function createState(options: {
   readonly fundOrder?: readonly string[]
   readonly groups?: readonly FundGroupDefinition[]
@@ -189,10 +211,16 @@ function createState(options: {
 function holding(
   code: string,
   units: number,
-  costPrice: number,
+  averageCostYuan: number,
   purchaseDate = '2026-08-01',
 ): FundHolding {
-  return { code, costPrice, dividendMode: 'cash', purchaseDate, units }
+  return {
+    code,
+    dividendMode: 'cash',
+    purchaseDate,
+    totalCostCents: Math.round(averageCostYuan * units * 100),
+    units,
+  }
 }
 
 function snapshot(code: string, overrides: Partial<FundSnapshot> = {}): FundSnapshot {

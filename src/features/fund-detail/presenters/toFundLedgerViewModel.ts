@@ -1,4 +1,7 @@
-import type { FundReconciliation } from '@/app/portfolio/portfolioCoordinator.ts'
+import type {
+  FundLedgerState,
+  PortfolioCoordinationStatus,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import type {
   FieldValue,
   MoneyFieldValue,
@@ -60,28 +63,16 @@ export interface LedgerPositionViewModel {
   readonly units: LedgerFieldViewModel
 }
 
-export type LedgerComparisonStatus = 'consistent' | 'different' | 'insufficient-data'
-export type LedgerComparisonTone = 'default' | 'success' | 'warning'
-
-export interface LedgerDifferenceViewModel {
-  readonly costAmount: LedgerFieldViewModel
-  readonly directionText: string
-  readonly status: LedgerComparisonStatus
-  readonly statusText: string
-  readonly statusTone: LedgerComparisonTone
-  readonly units: LedgerFieldViewModel
-}
-
 export interface FundLedgerViewModel {
-  readonly availability: FundReconciliation['availability']
-  readonly availabilityText: string
-  readonly difference: LedgerDifferenceViewModel
+  readonly canCorrect: boolean
+  readonly canRecord: boolean
   readonly fundCode: string
-  readonly fundHolding: LedgerPositionViewModel | null
-  readonly initialEventLocked: boolean
-  readonly ledgerEnabled: boolean
+  readonly partialPersistence: boolean
   readonly position: LedgerPositionViewModel | null
   readonly retryAvailable: boolean
+  readonly status: PortfolioCoordinationStatus
+  readonly statusText: string
+  readonly statusTone: LedgerStatusTone
 }
 
 interface OrderedLedgerRecord extends LedgerRecordViewModel {
@@ -97,7 +88,7 @@ type LedgerCalculation =
   | PortfolioCalculation['adjustmentEvents'][number]
 
 const kindText: Record<PortfolioEventKind, string> = {
-  adjustment: '调仓',
+  adjustment: '手工修正',
   'cash-dividend': '现金分红',
   'dividend-reinvestment': '红利再投资',
   buy: '买入',
@@ -107,10 +98,10 @@ const kindText: Record<PortfolioEventKind, string> = {
 
 export function toLedgerRecordViewModels(
   events: readonly PortfolioEvent[],
-  calculation: PortfolioCalculation,
+  calculation: PortfolioCalculation | undefined,
   fundCode: string,
 ): readonly LedgerRecordViewModel[] {
-  const issuesByEvent = groupIssuesByEvent(calculation.issues, fundCode)
+  const issuesByEvent = groupIssuesByEvent(calculation?.issues ?? [], fundCode)
   const records = events
     .map((event, savedIndex) => ({ event, savedIndex }))
     .filter(({ event }) => event.fundCode === fundCode)
@@ -132,35 +123,26 @@ export function sortLedgerRecords(
     .map(({ orderDate: _orderDate, savedIndex: _savedIndex, ...record }) => record)
 }
 
-export function toFundLedgerViewModel(reconciliation: FundReconciliation): FundLedgerViewModel {
-  const position = reconciliation.ledger
-    ? toPositionViewModel(reconciliation.ledger.units, reconciliation.ledger.costAmount)
-    : null
-  const fundHolding = reconciliation.fundHolding
-    ? toPositionViewModel(
-        valueField(reconciliation.fundHolding.units, 'actual', 'manual'),
-        valueField(reconciliation.fundHolding.costAmountCents, 'actual', 'manual'),
-      )
-    : null
-  const difference = toDifferenceViewModel(reconciliation)
-
+export function toFundLedgerViewModel(state: FundLedgerState): FundLedgerViewModel {
   return {
-    availability: reconciliation.availability,
-    availabilityText: availabilityText(reconciliation.availability),
-    difference,
-    fundCode: reconciliation.fundCode,
-    fundHolding,
-    initialEventLocked: reconciliation.initialEventLocked,
-    ledgerEnabled: reconciliation.ledgerEnabled,
-    position,
-    retryAvailable: reconciliation.availability === 'missing-ledger' && fundHolding !== null,
+    canCorrect: state.canCorrect,
+    canRecord: state.canRecord,
+    fundCode: state.fundCode,
+    partialPersistence: state.partialPersistence,
+    position: state.ledger
+      ? toPositionViewModel(state.ledger.units, state.ledger.costAmount)
+      : null,
+    retryAvailable: state.retryable,
+    status: state.status,
+    statusText: coordinationStatusText(state.status),
+    statusTone: coordinationStatusTone(state.status),
   }
 }
 
 function toLedgerRecordViewModel(
   event: PortfolioEvent,
   savedIndex: number,
-  calculation: PortfolioCalculation,
+  calculation: PortfolioCalculation | undefined,
   issues: readonly PortfolioCalculationIssue[],
 ): OrderedLedgerRecord {
   const calculated = findCalculation(event, calculation)
@@ -205,12 +187,12 @@ function toLedgerRecordViewModel(
 
   switch (event.kind) {
     case 'adjustment': {
-      const result = calculated && 'unitsDelta' in calculated ? calculated : undefined
+      const result = calculated && 'targetUnits' in calculated ? calculated : undefined
       return {
         ...base,
-        amount: toMoneyField(result?.costAmountDelta ?? event.costAmountDelta, true),
-        amountLabel: '成本变动',
-        units: toUnitsField(result?.unitsDelta ?? event.unitsDelta, true),
+        amount: toMoneyField(result?.targetCostAmount ?? event.targetCostAmount),
+        amountLabel: '目标总成本',
+        units: toUnitsField(result?.targetUnits ?? event.targetUnits),
       }
     }
     case 'cash-dividend': {
@@ -276,8 +258,9 @@ function toLedgerRecordViewModel(
 
 function findCalculation(
   event: PortfolioEvent,
-  calculation: PortfolioCalculation,
+  calculation: PortfolioCalculation | undefined,
 ): LedgerCalculation | undefined {
+  if (calculation === undefined) return undefined
   if (event.kind === 'buy') return calculation.events.find(({ eventId }) => eventId === event.id)
   if (event.kind === 'sell')
     return calculation.sellEvents.find(({ eventId }) => eventId === event.id)
@@ -287,10 +270,7 @@ function findCalculation(
   if (event.kind === 'dividend-reinvestment') {
     return calculation.dividendReinvestmentEvents.find(({ eventId }) => eventId === event.id)
   }
-  if (event.kind === 'adjustment') {
-    return calculation.adjustmentEvents.find(({ eventId }) => eventId === event.id)
-  }
-  return undefined
+  return calculation.adjustmentEvents.find(({ eventId }) => eventId === event.id)
 }
 
 function isPending(event: PortfolioEvent, calculated: LedgerCalculation | undefined): boolean {
@@ -307,7 +287,7 @@ function statusText(
   event: PortfolioEvent,
   calculated: LedgerCalculation | undefined,
 ): string {
-  if (status === 'issue') return '存在校验问题'
+  if (status === 'issue') return '账本异常'
   if (!pending) return '已确认'
   if (
     (event.kind === 'buy' || event.kind === 'sell') &&
@@ -324,7 +304,7 @@ function resultText(kind: PortfolioEventKind): string {
   if (kind === 'cash-dividend') return '计入现金分红'
   if (kind === 'dividend-reinvestment') return '计入持仓成本'
   if (kind === 'initial-holding') return '账本期初余额'
-  if (kind === 'adjustment') return '按调仓事实应用'
+  if (kind === 'adjustment') return '按目标持仓应用'
   if (kind === 'buy') return '增加持仓成本'
   return '按平均成本计算收益'
 }
@@ -361,57 +341,11 @@ function formatIssue(issue: PortfolioCalculationIssue): string {
     return `份额不足：请求 ${formatUnits(issue.requestedUnits)} 份，可用 ${formatUnits(issue.availableUnits)} 份`
   }
   if (issue.code === 'missing-sell-units') return '卖出份额未能确认，成本基础暂不可计算'
-  if (issue.code === 'insufficient-adjustment-units') {
-    return `调仓后份额将低于零：可用 ${formatUnits(issue.availableUnits)} 份`
-  }
-  if (issue.code === 'insufficient-adjustment-cost') {
-    return `调仓后成本将低于零：可用 ${formatMoneyValue(issue.availableCostAmount)}`
-  }
-  return '调仓事实不完整，暂未应用'
+  return '修正目标份额与总成本必须同时为零或同时为正'
 }
 
 function formatUnits(field: FieldValue<number>): string {
-  return field.value === null ? '--' : field.value.toFixed(4)
-}
-
-function formatMoneyValue(field: MoneyFieldValue): string {
-  return field.value === null ? '--' : `¥${(field.value / 100).toFixed(2)}`
-}
-
-function toDifferenceViewModel(reconciliation: FundReconciliation): LedgerDifferenceViewModel {
-  const { costAmountCents, units } = reconciliation.difference
-  const comparable =
-    reconciliation.availability === 'available' &&
-    reconciliation.fundHolding !== null &&
-    reconciliation.ledger !== null &&
-    costAmountCents !== null &&
-    units !== null
-  const status: LedgerComparisonStatus = !comparable
-    ? 'insufficient-data'
-    : costAmountCents === 0 && units === 0
-      ? 'consistent'
-      : 'different'
-
-  return {
-    costAmount: toDifferenceMoneyField(costAmountCents),
-    directionText: '成交记录计算结果 − 当前持仓设置',
-    status,
-    statusText: comparisonStatusText(status),
-    statusTone: comparisonStatusTone(status),
-    units: toDifferenceUnitsField(units),
-  }
-}
-
-function comparisonStatusText(status: LedgerComparisonStatus): string {
-  if (status === 'consistent') return '一致'
-  if (status === 'different') return '存在差异'
-  return '信息不足'
-}
-
-function comparisonStatusTone(status: LedgerComparisonStatus): LedgerComparisonTone {
-  if (status === 'consistent') return 'success'
-  if (status === 'different') return 'warning'
-  return 'default'
+  return field.value === null ? '--' : formatDecimal(field.value, 4)
 }
 
 function toPositionViewModel(
@@ -433,7 +367,7 @@ function toAverageCostField(
   return {
     confidenceText: confidenceText(mergeConfidence(costAmount.confidence, units.confidence)),
     sourceText: sourceText('formula'),
-    text: `¥${(costAmount.value / units.value / 100).toFixed(4)}`,
+    text: `¥${formatDecimal(costAmount.value / units.value / 100, 6)}`,
   }
 }
 
@@ -457,16 +391,8 @@ function toNavField(field: FieldValue<number>): LedgerFieldViewModel {
   return {
     confidenceText: confidenceText(field.confidence),
     sourceText: sourceText(field.source),
-    text: field.value === null ? '--' : field.value.toFixed(4),
+    text: field.value === null ? '--' : formatDecimal(field.value, 4),
   }
-}
-
-function toDifferenceMoneyField(value: number | null): LedgerFieldViewModel {
-  return toMoneyField(valueField(value, value === null ? 'unknown' : 'estimated', 'formula'), true)
-}
-
-function toDifferenceUnitsField(value: number | null): LedgerFieldViewModel {
-  return toUnitsField(valueField(value, value === null ? 'unknown' : 'estimated', 'formula'), true)
 }
 
 function emptyField(): LedgerFieldViewModel {
@@ -481,26 +407,25 @@ function unknownField(): MoneyFieldValue {
   return emptyFieldValue()
 }
 
-function valueField(
-  value: number | null,
-  confidence: PortfolioFieldConfidence,
-  source: PortfolioValueSource,
-): FieldValue<number> {
-  return { confidence, source, value }
-}
-
 function formatMoney(value: number | null, signed: boolean): string {
   if (value === null) return '--'
-  const absolute = `¥${(Math.abs(value) / 100).toFixed(2)}`
+  const absolute = `¥${Math.abs(value / 100).toFixed(2)}`
   if (!signed || value === 0) return absolute
   return value > 0 ? `+${absolute}` : `-${absolute}`
 }
 
 function formatUnitsValue(value: number | null, signed: boolean): string {
   if (value === null) return '--'
-  const absolute = Math.abs(value).toFixed(4)
+  const absolute = formatDecimal(Math.abs(value), 4)
   if (!signed || value === 0) return absolute
   return value > 0 ? `+${absolute}` : `-${absolute}`
+}
+
+function formatDecimal(value: number, digits: number): string {
+  return value
+    .toFixed(digits)
+    .replace(/\.\d*0$/, '')
+    .replace(/\.$/, '')
 }
 
 function confidenceText(confidence: PortfolioFieldConfidence): string {
@@ -521,7 +446,7 @@ function sourceText(source: PortfolioValueSource): string {
 function eventSourceText(source: PortfolioEvent['source']): string {
   if (source === 'initial-holding') return '自动建账'
   if (source === 'dividend-reinvestment') return '系统事件'
-  if (source === 'adjustment') return '调仓事件'
+  if (source === 'adjustment') return '手工修正'
   return '手工记录'
 }
 
@@ -534,10 +459,18 @@ function mergeConfidence(
   return 'estimated'
 }
 
-function availabilityText(availability: FundReconciliation['availability']): string {
-  if (availability === 'available') return '账本已建立'
-  if (availability === 'missing-ledger') return '账本自动建立未完成'
-  if (availability === 'missing-fund-holding') return '尚未录入当前持仓'
-  if (availability === 'incomplete') return '账本数据待补全'
-  return '基金不存在'
+function coordinationStatusText(status: PortfolioCoordinationStatus): string {
+  if (status === 'synced') return '已同步'
+  if (status === 'pending-confirmation') return '待确认'
+  if (status === 'pending-exact-data') return '待精确数据'
+  if (status === 'ledger-error') return '账本异常'
+  if (status === 'portfolio-persistence-failed') return '账本记录保存失败'
+  return '持仓同步失败'
+}
+
+function coordinationStatusTone(status: PortfolioCoordinationStatus): LedgerStatusTone {
+  if (status === 'synced') return 'success'
+  if (status === 'ledger-error' || status === 'portfolio-persistence-failed') return 'error'
+  if (status === 'holding-sync-failed') return 'error'
+  return 'warning'
 }

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import type {
+  CommitEventInput,
+  PortfolioCoordinationResult,
+  PortfolioCoordinator,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import { calculatePortfolio } from '@/domains/portfolio/services/calculatePortfolio.ts'
 import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
-import { createPortfolioStore } from '@/domains/portfolio/stores/createPortfolioStore.ts'
 import {
   completeBuyEventWithActualFacts,
   completeBuyEventWithExactNav,
@@ -13,7 +17,7 @@ import { createBuyDraft } from '../models/buyDraft.ts'
 import { toBuyTransactionViewModel } from './toBuyTransactionViewModel.ts'
 
 test('maps settlement state, dates, confidence and hides estimated purchase fees', () => {
-  const store = createPortfolioStore(createEmptyPortfolio(), () => undefined)
+  const coordinator = createCoordinator()
   const draftResult = createBuyDraft(
     {
       entryMode: 'pending',
@@ -27,11 +31,15 @@ test('maps settlement state, dates, confidence and hides estimated purchase fees
   )
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
-  assert.equal(saveBuyDraft(store, draftResult.draft).ok, true)
+  assert.equal(saveBuyDraft(coordinator, draftResult.draft).ok, true)
 
   const pending = toBuyTransactionViewModel(
     draftResult.draft,
-    store.calculate({ asOfDate: '2026-08-14', currentNavByFund: {} }),
+    calculatePortfolio({
+      asOfDate: '2026-08-14',
+      currentNavByFund: {},
+      events: coordinator.getPortfolio().events,
+    }),
   )
   assert.equal(pending.statusText, '待确认')
   assert.equal(pending.navDateText, '2026-08-14')
@@ -41,23 +49,27 @@ test('maps settlement state, dates, confidence and hides estimated purchase fees
   assert.equal(pending.purchaseFee.text, '--')
 
   const completed = completeBuyEventWithExactNav(
-    store,
+    coordinator,
     draftResult.draft,
     { date: '2026-08-14', source: 'nav-history', unitNav: 2 },
     '2026-08-14T22:00:00.000Z',
   )
   assert.equal(completed.ok, true)
-  const navReadyButPending = store.getPortfolio().events[0]
+  const navReadyButPending = coordinator.getPortfolio().events[0]
   if (navReadyButPending?.kind !== 'buy') return
   const stillPending = toBuyTransactionViewModel(
     navReadyButPending,
-    store.calculate({ asOfDate: '2026-08-14', currentNavByFund: {} }),
+    calculatePortfolio({
+      asOfDate: '2026-08-14',
+      currentNavByFund: {},
+      events: coordinator.getPortfolio().events,
+    }),
   )
   assert.equal(stillPending.statusText, '待确认')
   assert.equal(stillPending.unitNav.sourceText, '历史净值')
 
   const facts = completeBuyEventWithActualFacts(
-    store,
+    coordinator,
     navReadyButPending,
     {
       confirmedDate: '2026-08-14',
@@ -66,7 +78,7 @@ test('maps settlement state, dates, confidence and hides estimated purchase fees
     '2026-08-14T23:00:00.000Z',
   )
   assert.equal(facts.ok, true)
-  const settled = store.getPortfolio().events[0]
+  const settled = coordinator.getPortfolio().events[0]
   if (settled?.kind !== 'buy') return
   assert.equal(settled.expectedConfirmationDate, undefined)
   const ready = toBuyTransactionViewModel(
@@ -91,3 +103,26 @@ test('maps settlement state, dates, confidence and hides estimated purchase fees
   assert.equal(actual.units.text, '49.5000')
   assert.equal(actual.units.sourceText, '平台实际值')
 })
+
+function createCoordinator(): Pick<PortfolioCoordinator, 'commitEvent' | 'getPortfolio'> {
+  let portfolio = createEmptyPortfolio()
+  return {
+    commitEvent(input: CommitEventInput): PortfolioCoordinationResult {
+      const events = portfolio.events.some(({ id }) => id === input.event.id)
+        ? portfolio.events.map((event) => (event.id === input.event.id ? input.event : event))
+        : [...portfolio.events, input.event]
+      portfolio = { ...portfolio, events }
+      return {
+        fundCode: input.event.fundCode,
+        holding: null,
+        ledger: null,
+        ok: true,
+        partialPersistence: false,
+        portfolio,
+        retryable: false,
+        status: 'synced',
+      }
+    },
+    getPortfolio: () => portfolio,
+  }
+}

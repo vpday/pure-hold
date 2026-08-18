@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import type {
+  CommitEventInput,
+  PortfolioCoordinationResult,
+  PortfolioCoordinator,
+} from '@/app/portfolio/portfolioCoordinator.ts'
 import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
-import { createPortfolioStore } from '@/domains/portfolio/stores/createPortfolioStore.ts'
 import { createBuyDraft } from '../models/buyDraft.ts'
 import { completeBuyEventWithExactNav, saveBuyDraft } from './buyTransactionService.ts'
 
@@ -21,7 +25,7 @@ function input(overrides: Record<string, unknown> = {}) {
 }
 
 test('saves and completes the same buy event with an exact same-day NAV', () => {
-  const store = createPortfolioStore(createEmptyPortfolio(), () => undefined)
+  const coordinator = createCoordinator()
   const draftResult = createBuyDraft(
     {
       ...input({
@@ -34,15 +38,15 @@ test('saves and completes the same buy event with an exact same-day NAV', () => 
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
 
-  assert.equal(saveBuyDraft(store, draftResult.draft).ok, true)
+  assert.equal(saveBuyDraft(coordinator, draftResult.draft).ok, true)
   const first = completeBuyEventWithExactNav(
-    store,
+    coordinator,
     draftResult.draft,
     { date: '2026-08-14', source: 'nav-history', unitNav: 2 },
     '2026-08-14T22:00:00.000Z',
   )
   assert.equal(first.ok, true)
-  const saved = store.getPortfolio().events[0]
+  const saved = coordinator.getPortfolio().events[0]
   assert.equal(saved?.id, 'buy-same-event')
   assert.equal(saved?.kind, 'buy')
   if (saved?.kind !== 'buy') return
@@ -50,17 +54,17 @@ test('saves and completes the same buy event with an exact same-day NAV', () => 
   assert.deepEqual(saved.unitNav, { confidence: 'actual', source: 'nav-history', value: 2 })
 
   const repeated = completeBuyEventWithExactNav(
-    store,
+    coordinator,
     saved,
     { date: '2026-08-14', source: 'nav-history', unitNav: 2 },
     '2026-08-14T22:00:00.000Z',
   )
   assert.equal(repeated.ok, true)
-  assert.equal(store.getPortfolio().events.length, 1)
+  assert.equal(coordinator.getPortfolio().events.length, 1)
 })
 
 test('does not update a saved event when exact NAV completion fails', () => {
-  const store = createPortfolioStore(createEmptyPortfolio(), () => undefined)
+  const coordinator = createCoordinator()
   const draftResult = createBuyDraft(
     {
       ...input({ id: 'buy-pending', totalAmountYuan: '100' }),
@@ -69,23 +73,21 @@ test('does not update a saved event when exact NAV completion fails', () => {
   )
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
-  assert.equal(saveBuyDraft(store, draftResult.draft).ok, true)
+  assert.equal(saveBuyDraft(coordinator, draftResult.draft).ok, true)
 
   const result = completeBuyEventWithExactNav(
-    store,
+    coordinator,
     draftResult.draft,
     { date: '2026-08-13', source: 'nav-history', unitNav: 2 },
     '2026-08-14T22:00:00.000Z',
   )
 
   assert.deepEqual(result, { ok: false, reason: 'exact-nav-mismatch' })
-  assert.equal(store.getPortfolio().events[0]?.settlementStatus, 'pending-settlement')
+  assert.equal(coordinator.getPortfolio().events[0]?.settlementStatus, 'pending-settlement')
 })
 
 test('keeps the draft and old portfolio state when persistence fails', () => {
-  const store = createPortfolioStore(createEmptyPortfolio(), () => {
-    throw new Error('storage failed')
-  })
+  const coordinator = createCoordinator(true)
   const draftResult = createBuyDraft(
     {
       ...input({ id: 'buy-write-failure', totalAmountYuan: '100' }),
@@ -95,9 +97,47 @@ test('keeps the draft and old portfolio state when persistence fails', () => {
   assert.equal(draftResult.ok, true)
   if (!draftResult.ok) return
 
-  const result = saveBuyDraft(store, draftResult.draft)
+  const result = saveBuyDraft(coordinator, draftResult.draft)
 
   assert.equal(result.ok, false)
-  assert.deepEqual(store.getPortfolio(), createEmptyPortfolio())
+  assert.deepEqual(coordinator.getPortfolio(), createEmptyPortfolio())
   assert.equal(draftResult.draft.settlementStatus, 'pending-settlement')
 })
+
+function createCoordinator(
+  fail = false,
+): Pick<PortfolioCoordinator, 'commitEvent' | 'getPortfolio'> {
+  let portfolio = createEmptyPortfolio()
+  return {
+    commitEvent(input: CommitEventInput): PortfolioCoordinationResult {
+      if (fail) {
+        return {
+          error: new Error('storage failed'),
+          fundCode: input.event.fundCode,
+          holding: null,
+          ledger: null,
+          ok: false,
+          partialPersistence: false,
+          portfolio,
+          retryable: true,
+          status: 'portfolio-persistence-failed',
+        }
+      }
+      const events = portfolio.events.some(({ id }) => id === input.event.id)
+        ? portfolio.events.map((event) => (event.id === input.event.id ? input.event : event))
+        : [...portfolio.events, input.event]
+      portfolio = { ...portfolio, events }
+      return {
+        fundCode: input.event.fundCode,
+        holding: null,
+        ledger: null,
+        ok: true,
+        partialPersistence: false,
+        portfolio,
+        retryable: false,
+        status: 'synced',
+      }
+    },
+    getPortfolio: () => portfolio,
+  }
+}

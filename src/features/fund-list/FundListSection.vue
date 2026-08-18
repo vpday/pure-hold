@@ -5,6 +5,7 @@ import { MessagePlugin } from 'tdesign-vue-next'
 
 import type {
   FundDeletionPreview,
+  PortfolioCoordinationStatus,
   PortfolioCoordinator,
 } from '@/app/portfolio/portfolioCoordinator.ts'
 import { useAppSettingsStore } from '@/app/settings/stores/useAppSettingsStore'
@@ -106,10 +107,6 @@ function showComingSoon(): void {
   MessagePlugin.info('功能开发中')
 }
 
-function ensureFundLedger(fundCode: string) {
-  return props.portfolioCoordinator.ensureFundLedger({ fundCode })
-}
-
 function deleteFund(code: string): void {
   const result = props.portfolioCoordinator.prepareFundDeletion(code)
   if (!result.ok) {
@@ -176,13 +173,34 @@ function editTransaction(eventId: string): void {
 }
 
 function deleteTransaction(eventId: string): void {
-  const result = props.portfolio.deleteEvent(eventId)
-  if (!result.ok) {
-    MessagePlugin.error('交易记录删除失败，账本未改变')
+  const event = findTransaction(eventId)
+  if (event === undefined) {
+    MessagePlugin.error('交易记录不存在，无法删除')
+    return
+  }
+  const result = props.portfolioCoordinator.deleteEvent({
+    eventId,
+    fundCode: event.fundCode,
+  })
+  if (isBlockingCoordinationStatus(result.status)) {
+    MessagePlugin.error(
+      result.partialPersistence
+        ? '交易记录删除失败，数据可能已部分持久化，请重试并检查账本。'
+        : '交易记录删除失败，账本未改变。',
+    )
     return
   }
   portfolioRevision.value += 1
-  MessagePlugin.success('交易记录已删除')
+  if (result.status === 'synced') MessagePlugin.success('交易记录已删除')
+  else MessagePlugin.warning('交易记录已删除，但持仓同步待重试')
+}
+
+function isBlockingCoordinationStatus(status: PortfolioCoordinationStatus): boolean {
+  return (
+    status === 'ledger-error' ||
+    status === 'portfolio-persistence-failed' ||
+    status === 'holding-sync-failed'
+  )
 }
 </script>
 
@@ -284,7 +302,6 @@ function deleteTransaction(eventId: string): void {
     <FundGroupSettingsEntry ref="groupSettings" @saved="clearSavedCategorySorts" />
     <FundDetailEntry
       ref="fundDetail"
-      :portfolio="props.portfolio"
       :portfolio-coordinator="props.portfolioCoordinator"
       :portfolio-revision="portfolioRevision"
       @delete-transaction="deleteTransaction"
@@ -293,10 +310,10 @@ function deleteTransaction(eventId: string): void {
       @record-buy="openBuy"
       @record-sell="openSell"
     />
-    <FundEditEntry ref="fundEdit" :ensure-fund-ledger="ensureFundLedger" />
+    <FundEditEntry ref="fundEdit" :portfolio-coordinator="props.portfolioCoordinator" />
     <FundTransactionEntry
       ref="fundTransaction"
-      :portfolio="props.portfolio"
+      :portfolio-coordinator="props.portfolioCoordinator"
       @saved="handleTransactionSaved"
     />
 

@@ -80,8 +80,8 @@ test('does not warn when the submission date is today', () => {
 test('routes buy and sell actions into the transaction feature', () => {
   assert.match(actionsSource, /emit\('buy', props\.code\)/)
   assert.match(actionsSource, /emit\('sell', props\.code\)/)
-  assert.match(entrySource, /saveBuyDraft\(props\.portfolio, draft\)/)
-  assert.match(entrySource, /saveSellDraft\(props\.portfolio, draft\)/)
+  assert.match(entrySource, /saveBuyDraft\(props\.portfolioCoordinator, draft\)/)
+  assert.match(entrySource, /saveSellDraft\(props\.portfolioCoordinator, draft\)/)
   assert.match(entrySource, /emit\('saved'\)/)
 })
 
