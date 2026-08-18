@@ -30,9 +30,7 @@ const transactionColumns: TableProps<LedgerRecordViewModel>['columns'] = [
 ]
 
 function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
-  return transaction.kind === 'buy'
-    ? '删除这条买入记录？删除后会重新计算账本汇总。'
-    : '删除这条卖出记录？删除后会重新计算移动平均成本和收益。'
+  return transaction.kind === 'buy' ? '删除这条买入记录？' : '删除这条卖出记录？'
 }
 </script>
 
@@ -43,7 +41,7 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
     class="detail-section pt-4"
   >
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 id="fund-detail-transactions-title" class="section-title">账本记录</h2>
+      <h2 id="fund-detail-transactions-title" class="section-title">成交记录</h2>
       <div v-if="ledger.ledgerEnabled" class="flex items-center gap-2">
         <t-button
           size="small"
@@ -64,81 +62,12 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
       </div>
     </div>
 
-    <div class="ledger-summary mt-4" aria-label="账本汇总">
-      <h3 class="font-medium">聚合持仓与收益</h3>
-      <dl class="summary-grid mt-3">
-        <div>
-          <dt>账本份额</dt>
-          <dd>{{ ledger.summary.units.text }}</dd>
-        </div>
-        <div>
-          <dt>累计成本</dt>
-          <dd>{{ ledger.summary.costAmount.text }}</dd>
-        </div>
-        <div>
-          <dt>平均成本</dt>
-          <dd>{{ ledger.summary.averageCost.text }}</dd>
-        </div>
-        <div>
-          <dt>已实现收益</dt>
-          <dd>{{ ledger.summary.realizedGain.text }}</dd>
-        </div>
-        <div>
-          <dt>现金分红</dt>
-          <dd>{{ ledger.summary.cashDividend.text }}</dd>
-        </div>
-        <div>
-          <dt>总收益</dt>
-          <dd>{{ ledger.summary.totalGain.text }}</dd>
-        </div>
-      </dl>
-      <p class="mt-3 text-xs text-(--td-text-color-secondary)">
-        汇总来自已结算事件；待确认或缺少事实的指标保留为空值。
-      </p>
-    </div>
-
-    <div class="ledger-reconciliation mt-4" aria-label="持仓对账">
-      <h3 class="font-medium">持仓对账</h3>
-      <div v-if="ledger.fundHolding && ledger.position" class="reconciliation-grid mt-3">
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">当前 FundHolding</p>
-          <p>份额 {{ ledger.fundHolding.units.text }}</p>
-          <p>成本 {{ ledger.fundHolding.costAmount.text }}</p>
-        </div>
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">账本聚合</p>
-          <p>份额 {{ ledger.position.units.text }}</p>
-          <p>成本 {{ ledger.position.costAmount.text }}</p>
-        </div>
-        <div>
-          <p class="text-xs text-(--td-text-color-secondary)">对账差异</p>
-          <p>份额 {{ ledger.difference.units.text }}</p>
-          <p>成本 {{ ledger.difference.costAmount.text }}</p>
-        </div>
-      </div>
-      <p v-else class="mt-3 text-sm text-(--td-text-color-secondary)">
-        {{ ledger.availabilityText }}，暂不能进行持仓对账。
-      </p>
-      <p
-        v-if="ledger.fundHolding && ledger.position && !ledger.difference.hasDifference"
-        class="mt-3 text-sm text-(--td-success-color)"
-      >
-        当前 FundHolding 与账本聚合一致。
-      </p>
-      <p
-        v-else-if="ledger.fundHolding && ledger.position && ledger.difference.hasDifference"
-        class="mt-3 text-sm text-(--td-warning-color)"
-      >
-        当前 FundHolding 与账本聚合存在差异；账本不会自动写回基金设置。
-      </p>
-    </div>
-
     <div class="mt-4">
       <t-table
         bordered
         :columns="transactionColumns"
         :data="transactions"
-        empty="暂无账本记录"
+        empty="暂无成交记录"
         row-key="id"
         size="small"
         table-layout="auto"
@@ -244,27 +173,5 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
 
 .section-title {
   @apply text-lg font-medium text-(--td-text-color-primary);
-}
-
-.ledger-summary,
-.ledger-reconciliation {
-  @apply rounded-md border border-(--td-component-border) p-4;
-}
-
-.summary-grid {
-  @apply grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6;
-}
-
-.summary-grid dt,
-.reconciliation-grid p:first-child {
-  @apply text-xs text-(--td-text-color-secondary);
-}
-
-.summary-grid dd {
-  @apply mt-1 font-mono tabular-nums text-(--td-text-color-primary);
-}
-
-.reconciliation-grid {
-  @apply grid gap-3 sm:grid-cols-3;
 }
 </style>

@@ -60,28 +60,28 @@ export interface LedgerPositionViewModel {
   readonly units: LedgerFieldViewModel
 }
 
-export interface LedgerSummaryViewModel extends LedgerPositionViewModel {
-  readonly cashDividend: LedgerFieldViewModel
-  readonly marketValue: LedgerFieldViewModel
-  readonly realizedGain: LedgerFieldViewModel
-  readonly totalGain: LedgerFieldViewModel
+export type LedgerComparisonStatus = 'consistent' | 'different' | 'insufficient-data'
+export type LedgerComparisonTone = 'default' | 'success' | 'warning'
+
+export interface LedgerDifferenceViewModel {
+  readonly costAmount: LedgerFieldViewModel
+  readonly directionText: string
+  readonly status: LedgerComparisonStatus
+  readonly statusText: string
+  readonly statusTone: LedgerComparisonTone
+  readonly units: LedgerFieldViewModel
 }
 
 export interface FundLedgerViewModel {
   readonly availability: FundReconciliation['availability']
   readonly availabilityText: string
-  readonly difference: {
-    readonly costAmount: LedgerFieldViewModel
-    readonly hasDifference: boolean
-    readonly units: LedgerFieldViewModel
-  }
+  readonly difference: LedgerDifferenceViewModel
   readonly fundCode: string
   readonly fundHolding: LedgerPositionViewModel | null
   readonly initialEventLocked: boolean
   readonly ledgerEnabled: boolean
   readonly position: LedgerPositionViewModel | null
   readonly retryAvailable: boolean
-  readonly summary: LedgerSummaryViewModel
 }
 
 interface OrderedLedgerRecord extends LedgerRecordViewModel {
@@ -133,7 +133,6 @@ export function sortLedgerRecords(
 }
 
 export function toFundLedgerViewModel(reconciliation: FundReconciliation): FundLedgerViewModel {
-  const summary = reconciliation.calculation.estimatedSummary.byFund[reconciliation.fundCode]
   const position = reconciliation.ledger
     ? toPositionViewModel(reconciliation.ledger.units, reconciliation.ledger.costAmount)
     : null
@@ -143,14 +142,7 @@ export function toFundLedgerViewModel(reconciliation: FundReconciliation): FundL
         valueField(reconciliation.fundHolding.costAmountCents, 'actual', 'manual'),
       )
     : null
-  const difference = {
-    costAmount: toDifferenceMoneyField(reconciliation.difference.costAmountCents),
-    hasDifference:
-      (reconciliation.difference.costAmountCents !== null &&
-        reconciliation.difference.costAmountCents !== 0) ||
-      (reconciliation.difference.units !== null && reconciliation.difference.units !== 0),
-    units: toDifferenceUnitsField(reconciliation.difference.units),
-  }
+  const difference = toDifferenceViewModel(reconciliation)
 
   return {
     availability: reconciliation.availability,
@@ -162,7 +154,6 @@ export function toFundLedgerViewModel(reconciliation: FundReconciliation): FundL
     ledgerEnabled: reconciliation.ledgerEnabled,
     position,
     retryAvailable: reconciliation.availability === 'missing-ledger' && fundHolding !== null,
-    summary: toSummaryViewModel(summary),
   }
 }
 
@@ -387,20 +378,40 @@ function formatMoneyValue(field: MoneyFieldValue): string {
   return field.value === null ? '--' : `¥${(field.value / 100).toFixed(2)}`
 }
 
-function toSummaryViewModel(
-  summary: PortfolioCalculation['estimatedSummary']['byFund'][string] | undefined,
-): LedgerSummaryViewModel {
-  const units = summary?.units ?? emptyFieldValue()
-  const costAmount = summary?.costAmount ?? emptyFieldValue()
+function toDifferenceViewModel(reconciliation: FundReconciliation): LedgerDifferenceViewModel {
+  const { costAmountCents, units } = reconciliation.difference
+  const comparable =
+    reconciliation.availability === 'available' &&
+    reconciliation.fundHolding !== null &&
+    reconciliation.ledger !== null &&
+    costAmountCents !== null &&
+    units !== null
+  const status: LedgerComparisonStatus = !comparable
+    ? 'insufficient-data'
+    : costAmountCents === 0 && units === 0
+      ? 'consistent'
+      : 'different'
+
   return {
-    averageCost: toAverageCostField(costAmount, units),
-    cashDividend: toMoneyField(summary?.cashDividend ?? emptyFieldValue()),
-    costAmount: toMoneyField(costAmount),
-    marketValue: toMoneyField(summary?.marketValue ?? emptyFieldValue()),
-    realizedGain: toMoneyField(summary?.realizedGain ?? emptyFieldValue(), true),
-    totalGain: toMoneyField(summary?.totalGain ?? emptyFieldValue(), true),
-    units: toUnitsField(units),
+    costAmount: toDifferenceMoneyField(costAmountCents),
+    directionText: '成交记录计算结果 − 当前持仓设置',
+    status,
+    statusText: comparisonStatusText(status),
+    statusTone: comparisonStatusTone(status),
+    units: toDifferenceUnitsField(units),
   }
+}
+
+function comparisonStatusText(status: LedgerComparisonStatus): string {
+  if (status === 'consistent') return '一致'
+  if (status === 'different') return '存在差异'
+  return '信息不足'
+}
+
+function comparisonStatusTone(status: LedgerComparisonStatus): LedgerComparisonTone {
+  if (status === 'consistent') return 'success'
+  if (status === 'different') return 'warning'
+  return 'default'
 }
 
 function toPositionViewModel(

@@ -118,7 +118,8 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
   assert.match(transactionSectionSource, /记录卖出/)
   assert.match(transactionSectionSource, /row\.canEdit/)
   assert.match(transactionSectionSource, /row\.canDelete/)
-  assert.match(transactionSectionSource, /平均成本/)
+  assert.match(transactionSectionSource, /row\.costBasisLabel/)
+  assert.match(ledgerPresenterSource, /移动平均成本/)
   for (const label of ['期初持仓', '买入', '卖出', '现金分红', '红利再投资', '调仓']) {
     assert.match(ledgerPresenterSource, new RegExp(label))
   }
@@ -126,6 +127,19 @@ test('keeps automatic ledger lifecycle outside the fund detail entry', () => {
     detailEntrySource + detailDrawerSource + transactionSectionSource,
     /toRemainingBatchViewModels|initialHoldingDatesByEventId|remainingBatches|sellAllocations|FIFO/,
   )
+})
+
+test('uses transaction records as the detail section and keeps comparison in ledger status', () => {
+  assert.match(detailDrawerSource, /label: '成交记录'/)
+  assert.match(transactionSectionSource, />成交记录<\/h2>/)
+  assert.match(transactionSectionSource, /empty="暂无成交记录"/)
+  assert.match(detailDrawerSource, /ledger\.difference\.status/)
+  assert.match(detailDrawerSource, /ledger\.difference\.directionText/)
+  assert.doesNotMatch(
+    detailDrawerSource + transactionSectionSource,
+    /账本记录|账本汇总|聚合持仓与收益|持仓对账/,
+  )
+  assert.doesNotMatch(transactionSectionSource, /ledger\.summary|ledger\.difference/)
 })
 
 test('keeps the detail drawer open while launching transaction actions', () => {

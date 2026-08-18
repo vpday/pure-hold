@@ -2,10 +2,7 @@
 import { ref } from 'vue'
 
 import type { FundDetailTrend, FundDetailViewModel } from '../models/fundDetailViewModel'
-import type {
-  FundLedgerViewModel,
-  LedgerRecordViewModel,
-} from '../presenters/toFundLedgerViewModel'
+import type { FundLedgerViewModel, LedgerRecordViewModel } from '../presenters/toFundLedgerViewModel'
 import FundDetailHeader from './FundDetailHeader.vue'
 import FundTradingRules from './FundTradingRules.vue'
 import FundTransactionsSection from './FundTransactionsSection.vue'
@@ -38,7 +35,7 @@ const sections = [
   { href: '#fund-detail-metrics', label: '数据指标', value: 'metrics' },
   { href: '#fund-detail-holdings', label: '持仓构成', value: 'holdings' },
   { href: '#fund-detail-trading-rules', label: '交易规则', value: 'trading-rules' },
-  { href: '#fund-detail-transactions', label: '账本记录', value: 'transactions' },
+  { href: '#fund-detail-transactions', label: '成交记录', value: 'transactions' },
 ] as const
 
 const scrollContainer = ref<HTMLElement>()
@@ -275,36 +272,65 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </dl>
             </div>
 
-            <div class="ledger-status-panel">
-              <div>
-                <p class="font-medium">投资账本</p>
-                <p class="mt-1 text-sm text-(--td-text-color-secondary)">
-                  {{
-                    ledger.ledgerEnabled
-                      ? '已建立，可记录交易和查看移动加权平均成本。'
-                      : ledger.retryAvailable
-                        ? '持仓信息已保存，但账本自动建立未完成。'
-                        : '首次保存有效持仓后自动建立账本。'
-                  }}
-                </p>
+            <div
+              class="ledger-status-panel"
+              v-if="ledger.retryAvailable || ledger.difference.status === 'different'"
+            >
+              <div class="ledger-status-header" v-if="ledger.retryAvailable">
+                <div>
+                  <p class="font-medium">投资账本</p>
+                  <p class="mt-1 text-sm text-(--td-text-color-secondary)">
+                    {{
+                      ledger.ledgerEnabled
+                        ? '已建立，可记录交易和查看移动加权平均成本。'
+                        : ledger.retryAvailable
+                          ? '持仓信息已保存，但账本自动建立未完成。'
+                          : '首次保存有效持仓后自动建立账本。'
+                    }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <t-tag
+                    :theme="
+                      ledger.ledgerEnabled
+                        ? 'success'
+                        : ledger.retryAvailable
+                          ? 'warning'
+                          : 'default'
+                    "
+                    variant="light"
+                  >
+                    {{ ledger.ledgerEnabled ? '已建立' : ledger.availabilityText }}
+                  </t-tag>
+                  <t-button size="small" variant="outline" @click="emit('retryLedger')">
+                    重试自动建账
+                  </t-button>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <t-tag
-                  :theme="
-                    ledger.ledgerEnabled ? 'success' : ledger.retryAvailable ? 'warning' : 'default'
-                  "
-                  variant="light"
-                >
-                  {{ ledger.ledgerEnabled ? '已建立' : ledger.availabilityText }}
-                </t-tag>
-                <t-button
-                  v-if="ledger.retryAvailable"
-                  size="small"
-                  variant="outline"
-                  @click="emit('retryLedger')"
-                >
-                  重试自动建账
-                </t-button>
+              <div class="ledger-comparison-panel" v-if="ledger.difference.status === 'different'">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="font-medium">当前持仓设置与成交记录</p>
+                    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
+                      {{ ledger.difference.directionText }}
+                    </p>
+                  </div>
+                  <t-tag :theme="ledger.difference.statusTone" variant="light">
+                    {{ ledger.difference.statusText }}
+                  </t-tag>
+                </div>
+                <div class="ledger-comparison-grid">
+                  <div>
+                    <dt class="text-xs text-(--td-text-color-secondary)">份额差异</dt>
+                    <dd class="mt-1 font-mono tabular-nums">{{ ledger.difference.units.text }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs text-(--td-text-color-secondary)">成本差异</dt>
+                    <dd class="mt-1 font-mono tabular-nums">
+                      {{ ledger.difference.costAmount.text }}
+                    </dd>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -423,7 +449,19 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 .ledger-status-panel {
-  @apply mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-(--td-component-border) pt-4;
+  @apply mt-4 border-t border-(--td-component-border) pt-4;
+}
+
+.ledger-status-header {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.ledger-comparison-panel {
+  @apply mt-2;
+}
+
+.ledger-comparison-grid {
+  @apply mt-2 grid gap-3 sm:grid-cols-2;
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {

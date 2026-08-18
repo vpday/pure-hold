@@ -199,7 +199,7 @@ test('keeps an insufficient sell visible as an issue while preserving edit and d
   assert.equal(row?.costBasisAmount.text, '--')
 })
 
-test('presents aggregate position, average cost, gains and reconciliation differences', () => {
+test('presents aggregate position and signed reconciliation differences', () => {
   const events = [initial, sell, cashDividend]
   const calculation = calculatePortfolio({
     asOfDate: '2026-08-10',
@@ -222,9 +222,49 @@ test('presents aggregate position, average cost, gains and reconciliation differ
 
   assert.equal(model.ledgerEnabled, true)
   assert.equal(model.position?.averageCost.text, '¥10.0000')
-  assert.equal(model.summary.realizedGain.text, '-¥0.10')
-  assert.equal(model.summary.cashDividend.text, '¥5.00')
   assert.equal(model.difference.units.text, '+1.0000')
   assert.equal(model.difference.costAmount.text, '+¥1.00')
-  assert.equal(model.difference.hasDifference, true)
+  assert.equal(model.difference.directionText, '成交记录计算结果 − 当前持仓设置')
+  assert.equal(model.difference.status, 'different')
+  assert.equal(model.difference.statusText, '存在差异')
+})
+
+test('marks matching ledger and current holding values as consistent', () => {
+  const calculation = calculate([initial])
+  const model = toFundLedgerViewModel({
+    availability: 'available',
+    calculation,
+    difference: { costAmountCents: 0, units: 0 },
+    fundCode,
+    fundHolding: { costAmountCents: 100000, units: 100 },
+    initialEvent: initial,
+    initialEventLocked: false,
+    ledger: { costAmount: actual(100000), units: actual(100) },
+    ledgerEnabled: true,
+  })
+
+  assert.equal(model.difference.status, 'consistent')
+  assert.equal(model.difference.statusText, '一致')
+  assert.equal(model.difference.statusTone, 'success')
+})
+
+test('marks an unavailable comparison as insufficient data instead of consistent', () => {
+  const calculation = calculate([initial])
+  const model = toFundLedgerViewModel({
+    availability: 'missing-ledger',
+    calculation,
+    difference: { costAmountCents: null, units: null },
+    fundCode,
+    fundHolding: { costAmountCents: 100000, units: 100 },
+    initialEvent: null,
+    initialEventLocked: false,
+    ledger: null,
+    ledgerEnabled: false,
+  })
+
+  assert.equal(model.difference.status, 'insufficient-data')
+  assert.equal(model.difference.statusText, '信息不足')
+  assert.equal(model.difference.statusTone, 'default')
+  assert.equal(model.difference.units.text, '--')
+  assert.equal(model.difference.costAmount.text, '--')
 })
