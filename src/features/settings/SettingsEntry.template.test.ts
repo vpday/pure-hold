@@ -22,10 +22,11 @@ test('renders import selection in a dialog and overwrite confirmation as a popco
   assert.doesNotMatch(source, /header="确认覆盖配置"/)
 })
 
-test('exposes portfolio transfer selection and explicit recovery modes', () => {
-  assert.match(transferSource, /投资账本（交易、分红、修正）/)
-  assert.match(transferSource, /合并：保留现有记录，相同稳定 ID 内容一致时幂等/)
-  assert.match(transferSource, /显式替换：先备份现有账本，失败时尝试恢复/)
+test('exposes portfolio transfer selection without recovery mode choices', () => {
+  assert.match(transferSource, /投资账本（交易、分红）/)
+  assert.doesNotMatch(transferSource, /投资账本恢复方式/)
+  assert.doesNotMatch(transferSource, /portfolioMode/)
+  assert.doesNotMatch(transferSource, /<t-radio/)
   assert.match(source, /portfolio: props\.portfolio\.getPortfolio\(\)/)
   assert.match(source, /new Set\(fundStore\.fundOrder\)/)
 })
@@ -43,4 +44,11 @@ test('uses explicit footer actions for settings dialog and overwrite popconfirm'
   assert.match(transferSource, /:cancel-btn="\{ content: '取消', variant: 'outline' \}"/)
   assert.match(transferSource, /@confirm="emit\('commitImport'\)"/)
   assert.match(source, /disabled: !isDirty/)
+})
+
+test('closes the outer settings dialog only after a clean successful import', () => {
+  assert.match(
+    source,
+    /MessagePlugin\.success\('配置已恢复'\)\s*if \(!isDirty\.value\) \{\s*close\(\)\s*return\s*\}\s*clearImport\(\)/,
+  )
 })

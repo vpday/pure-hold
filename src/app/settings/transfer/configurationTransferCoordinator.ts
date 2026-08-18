@@ -3,7 +3,7 @@ import type { CommitIndexGroupsResult } from '@/domains/indices/services/createI
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import type { Portfolio } from '@/domains/portfolio/models/index.ts'
 import type { ConfigurationTransferPackage } from './configurationTransfer.ts'
-import type { PortfolioTransferConflict, PortfolioTransferResult } from './portfolioTransfer.ts'
+import type { PortfolioTransferResult } from './portfolioTransfer.ts'
 
 export interface ConfigurationTransferStoreAdapters {
   readonly getIndexGroups: () => readonly IndexGroupDefinition[]
@@ -11,7 +11,6 @@ export interface ConfigurationTransferStoreAdapters {
   readonly getFundSettings: () => FundSettings
   readonly replaceFundSettings: (settings: FundSettings) => ConfigurationTransferReplaceResult
   readonly getPortfolio?: () => Portfolio
-  readonly mergePortfolio?: (portfolio: Portfolio) => PortfolioTransferResult
   readonly replacePortfolio?: (portfolio: Portfolio) => PortfolioTransferResult
 }
 
@@ -19,7 +18,6 @@ export interface ConfigurationTransferSelection {
   readonly index: boolean
   readonly funds: boolean
   readonly portfolio?: boolean
-  readonly portfolioMode?: 'merge' | 'replace'
 }
 
 export type ConfigurationTransferReplaceResult =
@@ -32,7 +30,6 @@ export type ConfigurationTransferCommitResult =
       readonly ok: false
       readonly reason: string
       readonly partialPersistence: boolean
-      readonly conflicts?: readonly PortfolioTransferConflict[]
     }
 
 export function createConfigurationTransferCoordinator(
@@ -55,10 +52,7 @@ export function createConfigurationTransferCoordinator(
     if (portfolioSelected && packageValue.portfolio === undefined) {
       return { ok: false, partialPersistence: false, reason: '导入包中没有可用的投资账本' }
     }
-    if (
-      portfolioSelected &&
-      (adapters.mergePortfolio === undefined || adapters.replacePortfolio === undefined)
-    ) {
+    if (portfolioSelected && adapters.replacePortfolio === undefined) {
       return { ok: false, partialPersistence: false, reason: '投资账本传输暂不可用' }
     }
 
@@ -99,10 +93,7 @@ export function createConfigurationTransferCoordinator(
     }
 
     if (portfolioSelected) {
-      const result =
-        selection.portfolioMode === 'replace'
-          ? adapters.replacePortfolio!(packageValue.portfolio!)
-          : adapters.mergePortfolio!(packageValue.portfolio!)
+      const result = adapters.replacePortfolio!(packageValue.portfolio!)
       if (!result.ok) {
         const portfolioRollback =
           result.partialPersistence && originalPortfolio !== undefined
@@ -115,7 +106,6 @@ export function createConfigurationTransferCoordinator(
           originalFundSettings,
         })
         return {
-          conflicts: result.conflicts,
           ok: false,
           partialPersistence: (result.partialPersistence && !portfolioRollback) || !rollback,
           reason: portfolioFailureReason(result),
@@ -148,9 +138,6 @@ export function createConfigurationTransferCoordinator(
 function portfolioFailureReason(
   result: Extract<PortfolioTransferResult, { readonly ok: false }>,
 ): string {
-  if (result.reason === 'conflict') {
-    return '投资账本存在稳定 ID 冲突，请选择合并或显式替换'
-  }
   if (result.reason === 'invalid-portfolio') return '投资账本内容无效'
   return '投资账本保存失败'
 }

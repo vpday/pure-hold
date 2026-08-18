@@ -31,33 +31,16 @@ function createStore(
   return createPortfolioStore(initial, writer)
 }
 
-test('portfolio transfer merge is idempotent and exposes stable-ID conflicts', () => {
+test('portfolio transfer replacement overwrites the existing snapshot', () => {
   const store = createStore()
   const adapter = createPortfolioTransferAdapter(store)
-  const same = adapter.merge(initialPortfolio)
-
-  assert.deepEqual(same, { ok: true })
-
-  const conflict = adapter.merge({
-    ...initialPortfolio,
+  const replacement: Portfolio = {
     events: initialPortfolio.events.map((event) => ({
       ...event,
       auditedAt: '2026-08-15T09:00:00.000Z',
     })),
-  })
-  assert.deepEqual(conflict, {
-    conflicts: [{ collection: 'events', id: 'initial-holding:000001' }],
-    ok: false,
-    partialPersistence: false,
-    reason: 'conflict',
-  })
-  assert.deepEqual(store.getPortfolio(), initialPortfolio)
-})
-
-test('portfolio transfer replacement keeps only the explicit incoming snapshot', () => {
-  const store = createStore()
-  const adapter = createPortfolioTransferAdapter(store)
-  const replacement: Portfolio = { events: [], fundCodes: ['000002'] }
+    fundCodes: ['000002'],
+  }
 
   assert.deepEqual(adapter.replace(replacement), { ok: true })
   assert.deepEqual(store.getPortfolio(), replacement)

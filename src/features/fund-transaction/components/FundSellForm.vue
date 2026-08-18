@@ -391,7 +391,7 @@ defineExpose({ validate })
 
     <section class="mt-4" aria-labelledby="sell-result-title">
       <h2 id="sell-result-title" class="mb-3 text-sm font-semibold">规则、净值与金额</h2>
-      <t-descriptions bordered size="small" :column="2">
+      <t-descriptions size="small" :column="2">
         <t-descriptions-item label="净值日期">{{ navDate || '--' }}</t-descriptions-item>
         <t-descriptions-item label="预计确认日">
           {{ entryMode === 'pending' ? expectedConfirmationDate || '--' : '--' }}
@@ -401,11 +401,14 @@ defineExpose({ validate })
           <span v-else class="font-mono tabular-nums">{{ unitNavText }}</span>
         </t-descriptions-item>
         <t-descriptions-item label="数据来源">{{ navSourceText || '--' }}</t-descriptions-item>
-        <t-descriptions-item label="毛额 / 净额">
-          <span class="font-mono tabular-nums">{{ grossAmountText }} / {{ netAmountText }}</span>
+        <t-descriptions-item label="毛额">
+          <span class="font-mono tabular-nums">{{ grossAmountText }}</span>
         </t-descriptions-item>
-        <t-descriptions-item label="净值查询">{{ navStatusText }}</t-descriptions-item>
-        <t-descriptions-item label="交易状态">
+        <t-descriptions-item label="净额">
+          <span class="font-mono tabular-nums">{{ netAmountText }}</span>
+        </t-descriptions-item>
+        <t-descriptions-item label="净值查询" :span="2">{{ navStatusText }}</t-descriptions-item>
+        <t-descriptions-item label="交易状态" :span="2">
           <t-tag size="small" :theme="statusTheme" variant="light">{{ statusText }}</t-tag>
         </t-descriptions-item>
       </t-descriptions>

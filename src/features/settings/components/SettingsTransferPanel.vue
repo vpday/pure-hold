@@ -32,18 +32,7 @@ function updateFundSelection(value: boolean): void {
 }
 
 function updatePortfolioSelection(value: boolean): void {
-  emit('updateSelection', {
-    ...props.selection,
-    portfolio: value,
-    portfolioMode: props.selection.portfolioMode ?? 'merge',
-  })
-}
-
-function updatePortfolioMode(value: unknown): void {
-  emit('updateSelection', {
-    ...props.selection,
-    portfolioMode: value === 'replace' ? 'replace' : 'merge',
-  })
+  emit('updateSelection', { ...props.selection, portfolio: value })
 }
 
 function openFilePicker(): void {
@@ -66,8 +55,8 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
 
 <template>
   <section aria-labelledby="settings-backup-heading">
-    <h3 id="settings-backup-heading" class="text-base font-medium">配置备份</h3>
-    <p class="mt-1 text-sm text-(--td-text-color-secondary)">
+    <h3 id="settings-backup-heading" class="text-sm font-semibold">配置备份</h3>
+    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
       导出指数分组、完整基金配置（含持仓）和投资账本，不包含自动刷新偏好或行情快照。
     </p>
 
@@ -78,8 +67,8 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
   </section>
 
   <section aria-labelledby="settings-restore-heading">
-    <h3 id="settings-restore-heading" class="text-base font-medium">配置恢复</h3>
-    <p class="mt-1 text-sm text-(--td-text-color-secondary)">
+    <h3 id="settings-restore-heading" class="text-sm font-semibold">配置恢复</h3>
+    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
       从剪贴板或 JSON 文件读取备份，并选择要恢复的配置分区。
     </p>
 
@@ -129,23 +118,8 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
           :disabled="!importState.package.portfolio"
           @change="updatePortfolioSelection"
         >
-          投资账本（交易、分红、修正）
+          投资账本（交易、分红）
         </t-checkbox>
-      </div>
-
-      <div
-        v-if="selection.portfolio"
-        class="mt-3 rounded border border-(--td-component-border) p-3"
-      >
-        <div class="text-sm font-medium">投资账本恢复方式</div>
-        <t-radio-group
-          class="mt-2 flex flex-col gap-2"
-          :value="selection.portfolioMode ?? 'merge'"
-          @change="updatePortfolioMode"
-        >
-          <t-radio value="merge">合并：保留现有记录，相同稳定 ID 内容一致时幂等</t-radio>
-          <t-radio value="replace">显式替换：先备份现有账本，失败时尝试恢复</t-radio>
-        </t-radio-group>
       </div>
 
       <div

@@ -168,7 +168,7 @@ test('configuration transfer reports partial persistence when rollback fails', (
   })
 })
 
-test('configuration transfer pauses portfolio conflicts with stable IDs', () => {
+test('configuration transfer overwrites portfolio conflicts by default', () => {
   let currentPortfolio = portfolio
   const portfolioStore = createPortfolioStore(portfolio, (candidate) => {
     currentPortfolio = candidate
@@ -179,7 +179,6 @@ test('configuration transfer pauses portfolio conflicts with stable IDs', () => 
     getFundSettings: () => fundSettings,
     getIndexGroups: () => defaultIndexGroups,
     getPortfolio: () => currentPortfolio,
-    mergePortfolio: portfolioAdapter.merge,
     replaceFundSettings: () => ({ ok: true }),
     replacePortfolio: portfolioAdapter.replace,
   })
@@ -190,16 +189,11 @@ test('configuration transfer pauses portfolio conflicts with stable IDs', () => 
 
   const result = coordinator.commitImport(
     createConfigurationTransferPackage({ portfolio: incoming }),
-    { funds: false, index: false, portfolio: true, portfolioMode: 'merge' },
+    { funds: false, index: false, portfolio: true },
   )
 
-  assert.deepEqual(result, {
-    conflicts: [{ collection: 'events', id: 'initial-holding:000001' }],
-    ok: false,
-    partialPersistence: false,
-    reason: '投资账本存在稳定 ID 冲突，请选择合并或显式替换',
-  })
-  assert.deepEqual(currentPortfolio, portfolio)
+  assert.deepEqual(result, { ok: true })
+  assert.deepEqual(currentPortfolio, incoming)
 })
 
 test('configuration transfer routes explicit portfolio replacement through the replacement seam', () => {
@@ -214,14 +208,13 @@ test('configuration transfer routes explicit portfolio replacement through the r
     getFundSettings: () => fundSettings,
     getIndexGroups: () => defaultIndexGroups,
     getPortfolio: () => currentPortfolio,
-    mergePortfolio: portfolioAdapter.merge,
     replaceFundSettings: () => ({ ok: true }),
     replacePortfolio: portfolioAdapter.replace,
   })
 
   const result = coordinator.commitImport(
     createConfigurationTransferPackage({ portfolio: replacement }),
-    { funds: false, index: false, portfolio: true, portfolioMode: 'replace' },
+    { funds: false, index: false, portfolio: true },
   )
 
   assert.deepEqual(result, { ok: true })

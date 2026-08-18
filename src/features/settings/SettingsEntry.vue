@@ -34,14 +34,13 @@ const selection = ref<SettingsImportSelection>({
   funds: false,
   index: false,
   portfolio: false,
-  portfolioMode: 'merge',
 })
 const isDirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(initialDraft.value))
 const overwriteSections = computed(() => {
   const sections: string[] = []
   if (selection.value.index && indexStore.groups.length > 0) sections.push('指数分组')
   if (selection.value.funds && fundStore.fundOrder.length > 0) sections.push('基金')
-  if (selection.value.portfolio && selection.value.portfolioMode === 'replace') {
+  if (selection.value.portfolio) {
     const current = props.portfolio.getPortfolio()
     if (current.events.length > 0 || current.fundCodes.length > 0) {
       sections.push('投资账本')
@@ -59,7 +58,6 @@ const transferCoordinator = createConfigurationTransferCoordinator({
   getFundSettings: fundStore.getSettingsSnapshot,
   getIndexGroups: indexStore.getSettingsSnapshot,
   getPortfolio: props.portfolio.getPortfolio,
-  mergePortfolio: portfolioTransfer.merge,
   replaceFundSettings: fundStore.replaceSettingsPersisted,
   replacePortfolio: portfolioTransfer.replace,
 })
@@ -178,13 +176,12 @@ async function importText(text: string): Promise<void> {
     funds: result.package.funds !== undefined,
     index: result.package.index !== undefined,
     portfolio: result.package.portfolio !== undefined,
-    portfolioMode: 'merge',
   }
 }
 
 function clearImport(): void {
   importState.value = null
-  selection.value = { funds: false, index: false, portfolio: false, portfolioMode: 'merge' }
+  selection.value = { funds: false, index: false, portfolio: false }
 }
 
 function updateSelection(nextSelection: SettingsImportSelection): void {
@@ -201,6 +198,11 @@ function commitImport(): void {
   }
 
   MessagePlugin.success('配置已恢复')
+  if (!isDirty.value) {
+    close()
+    return
+  }
+
   clearImport()
 }
 

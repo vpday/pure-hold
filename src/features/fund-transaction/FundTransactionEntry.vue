@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { MessagePlugin } from 'tdesign-vue-next'
 
 import { fetchTiantianFundBasicInfo } from '@/domains/funds/services/tiantian/fetchTiantianFundBasicInfo.ts'
 import {
@@ -370,6 +371,7 @@ async function saveCurrentTransaction(): Promise<void> {
 function completeSave(event: TransactionEvent): void {
   editingEvent.value = event
   errors.value = {}
+  MessagePlugin.success('交易记录已保存')
   visible.value = false
   openGeneration += 1
   navRequestGeneration += 1
@@ -708,8 +710,7 @@ defineExpose({ open, openBuy: open, openEdit, openSell })
 @reference '@/style.css';
 
 :global(.fund-transaction-dialog .t-dialog__body) {
-  max-height: calc(100dvh - 176px);
-  overflow-y: auto;
+  @apply max-h-[calc(100dvh-176px)] overflow-y-auto scrollbar-none;
 }
 
 .fund-transaction-mobile-content {

@@ -44,8 +44,8 @@ function updateFundInterval(value: number | number[]): void {
 
 <template>
   <section aria-labelledby="settings-refresh-heading">
-    <h3 id="settings-refresh-heading" class="text-base font-medium">首页自动刷新</h3>
-    <p class="mt-1 text-sm text-(--td-text-color-secondary)">
+    <h3 id="settings-refresh-heading" class="text-sm font-semibold">首页自动刷新</h3>
+    <p class="mt-1 text-xs text-(--td-text-color-secondary)">
       自动刷新只作用于首页行情；关闭后仍可使用顶部的“刷新全部数据”。
     </p>
 
