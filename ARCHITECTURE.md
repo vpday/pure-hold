@@ -24,7 +24,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 基金搜索     | `src/features/fund-search/FundSearchEntry.vue`         | 搜索、累计选择、批量添加和汇总持仓录入入口                    |
 | 基金编辑     | `src/features/fund-edit/FundEditEntry.vue`             | 单基金持仓与自定义分组编辑入口                                |
 | 持仓表单     | `src/features/fund-holding-form/`                      | 新增与编辑共用的持仓草稿、校验和字段组件                      |
-| 基金状态     | `useFundsStore`                                        | 公共 Store facade、设置投影和行情 runtime 协调                |
+| 基金状态     | `useFundsStore`                                        | 公共 Store facade、设置状态和行情 runtime 协调                |
 | 基金搜索 API | `fetchEastmoneyFundSearchPage`                         | 东方财富基金搜索适配器的领域入口                              |
 | 累计收益 API | `fetchTiantianFundCumulativeReturns`                   | 天天基金历史累计收益适配器的领域入口                          |
 | 净值历史 API | `fetchTiantianFundNetValueHistory`                     | 天天基金单位净值与累计净值适配器的领域入口                    |
@@ -78,7 +78,7 @@ EastmoneyIndexQuoteDto
 
 Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存 `FundSettings`，Service Worker 不替代 Vue 状态管理或领域持久化。
 
-`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode` 或 `previousSnapshotsByCode`。Store 启动时由设置命令 module 提供设置投影，由行情 runtime 为每只基金创建空 `FundSnapshot`；确认净值日期推进时，runtime 仅在内存中保留上一份确认快照，同日刷新和旧数据不推进或回滚它。行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情或上一份确认快照。
+`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode` 或 `previousSnapshotsByCode`。Store 启动时由设置命令 module 提供设置状态，由行情 runtime 为每只基金创建空 `FundSnapshot`；确认净值日期推进时，runtime 仅在内存中保留上一份确认快照，同日刷新和旧数据不推进或回滚它。行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情或上一份确认快照。
 
 基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
 
@@ -134,7 +134,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`SettingsEntry` 是应用设置的 Feature 入口，负责草稿、响应式 Dialog/Drawer、浏览器 Clipboard/File/Download 适配和用户确认；纯传输解析与跨 Store 回滚协调留在 `src/app/settings/`。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、应用刷新偏好到指数轮询 seam 的连接、全局手动刷新订阅、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、行投影、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、列表行模型、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 详情图表共同使用 feature-local ECharts runtime 管理 DOM、实例和 observer；历史数据源共同使用请求池管理 pending 与订阅者。图表 option、业务展示语义、成功缓存、force 和交易日策略仍留在各自 component 或 data source adapter。
 
@@ -195,7 +195,7 @@ pure-hold:fund-settings:v1
   -> loadFundSettings
   -> FundSettings（代码、名称、分组、持仓）
   -> createFundSettingsCommandModule
-  -> useFundsStore 设置投影
+  -> useFundsStore 设置状态
   -> createFundMarketRuntime（包含空的 snapshotsByCode）
 
 main.ts 初始化天天基金 deviceid
@@ -356,7 +356,7 @@ FundDetailEntry 当前基金代码
 - `useFundNetValueHistory` 隐藏两个净值视图的独立范围、懒加载、重试和过期响应隔离。
 - `useFundReinvestedNavHistory` 隐藏成立来复权计算、本地范围截取、共享缓存订阅、重试和过期响应隔离。
 - `useFundComparisonSession` 隐藏三个比较图表共同的三份历史并行订阅、复权构造、懒激活、本地范围重算、刷新保旧数据、取消和过期响应隔离；calculation adapters 只表达算法差异。
-- `useFundListSession` 隐藏基金分类恢复、每分类排序、持仓指标、行投影、日期标题和刷新 notices；轮询、Toast、Store 命令和 Feature 入口仍由 `FundListSection` 拥有。
+- `useFundListSession` 隐藏基金分类恢复、每分类排序、持仓指标、列表行模型、日期标题和刷新 notices；轮询、Toast、Store 命令和 Feature 入口仍由 `FundListSection` 拥有。
 - `fundBenchmarkTimeSeriesAlignment` 隐藏基金与 H00300 的有效点过滤、第一条重复日期优先、排序、精确日期交集、共同截止日和基准预期日历。
 - `calculateFundCumulativeExcessReturn` 隐藏共同对齐结果、共同截止、UTC 范围、首点归零和逐点复合相对收益口径。
 - `useFundRollingExcessReturn` 隐藏三份共享历史的懒订阅、近 1 年默认、四项本地范围重算、刷新保旧数据、取消和过期响应隔离。
@@ -370,7 +370,7 @@ FundDetailEntry 当前基金代码
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `createFundSettingsCommandModule` 隐藏七类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
 - `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、可见性轮询、刷新元数据、上一份确认快照和行情名称观察。
-- `useFundsStore` 隐藏设置投影与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组、组织排序、完整设置替换和轮询内部状态不向 Feature 暴露内部 module。
+- `useFundsStore` 隐藏设置状态与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组、组织排序、完整设置替换和轮询内部状态不向 Feature 暴露内部 module。
 - `useAppSettingsStore` 隐藏应用刷新偏好的版本化加载、校验、先保存后提交和损坏恢复；`configurationTransfer` 隐藏导入包解析、分区校验、未知指数引用警告和跨分区回滚协调。
 - `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
 - `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
@@ -410,7 +410,7 @@ FundDetailEntry 当前基金代码
 
 指数分组通过 `createIndexSettingsCommandModule` 执行唯一公开提交：完整候选先由 `validateIndexGroups` 严格验证，再写入版本化 storage，成功后才由 Store 私有 callback 应用并重置相关行情生命周期。Feature 和 App 协调器不能分别调用保存与运行时替换原语。
 
-`useFundsStore` 是基金共享领域的公共 facade 和投影协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再替换设置投影；行情 runtime 独立持有 `snapshotsByCode`、`previousSnapshotsByCode`、刷新请求和元数据。确认日期严格推进时，当前确认快照成为上一份快照；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
+`useFundsStore` 是基金共享领域的公共 facade 和设置状态与行情 runtime 的协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再应用设置状态；行情 runtime 独立持有 `snapshotsByCode`、`previousSnapshotsByCode`、刷新请求和元数据。确认日期严格推进时，当前确认快照成为上一份快照；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
 
 ### PWA 与缓存
 
