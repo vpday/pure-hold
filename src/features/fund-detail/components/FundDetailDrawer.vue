@@ -34,6 +34,8 @@ const sections = [
 
 const scrollContainer = ref<HTMLElement>()
 const sectionTargetOffset = 64
+const overviewDetailsPanel = 'overview-details'
+const expandedOverviewPanels = ref<(number | string)[]>([])
 
 function trendClass(trend: FundDetailTrend): string {
   if (trend === 'up') return 'text-(--td-error-color)'
@@ -86,7 +88,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
             class="min-w-0"
           >
             <h2 id="fund-detail-overview-title" class="section-title">基金概览</h2>
-            <div class="details-grid mt-4">
+            <div class="quote-grid my-4">
               <div v-if="viewModel.estimatedNavText !== '--'">
                 <p class="text-xs text-(--td-text-color-secondary)">净值估算</p>
                 <p class="nav-value">
@@ -128,144 +130,172 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </div>
             </div>
 
-            <div v-if="viewModel.holding" class="holding-details-grid">
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">估算收益</p>
-                <p
-                  class="mt-1 font-mono text-lg font-medium tabular-nums"
-                  :class="trendClass(viewModel.holding.estimatedIncome.trend)"
-                >
-                  {{ viewModel.holding.estimatedIncome.amountText }}
-                </p>
-                <p
-                  class="font-mono text-xs tabular-nums"
-                  :class="trendClass(viewModel.holding.estimatedIncome.trend)"
-                >
-                  {{ viewModel.holding.estimatedIncome.percentText }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">今日收益</p>
-                <p
-                  class="mt-1 font-mono text-lg font-medium tabular-nums"
-                  :class="trendClass(viewModel.holding.todayIncome.trend)"
-                >
-                  {{ viewModel.holding.todayIncome.amountText }}
-                </p>
-                <p
-                  class="font-mono text-xs tabular-nums"
-                  :class="trendClass(viewModel.holding.todayIncome.trend)"
-                >
-                  {{ viewModel.holding.todayIncome.percentText }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">昨日收益</p>
-                <p
-                  class="mt-1 font-mono text-lg font-medium tabular-nums"
-                  :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
-                >
-                  {{ viewModel.holding.yesterdayIncome.amountText }}
-                </p>
-                <p
-                  class="font-mono text-xs tabular-nums"
-                  :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
-                >
-                  {{ viewModel.holding.yesterdayIncome.percentText }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">持仓收益</p>
-                <p
-                  class="mt-1 font-mono text-lg font-medium tabular-nums"
-                  :class="trendClass(viewModel.holding.holdingIncome.trend)"
-                >
-                  {{ viewModel.holding.holdingIncome.amountText }}
-                </p>
-                <p
-                  class="font-mono text-xs tabular-nums"
-                  :class="trendClass(viewModel.holding.holdingIncome.trend)"
-                >
-                  {{ viewModel.holding.holdingIncome.percentText }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">持仓金额</p>
-                <p class="mt-1 font-mono text-lg font-medium tabular-nums">
-                  {{ viewModel.holding.holdingAmountText }}
-                </p>
-              </div>
-              <div>
-                <p class="text-xs text-(--td-text-color-secondary)">持有天数</p>
-                <p class="mt-1 font-mono text-lg font-medium tabular-nums">
-                  {{ viewModel.holding.holdingDaysText }}
-                </p>
-              </div>
-            </div>
+            <t-collapse v-model:value="expandedOverviewPanels" expand-icon-placement="right">
+              <t-collapse-panel :value="overviewDetailsPanel" header="更多">
+                <div v-if="viewModel.holding">
+                  <div class="holding-details-row">
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">估算收益</p>
+                      <p
+                        class="mt-1 font-mono text-lg font-medium tabular-nums"
+                        :class="trendClass(viewModel.holding.estimatedIncome.trend)"
+                      >
+                        {{ viewModel.holding.estimatedIncome.amountText }}
+                      </p>
+                      <p
+                        v-if="viewModel.holding.estimatedIncome.percentText !== '--'"
+                        class="font-mono text-xs tabular-nums"
+                        :class="trendClass(viewModel.holding.estimatedIncome.trend)"
+                      >
+                        {{ viewModel.holding.estimatedIncome.percentText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">今日收益</p>
+                      <p
+                        class="mt-1 font-mono text-lg font-medium tabular-nums"
+                        :class="trendClass(viewModel.holding.todayIncome.trend)"
+                      >
+                        {{ viewModel.holding.todayIncome.amountText }}
+                      </p>
+                      <p
+                        v-if="viewModel.holding.todayIncome.percentText !== '--'"
+                        class="font-mono text-xs tabular-nums"
+                        :class="trendClass(viewModel.holding.todayIncome.trend)"
+                      >
+                        {{ viewModel.holding.todayIncome.percentText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">昨日收益</p>
+                      <p
+                        class="mt-1 font-mono text-lg font-medium tabular-nums"
+                        :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
+                      >
+                        {{ viewModel.holding.yesterdayIncome.amountText }}
+                      </p>
+                      <p
+                        v-if="viewModel.holding.yesterdayIncome.percentText !== '--'"
+                        class="font-mono text-xs tabular-nums"
+                        :class="trendClass(viewModel.holding.yesterdayIncome.trend)"
+                      >
+                        {{ viewModel.holding.yesterdayIncome.percentText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">持仓收益</p>
+                      <p
+                        class="mt-1 font-mono text-lg font-medium tabular-nums"
+                        :class="trendClass(viewModel.holding.holdingIncome.trend)"
+                      >
+                        {{ viewModel.holding.holdingIncome.amountText }}
+                      </p>
+                      <p
+                        v-if="viewModel.holding.holdingIncome.percentText !== '--'"
+                        class="font-mono text-xs tabular-nums"
+                        :class="trendClass(viewModel.holding.holdingIncome.trend)"
+                      >
+                        {{ viewModel.holding.holdingIncome.percentText }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="holding-details-row">
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">持仓金额</p>
+                      <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                        {{ viewModel.holding.holdingAmountText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">持有天数</p>
+                      <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                        {{ viewModel.holding.holdingDaysText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">可用份额</p>
+                      <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                        {{ viewModel.holding.availableUnitsText }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-(--td-text-color-secondary)">持仓成本价</p>
+                      <p class="mt-1 font-mono text-lg font-medium tabular-nums">
+                        {{ ledger.position?.averageCost.text ?? '--' }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            <div class="mt-4 pt-4 border-t border-(--td-component-border)">
-              <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1]" />
-              <div
-                v-else-if="error"
-                class="rounded-md bg-(--td-error-color-light-9) p-4 text-(--td-error-color)"
-              >
-                <p>{{ error }}</p>
-                <t-button
-                  class="mt-2"
-                  size="small"
-                  theme="danger"
-                  variant="outline"
-                  @click="emit('retry')"
-                >
-                  重试
-                </t-button>
-              </div>
-              <dl v-else class="details-grid">
-                <div>
-                  <dt class="text-xs text-(--td-text-color-secondary)">管理人</dt>
-                  <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
-                    {{ viewModel.companyName }}
-                  </dd>
-                </div>
-                <div v-if="viewModel.morningstarRating !== null">
-                  <dt class="text-xs text-(--td-text-color-secondary)">晨星评级</dt>
-                  <dd class="mt-1">
-                    <t-rate :default-value="viewModel.morningstarRating" disabled size="16" />
-                  </dd>
-                </div>
-                <div v-if="viewModel.shanghaiRating !== null">
-                  <dt class="text-xs text-(--td-text-color-secondary)">上证评级</dt>
-                  <dd class="mt-1">
-                    <t-rate :default-value="viewModel.shanghaiRating" disabled size="16" />
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-xs text-(--td-text-color-secondary)">净资产规模</dt>
-                  <dd class="mt-1 text-(--td-text-color-primary)">
-                    {{ viewModel.netAssetsText }}
-                    <span
-                      v-if="viewModel.netAssetsDateText !== '--'"
-                      class="text-(--td-text-color-secondary)"
+                <div class="fund-profile-panel">
+                  <t-skeleton v-if="isLoading" animation="gradient" :row-col="[1, 1]" />
+                  <div
+                    v-else-if="error"
+                    class="rounded-md bg-(--td-error-color-light-9) p-4 text-(--td-error-color)"
+                  >
+                    <p>{{ error }}</p>
+                    <t-button
+                      class="mt-2"
+                      size="small"
+                      theme="danger"
+                      variant="outline"
+                      @click="emit('retry')"
                     >
-                      （{{ viewModel.netAssetsDateText }}）
-                    </span>
-                  </dd>
+                      重试
+                    </t-button>
+                  </div>
+                  <div v-else>
+                    <div class="fund-profile-grid">
+                      <div>
+                        <dt class="text-xs text-(--td-text-color-secondary)">管理人</dt>
+                        <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
+                          {{ viewModel.companyName }}
+                        </dd>
+                      </div>
+                      <div v-if="viewModel.morningstarRating !== null">
+                        <dt class="text-xs text-(--td-text-color-secondary)">晨星评级</dt>
+                        <dd class="mt-1">
+                          <t-rate :default-value="viewModel.morningstarRating" disabled size="16" />
+                        </dd>
+                      </div>
+                      <div v-if="viewModel.shanghaiRating !== null">
+                        <dt class="text-xs text-(--td-text-color-secondary)">上证评级</dt>
+                        <dd class="mt-1">
+                          <t-rate :default-value="viewModel.shanghaiRating" disabled size="16" />
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs text-(--td-text-color-secondary)">净资产规模</dt>
+                        <dd class="mt-1 text-(--td-text-color-primary)">
+                          {{ viewModel.netAssetsText }}
+                          <span
+                            v-if="viewModel.netAssetsDateText !== '--'"
+                            class="text-(--td-text-color-secondary)"
+                          >
+                            （{{ viewModel.netAssetsDateText }}）
+                          </span>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-xs text-(--td-text-color-secondary)">成立日期</dt>
+                        <dd class="mt-1 text-(--td-text-color-primary)">
+                          {{ viewModel.establishedDateText }}
+                        </dd>
+                      </div>
+                    </div>
+                    <div
+                      v-if="viewModel.trackingIndexName && viewModel.trackingIndexName !== '--'"
+                      class="mt-4"
+                    >
+                      <dt class="text-xs text-(--td-text-color-secondary)">跟踪指数</dt>
+                      <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
+                        {{ viewModel.trackingIndexName }}
+                      </dd>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <dt class="text-xs text-(--td-text-color-secondary)">成立日期</dt>
-                  <dd class="mt-1 text-(--td-text-color-primary)">
-                    {{ viewModel.establishedDateText }}
-                  </dd>
-                </div>
-                <div v-if="viewModel.trackingIndexName && viewModel.trackingIndexName !== '--'">
-                  <dt class="text-xs text-(--td-text-color-secondary)">跟踪指数</dt>
-                  <dd class="mt-1 wrap-break-word text-(--td-text-color-primary)">
-                    {{ viewModel.trackingIndexName }}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
+              </t-collapse-panel>
+            </t-collapse>
             <div class="ledger-status-panel" v-if="ledger.retryAvailable">
               <div class="ledger-status-header">
                 <div>
@@ -372,12 +402,24 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
   @apply mt-1 font-mono text-lg font-medium tabular-nums text-(--td-text-color-primary);
 }
 
-.details-grid {
-  @apply grid gap-3 grid-cols-3 lg:grid-cols-6 lg:gap-6;
+.quote-grid {
+  @apply grid grid-cols-2 gap-4 sm:grid-cols-4;
 }
 
-.holding-details-grid {
-  @apply grid gap-3 grid-cols-3 lg:grid-cols-6 lg:gap-6 mt-4 pt-4 border-t border-(--td-component-border);
+.holding-details-row {
+  @apply grid grid-cols-2 gap-4 sm:grid-cols-4;
+}
+
+.holding-details-row + .holding-details-row {
+  @apply mt-4;
+}
+
+.fund-profile-grid {
+  @apply grid grid-cols-2 gap-4 sm:grid-cols-4;
+}
+
+.fund-profile-panel {
+  @apply mt-4 pt-4 border-t border-(--td-component-border);
 }
 
 .detail-section {
@@ -415,5 +457,10 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {
   @apply max-w-none rounded-none sm:left-1/2 sm:max-w-7xl sm:-translate-x-1/2 sm:rounded-t-md;
+}
+
+:global(.t-collapse-panel__wrapper .t-collapse-panel__content) {
+  padding: var(--td-comp-paddingTB-m) var(--td-comp-paddingLR-l) var(--td-comp-paddingTB-m)
+    var(--td-comp-paddingLR-l);
 }
 </style>

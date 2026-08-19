@@ -78,12 +78,6 @@ const holdingMetrics = computed(() => {
     today: shanghaiDate(),
   })
 })
-const viewModel = computed(() => {
-  const currentSnapshot = snapshot.value
-  return currentSnapshot
-    ? toFundDetailViewModel(currentSnapshot, detail.basicInfo.value, holdingMetrics.value)
-    : undefined
-})
 const currentNavByFund = computed<CurrentNavByFund>(() => {
   const code = detail.currentCode.value
   const currentSnapshot = snapshot.value
@@ -116,6 +110,17 @@ const ledgerState = computed(() => {
 const ledger = computed(() => {
   const state = ledgerState.value
   return state ? toFundLedgerViewModel(state) : undefined
+})
+const viewModel = computed(() => {
+  const currentSnapshot = snapshot.value
+  return currentSnapshot
+    ? toFundDetailViewModel(
+        currentSnapshot,
+        detail.basicInfo.value,
+        holdingMetrics.value,
+        ledger.value?.position?.units.text,
+      )
+    : undefined
 })
 const transactions = computed(() => {
   const code = detail.currentCode.value

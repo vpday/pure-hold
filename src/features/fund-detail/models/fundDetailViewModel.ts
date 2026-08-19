@@ -26,6 +26,7 @@ export interface FundDetailIncomeViewModel {
 }
 
 export interface FundDetailHoldingViewModel {
+  readonly availableUnitsText: string
   readonly estimatedIncome: FundDetailIncomeViewModel
   readonly holdingAmountText: string
   readonly holdingDaysText: string

@@ -80,9 +80,15 @@ test('formats holding metrics for the detail overview', () => {
     yesterdayIncomePercent: 0,
   }
 
-  const viewModel = toFundDetailViewModel(createTestFundSnapshot('161726'), undefined, metrics)
+  const viewModel = toFundDetailViewModel(
+    createTestFundSnapshot('161726'),
+    undefined,
+    metrics,
+    '98',
+  )
 
   assert.deepEqual(viewModel.holding, {
+    availableUnitsText: '98 份',
     estimatedIncome: {
       amountText: '--',
       percentText: '--',

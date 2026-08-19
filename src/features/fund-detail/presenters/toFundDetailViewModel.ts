@@ -20,6 +20,7 @@ export function toFundDetailViewModel(
   snapshot: FundSnapshot,
   basicInfo?: FundBasicInfo,
   holdingMetrics?: FundHoldingMetrics,
+  availableUnitsText?: string,
 ): FundDetailViewModel {
   return {
     code: snapshot.code,
@@ -30,7 +31,7 @@ export function toFundDetailViewModel(
     estimatedAtTimeText: formatRowDate(snapshot.estimatedAt ?? '--'),
     estimatedNavText: formatNumber(snapshot.estimatedNav, 4),
     fundType: basicInfo?.fundType ?? '--',
-    holding: holdingMetrics ? toHoldingViewModel(holdingMetrics) : null,
+    holding: holdingMetrics ? toHoldingViewModel(holdingMetrics, availableUnitsText) : null,
     morningstarRating: basicInfo?.morningstarRating ?? null,
     name: snapshot.name,
     navDateText: formatCompactDate(snapshot.navDate),
@@ -47,8 +48,12 @@ export function toFundDetailViewModel(
   }
 }
 
-function toHoldingViewModel(metrics: FundHoldingMetrics): FundDetailHoldingViewModel {
+function toHoldingViewModel(
+  metrics: FundHoldingMetrics,
+  availableUnitsText = '--',
+): FundDetailHoldingViewModel {
   return {
+    availableUnitsText: formatUnitsText(availableUnitsText),
     estimatedIncome: toIncomeViewModel(metrics.estimatedIncome, metrics.estimatedIncomePercent),
     holdingAmountText: formatCurrency(metrics.holdingAmount),
     holdingDaysText: metrics.holdingDays === null ? '--' : `${metrics.holdingDays} 天`,
@@ -56,6 +61,10 @@ function toHoldingViewModel(metrics: FundHoldingMetrics): FundDetailHoldingViewM
     todayIncome: toIncomeViewModel(metrics.todayIncome, metrics.todayIncomePercent),
     yesterdayIncome: toIncomeViewModel(metrics.yesterdayIncome, metrics.yesterdayIncomePercent),
   }
+}
+
+function formatUnitsText(value: string): string {
+  return value === '--' ? '--' : `${value} 份`
 }
 
 function toIncomeViewModel(
