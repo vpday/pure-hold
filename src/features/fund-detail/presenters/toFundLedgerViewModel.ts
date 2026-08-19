@@ -67,7 +67,7 @@ export interface FundLedgerViewModel {
   readonly canCorrect: boolean
   readonly canRecord: boolean
   readonly fundCode: string
-  readonly partialPersistence: boolean
+  readonly hasPartialPersistence: boolean
   readonly position: LedgerPositionViewModel | null
   readonly retryAvailable: boolean
   readonly status: PortfolioCoordinationStatus
@@ -128,7 +128,7 @@ export function toFundLedgerViewModel(state: FundLedgerState): FundLedgerViewMod
     canCorrect: state.canCorrect,
     canRecord: state.canRecord,
     fundCode: state.fundCode,
-    partialPersistence: state.partialPersistence,
+    hasPartialPersistence: state.failure?.persistence === 'partial',
     position: state.ledger
       ? toPositionViewModel(state.ledger.units, state.ledger.costAmount)
       : null,

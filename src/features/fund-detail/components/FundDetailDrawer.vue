@@ -317,7 +317,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                   </t-button>
                 </div>
               </div>
-              <p v-if="ledger.partialPersistence" class="mt-2 text-sm text-(--td-warning-color)">
+              <p v-if="ledger.hasPartialPersistence" class="mt-2 text-sm text-(--td-warning-color)">
                 本次操作可能已部分持久化，请通过重试或导出配置检查结果。
               </p>
             </div>

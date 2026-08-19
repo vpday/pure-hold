@@ -200,7 +200,7 @@ function commitImport(): void {
   const result = transferCoordinator.commitImport(state.package, selection.value)
   if (!result.ok) {
     MessagePlugin.error(
-      result.partialPersistence
+      result.failure?.persistence === 'partial'
         ? `${result.reason}，数据可能已部分持久化，请检查后重试`
         : result.reason,
     )

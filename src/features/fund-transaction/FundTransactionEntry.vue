@@ -281,7 +281,10 @@ function persistExactNav(
     return
   }
   if (isBlockingCoordinationStatus(result.status)) {
-    navError.value = coordinationFailureText(result.status, result.partialPersistence)
+    navError.value = coordinationFailureText(
+      result.status,
+      result.failure?.persistence === 'partial',
+    )
     return
   }
   emit('saved')
@@ -329,7 +332,7 @@ function saveBuy(): void {
     ? updateBuyDraft(props.portfolioCoordinator, draft)
     : saveBuyDraft(props.portfolioCoordinator, draft)
   if (isBlockingCoordinationStatus(saveResult.status)) {
-    handleTransactionSaveFailure(saveResult.status, saveResult.partialPersistence)
+    handleTransactionSaveFailure(saveResult.status, saveResult.failure?.persistence === 'partial')
     return
   }
   completeSave(
@@ -364,7 +367,7 @@ function saveSell(): void {
     ? updateSellDraft(props.portfolioCoordinator, draft)
     : saveSellDraft(props.portfolioCoordinator, draft)
   if (isBlockingCoordinationStatus(saveResult.status)) {
-    handleTransactionSaveFailure(saveResult.status, saveResult.partialPersistence)
+    handleTransactionSaveFailure(saveResult.status, saveResult.failure?.persistence === 'partial')
     return
   }
   completeSave(
@@ -539,25 +542,25 @@ function coordinationStatusText(status: PortfolioCoordinationStatus): string {
 
 function coordinationFailureText(
   status: PortfolioCoordinationStatus,
-  partialPersistence: boolean,
+  hasPartialPersistence: boolean,
 ): string {
   if (status === 'ledger-error') return '账本异常，交易记录未能更新当前持仓，请重试。'
   if (status === 'holding-sync-failed') {
-    return partialPersistence
+    return hasPartialPersistence
       ? '持仓同步失败，数据可能已部分持久化，请重试并检查账本。'
       : '持仓同步失败，请重试。'
   }
-  return partialPersistence
+  return hasPartialPersistence
     ? '交易记录可能已部分保存，请重试并检查账本。'
     : '交易记录保存失败，账本未改变，请重试。'
 }
 
 function handleTransactionSaveFailure(
   status: PortfolioCoordinationStatus,
-  partialPersistence: boolean,
+  hasPartialPersistence: boolean,
 ): void {
-  const message = coordinationFailureText(status, partialPersistence)
-  if (status === 'ledger-error' || partialPersistence) {
+  const message = coordinationFailureText(status, hasPartialPersistence)
+  if (status === 'ledger-error' || hasPartialPersistence) {
     errors.value = { form: message }
     return
   }

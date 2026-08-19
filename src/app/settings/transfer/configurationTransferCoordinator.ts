@@ -4,7 +4,11 @@ import {
   type CompensatedStage,
   type CompensatedStageAttempt,
 } from '@/app/coordination/compensatedCommit.ts'
-import type { CoordinationDomain } from '@/app/coordination/coordinationFailure.ts'
+import {
+  createCoordinationFailureFact,
+  type CoordinationDomain,
+  type CoordinationFailureFact,
+} from '@/app/coordination/coordinationFailure.ts'
 import type { RebuildHoldingProjectionsResult } from '@/app/portfolio/portfolioCoordinator.ts'
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
 import type { CommitIndexGroupsResult } from '@/domains/indices/services/createIndexSettingsCommandModule.ts'
@@ -38,8 +42,7 @@ export type ConfigurationTransferReplaceResult =
   | { readonly ok: true }
   | {
       readonly ok: false
-      readonly error?: unknown
-      readonly partialPersistence?: boolean
+      readonly failure?: CoordinationFailureFact
       readonly reason: string
     }
 
@@ -47,10 +50,9 @@ export type ConfigurationTransferCommitResult =
   | { readonly ok: true; readonly rebuild?: RebuildHoldingProjectionsResult }
   | {
       readonly ok: false
-      readonly error?: unknown
+      readonly failure?: CoordinationFailureFact
       readonly rebuild?: RebuildHoldingProjectionsResult
       readonly reason: string
-      readonly partialPersistence: boolean
     }
 
 type ConfigurationRecoveryRoute =
@@ -69,25 +71,25 @@ export function createConfigurationTransferCoordinator(
   ): ConfigurationTransferCommitResult {
     const portfolioSelected = selection.portfolio === true
     if (!selection.index && !selection.funds && !portfolioSelected) {
-      return { ok: false, partialPersistence: false, reason: '未选择任何配置分区' }
+      return { ok: false, reason: '未选择任何配置分区' }
     }
     if (selection.index && packageValue.index === undefined) {
-      return { ok: false, partialPersistence: false, reason: '导入包中没有可用的指数配置' }
+      return { ok: false, reason: '导入包中没有可用的指数配置' }
     }
     if (selection.funds && packageValue.funds === undefined) {
-      return { ok: false, partialPersistence: false, reason: '导入包中没有可用的基金配置' }
+      return { ok: false, reason: '导入包中没有可用的基金配置' }
     }
     if (portfolioSelected && packageValue.portfolio === undefined) {
-      return { ok: false, partialPersistence: false, reason: '导入包中没有可用的投资账本' }
+      return { ok: false, reason: '导入包中没有可用的投资账本' }
     }
     if (portfolioSelected && adapters.replacePortfolio === undefined) {
-      return { ok: false, partialPersistence: false, reason: '投资账本传输暂不可用' }
+      return { ok: false, reason: '投资账本传输暂不可用' }
     }
     if (portfolioSelected && adapters.getPortfolio === undefined) {
-      return { ok: false, partialPersistence: false, reason: '投资账本快照暂不可用' }
+      return { ok: false, reason: '投资账本快照暂不可用' }
     }
     if (portfolioSelected && adapters.rebuildHoldingProjections === undefined) {
-      return { ok: false, partialPersistence: false, reason: '投资账本恢复后无法重建持仓信息' }
+      return { ok: false, reason: '投资账本恢复后无法重建持仓信息' }
     }
 
     const metadataFundSettings =
@@ -104,7 +106,6 @@ export function createConfigurationTransferCoordinator(
       if (missingFundCodes.length > 0) {
         return {
           ok: false,
-          partialPersistence: false,
           reason: `投资账本缺少基金元数据：${missingFundCodes.join('、')}`,
         }
       }
@@ -159,9 +160,9 @@ export function createConfigurationTransferCoordinator(
             const result = replacePortfolio(packageValue.portfolio!)
             if (result.ok) return { ok: true }
             failureReason = portfolioFailureReason(result)
-            const partial = result.partialPersistence
+            const partial = result.failure?.persistence === 'partial'
             return stageFailure(
-              result.error,
+              result.failure?.primaryError,
               partial ? 'required' : 'not-needed',
               partial ? 'portfolio-index' : 'index-only',
             )
@@ -185,9 +186,9 @@ export function createConfigurationTransferCoordinator(
               const result = replaceFundSettings(packageValue.funds!)
               if (!result.ok) {
                 fundsWriteFailed = true
-                const partial = result.partialPersistence === true
+                const partial = result.failure?.persistence === 'partial'
                 return stageFailure(
-                  result.error,
+                  result.failure?.primaryError,
                   partial ? 'required' : 'not-needed',
                   partial ? 'funds-portfolio-index' : 'portfolio-index',
                 )
@@ -202,8 +203,8 @@ export function createConfigurationTransferCoordinator(
               failureReason = '投资账本恢复后持仓信息重建失败'
               return stageFailure(error, 'required', 'portfolio-funds-index')
             }
-            if (rebuild.status !== 'synced' || rebuild.partialPersistence) {
-              const rebuildError = rebuild.results.find(({ error }) => error !== undefined)?.error
+            if (rebuild.status !== 'synced' || rebuild.failure !== undefined) {
+              const rebuildError = rebuild.failure?.primaryError
               failureReason =
                 rebuild.status === 'pending'
                   ? '投资账本恢复后持仓信息仍待确认或精确数据'
@@ -221,17 +222,18 @@ export function createConfigurationTransferCoordinator(
     const result = runCompensatedCommit({ recoveryRoutes, stages })
     if (result.ok) return portfolioSelected ? { ok: true, rebuild } : { ok: true }
 
+    const failure = result.failure
+
     const reason =
       fundsWriteFailed && selection.index
-        ? result.failure.persistence === 'restored'
+        ? failure.persistence === 'restored'
           ? '基金配置保存失败，已恢复原指数配置'
           : '基金配置保存失败，指数配置可能已部分写入'
         : failureReason
     return {
-      ...(result.failure.primaryError !== undefined ? { error: result.failure.primaryError } : {}),
       ...(rebuild !== undefined ? { rebuild } : {}),
+      failure,
       ok: false,
-      partialPersistence: result.failure.persistence === 'partial',
       reason,
     }
 
@@ -260,7 +262,11 @@ export function createConfigurationTransferCoordinator(
       try {
         return adapters.replaceFundSettings(settings)
       } catch (error) {
-        return { error, ok: false, partialPersistence: true, reason: 'persistence-failed' }
+        return {
+          failure: createCoordinationFailureFact('partial', error),
+          ok: false,
+          reason: 'persistence-failed',
+        }
       }
     }
 
@@ -268,7 +274,11 @@ export function createConfigurationTransferCoordinator(
       try {
         return adapters.replacePortfolio!(portfolio)
       } catch (error) {
-        return { error, ok: false, partialPersistence: true, reason: 'persistence-failed' }
+        return {
+          failure: createCoordinationFailureFact('partial', error),
+          ok: false,
+          reason: 'persistence-failed',
+        }
       }
     }
   }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { createCoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type { PortfolioCoordinationResult } from '@/app/portfolio/portfolioCoordinator.ts'
 import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
 import type { FundEditSubmitters } from './fundEditDraft.ts'
@@ -119,12 +120,12 @@ test('reports a retryable ledger failure after the holding is persisted', () => 
   fillValidHolding(draft)
   const calls: string[] = []
   const submitters = createSubmitters(calls)
+  const ledgerError = new Error('quota exceeded')
   submitters.ensureFundLedger = (code) => {
     calls.push(`ledger:${code}`)
     return {
-      error: new Error('quota exceeded'),
+      failure: createCoordinationFailureFact('partial', ledgerError),
       ok: false,
-      partialPersistence: true,
       retryable: true,
     }
   }
@@ -133,9 +134,9 @@ test('reports a retryable ledger failure after the holding is persisted', () => 
 
   assert.deepEqual(result, {
     error: '持仓信息已保存，但投资账本可能已部分持久化，请重试并检查账本',
+    failure: createCoordinationFailureFact('partial', ledgerError),
     fieldErrors: {},
     holdingSaved: true,
-    partialPersistence: true,
     reason: 'ledger-persistence-failed',
     retryable: true,
     success: false,
@@ -262,7 +263,6 @@ function coordinationResult(
     holding: null,
     ledger: null,
     ok: status === 'synced',
-    partialPersistence: false,
     portfolio: createEmptyPortfolio(),
     retryable: status !== 'synced',
     status,

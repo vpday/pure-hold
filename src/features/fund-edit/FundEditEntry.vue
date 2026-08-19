@@ -85,7 +85,7 @@ function confirm(): void {
 function isPersistentSubmitFailure(result: FundEditSubmitResult): boolean {
   return (
     result.holdingSaved === true ||
-    result.partialPersistence === true ||
+    result.failure?.persistence === 'partial' ||
     result.status === 'ledger-error' ||
     result.status === 'portfolio-persistence-failed' ||
     result.status === 'holding-sync-failed'
@@ -105,9 +105,8 @@ function createEnsureFundLedger(coordinator: PortfolioCoordinator): EnsureFundLe
   return (fundCode) => {
     const result = coordinator.ensureFundLedger({ fundCode })
     return {
-      error: result.ok ? undefined : result.error,
+      ...(result.ok || result.failure === undefined ? {} : { failure: result.failure }),
       ok: result.ok,
-      partialPersistence: result.ok ? undefined : result.partialPersistence,
       retryable: result.ok ? false : result.retryable,
     }
   }

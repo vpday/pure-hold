@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { createCoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type {
   CommitEventInput,
   PortfolioCoordinationResult,
@@ -108,16 +109,16 @@ function createCoordinator(
   fail = false,
 ): Pick<PortfolioCoordinator, 'commitEvent' | 'getPortfolio'> {
   let portfolio = createEmptyPortfolio()
+  const persistenceError = new Error('storage failed')
   return {
     commitEvent(input: CommitEventInput): PortfolioCoordinationResult {
       if (fail) {
         return {
-          error: new Error('storage failed'),
+          failure: createCoordinationFailureFact('unchanged', persistenceError),
           fundCode: input.event.fundCode,
           holding: null,
           ledger: null,
           ok: false,
-          partialPersistence: false,
           portfolio,
           retryable: true,
           status: 'portfolio-persistence-failed',
@@ -132,7 +133,6 @@ function createCoordinator(
         holding: null,
         ledger: null,
         ok: true,
-        partialPersistence: false,
         portfolio,
         retryable: false,
         status: 'synced',

@@ -52,6 +52,8 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/app` 保存跨领域但仍属于本应用的协调能力。`src/app/settings` 保存应用级刷新偏好和纯配置传输协议；它通过 Domain facade 读写指数分组与基金设置，不读取原始 localStorage，也不接触行情快照或设备标识。
 
+`src/app/coordination` 提供 app-local 的 compensated commit seam。`runCompensatedCommit` 统一捕获快照、执行具名恢复路径和收集恢复错误；各协调器仍负责领域校验、正向写入顺序和失败 route 的选择。公开的 `CoordinationFailureFact` 只描述持久化最终是 `unchanged`、`restored` 还是 `partial`，与 `status`、`reason`、`retryable` 以及 pending 状态正交。该 seam 不是 ACID 事务，不拥有任何 Domain policy，也不把 Store 命令或第三方协议带入 App 层。
+
 `src/pwa` 保存 Service Worker 使用的平台基础设施。`src/pwa/cache` 通过共同 cache policy 编排 Cache Storage；每个 route object 将请求 matcher 与 handler 绑定，独立 adapter 描述具体请求的 key、缓存名称和响应装饰。
 
 `src/shared` 只保存没有业务语义、能够跨功能复用的能力。`src/shared/persistence` 集中浏览器字符串存储的能力检测、原始读写结果和异常捕获；基金设置、指数分组、应用刷新偏好和天天基金 deviceid 仍分别拥有自己的 key、schema、校验、恢复与会话语义。`src/shared/transport` 保存 PWA 与 Domain 共同使用的中性响应 metadata contract，不包含缓存实现或基金模型。代码不会因为“以后可能复用”而提前移入 shared。

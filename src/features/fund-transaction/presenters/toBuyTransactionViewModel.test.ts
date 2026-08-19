@@ -117,7 +117,6 @@ function createCoordinator(): Pick<PortfolioCoordinator, 'commitEvent' | 'getPor
         holding: null,
         ledger: null,
         ok: true,
-        partialPersistence: false,
         portfolio,
         retryable: false,
         status: 'synced',

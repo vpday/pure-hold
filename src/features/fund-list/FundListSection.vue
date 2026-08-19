@@ -129,11 +129,12 @@ function confirmFundDeletion(): void {
   if (!preview) return
   const result = props.portfolioCoordinator.confirmFundDeletion(preview)
   if (!result.ok) {
-    deletionError.value = result.partialPersistence
-      ? '删除失败，数据可能已部分持久化，请先检查账本和基金配置。'
-      : result.reason === 'portfolio-persistence-failed'
-        ? '投资账本保存失败，删除未完成。'
-        : '基金配置保存失败，删除未完成。'
+    deletionError.value =
+      result.failure.persistence === 'partial'
+        ? '删除失败，数据可能已部分持久化，请先检查账本和基金配置。'
+        : result.reason === 'portfolio-persistence-failed'
+          ? '投资账本保存失败，删除未完成。'
+          : '基金配置保存失败，删除未完成。'
     MessagePlugin.error(deletionError.value)
     return
   }
@@ -184,7 +185,7 @@ function deleteTransaction(eventId: string): void {
   })
   if (isBlockingCoordinationStatus(result.status)) {
     MessagePlugin.error(
-      result.partialPersistence
+      result.failure?.persistence === 'partial'
         ? '交易记录删除失败，数据可能已部分持久化，请重试并检查账本。'
         : '交易记录删除失败，账本未改变。',
     )

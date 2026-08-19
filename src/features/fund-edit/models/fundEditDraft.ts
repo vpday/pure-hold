@@ -2,6 +2,7 @@ import type {
   PortfolioCoordinationStatus,
   PortfolioCoordinator,
 } from '@/app/portfolio/portfolioCoordinator.ts'
+import type { CoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type { FundGroupDefinition } from '@/domains/funds/models/fundGroupDefinition.ts'
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
 import type { PortfolioEvent } from '@/domains/portfolio/models/portfolio.ts'
@@ -22,9 +23,8 @@ export interface FundEditDraft {
 }
 
 export type EnsureFundLedger = (fundCode: string) => {
-  readonly error?: unknown
+  readonly failure?: CoordinationFailureFact
   readonly ok: boolean
-  readonly partialPersistence?: boolean
   readonly retryable?: boolean
 }
 
@@ -41,9 +41,9 @@ export interface FundEditSubmitters {
 
 export interface FundEditSubmitResult {
   readonly error?: string
+  readonly failure?: CoordinationFailureFact
   readonly fieldErrors: FundHoldingDraftErrors
   readonly holdingSaved?: boolean
-  readonly partialPersistence?: boolean
   readonly reason?: 'ledger-persistence-failed'
   readonly retryable?: boolean
   readonly status?: PortfolioCoordinationStatus
@@ -130,12 +130,13 @@ export function submitFundEditDraft(
     const ledgerResult = submitters.ensureFundLedger?.(validation.holding.code)
     if (ledgerResult && !ledgerResult.ok) {
       return {
-        error: ledgerResult.partialPersistence
-          ? '持仓信息已保存，但投资账本可能已部分持久化，请重试并检查账本'
-          : '持仓信息已保存，但投资账本自动建立失败，请重试',
+        error:
+          ledgerResult.failure?.persistence === 'partial'
+            ? '持仓信息已保存，但投资账本可能已部分持久化，请重试并检查账本'
+            : '持仓信息已保存，但投资账本自动建立失败，请重试',
         fieldErrors: {},
+        ...(ledgerResult.failure === undefined ? {} : { failure: ledgerResult.failure }),
         holdingSaved: true,
-        partialPersistence: ledgerResult.partialPersistence,
         reason: 'ledger-persistence-failed',
         retryable: ledgerResult.retryable !== false,
         success: false,

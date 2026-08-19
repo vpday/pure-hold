@@ -4,6 +4,12 @@ import {
   type CompensatedStageAttempt,
 } from '@/app/coordination/compensatedCommit.ts'
 import {
+  aggregateCoordinationFailureFacts,
+  createCoordinationFailureFact,
+  type CoordinationFailureFact,
+  type CoordinationPersistence,
+} from '@/app/coordination/coordinationFailure.ts'
+import {
   createFundHolding,
   holdingTotalCostCents,
   type FundHolding,
@@ -100,8 +106,7 @@ export interface PortfolioCoordinationResult {
   readonly holding: FundHolding | null
   readonly ledger: PortfolioAggregateCalculation | null
   readonly calculation?: PortfolioCalculation
-  readonly error?: unknown
-  readonly partialPersistence: boolean
+  readonly failure?: CoordinationFailureFact
   readonly retryable: boolean
 }
 
@@ -140,7 +145,7 @@ export interface RebuildHoldingProjectionsResult {
   readonly status: 'synced' | 'pending' | 'failed'
   readonly results: readonly PortfolioCoordinationResult[]
   readonly portfolio: Portfolio
-  readonly partialPersistence: boolean
+  readonly failure?: CoordinationFailureFact
   readonly retryable: boolean
 }
 
@@ -167,8 +172,7 @@ export type EnsureFundLedgerResult =
         | 'fund-not-found'
         | 'missing-fund-holding'
         | 'portfolio-persistence-failed'
-      readonly error?: unknown
-      readonly partialPersistence: boolean
+      readonly failure?: CoordinationFailureFact
       readonly portfolio: Portfolio
       readonly retryable: boolean
     }
@@ -232,9 +236,8 @@ export type FundDeletionResult =
     }
   | {
       readonly ok: false
-      readonly error?: unknown
+      readonly failure: CoordinationFailureFact
       readonly funds: FundSettings
-      readonly partialPersistence: boolean
       readonly portfolio: Portfolio
       readonly reason: 'funds-persistence-failed' | 'portfolio-persistence-failed'
       readonly preview: FundDeletionPreview
@@ -345,14 +348,17 @@ export function createPortfolioCoordinator(
       ],
     })
 
-    const failure = result.ok ? undefined : result.failure
+    const failure = result.ok
+      ? state.error === undefined
+        ? undefined
+        : createCoordinationFailureFact('unchanged', state.error)
+      : result.failure
     return coordinationResult({
+      ...(failure === undefined ? {} : { failure }),
       calculation: state.calculation,
-      error: failure?.primaryError ?? state.error,
       fundCode: input.fundCode,
       holding: state.holding,
       ledger: state.ledger,
-      partialPersistence: failure?.persistence === 'partial',
       portfolio: dependencies.portfolio.getPortfolio(),
       retryable: state.retryable,
       status: state.status,
@@ -405,11 +411,13 @@ export function createPortfolioCoordinator(
 
     if (!previousSettings.funds.some(({ code }) => code === fundCode)) {
       return coordinationResult({
-        error: new Error(`Fund ${fundCode} does not exist`),
+        failure: createCoordinationFailureFact(
+          'unchanged',
+          new Error(`Fund ${fundCode} does not exist`),
+        ),
         fundCode,
         holding: settingsHolding ?? null,
         ledger: null,
-        partialPersistence: false,
         portfolio: previousPortfolio,
         retryable: false,
         status: 'ledger-error',
@@ -587,18 +595,16 @@ export function createPortfolioCoordinator(
         fundCode: input.fundCode,
         holding,
         ledger,
-        partialPersistence: false,
         portfolio,
         retryable: false,
         status: statusForCalculation(calculation, input.fundCode),
       })
     } catch (error) {
       return coordinationResult({
-        error,
+        failure: createCoordinationFailureFact('unchanged', error),
         fundCode: input.fundCode,
         holding,
         ledger: null,
-        partialPersistence: false,
         portfolio,
         retryable: true,
         status: 'ledger-error',
@@ -632,8 +638,9 @@ export function createPortfolioCoordinator(
     const pending = results.some(
       ({ status }) => status === 'pending-confirmation' || status === 'pending-exact-data',
     )
+    const failure = aggregateCoordinationFailureFacts(results.map(({ failure: value }) => value))
     return {
-      partialPersistence: results.some(({ partialPersistence }) => partialPersistence),
+      ...(failure === undefined ? {} : { failure }),
       portfolio: dependencies.portfolio.getPortfolio(),
       results,
       retryable: failed || pending,
@@ -717,7 +724,7 @@ export function createPortfolioCoordinator(
               }
             }
             if (!ensured.ok) {
-              primaryError = ensured.error
+              primaryError = ensured.failure?.primaryError
               retryable = true
               status = 'portfolio-persistence-failed'
               return {
@@ -735,15 +742,19 @@ export function createPortfolioCoordinator(
     })
 
     if (!result.ok) {
-      const partialPersistence =
-        result.failure.persistence === 'partial' ||
-        (ensured !== undefined && !ensured.ok && ensured.partialPersistence)
+      const failure = aggregateCoordinationFailureFacts([
+        result.failure,
+        ensured !== undefined && !ensured.ok ? ensured.failure : undefined,
+      ])
       return coordinationResult({
-        error: result.failure.primaryError ?? primaryError,
+        ...(failure === undefined
+          ? primaryError === undefined
+            ? {}
+            : { failure: createCoordinationFailureFact('unchanged', primaryError) }
+          : { failure }),
         fundCode: input.code,
         holding: previousSettings.holdingsByCode[input.code] ?? null,
         ledger: null,
-        partialPersistence,
         portfolio: dependencies.portfolio.getPortfolio(),
         retryable,
         status,
@@ -756,7 +767,6 @@ export function createPortfolioCoordinator(
         fundCode: input.code,
         holding,
         ledger: aggregateForCurrent(input.code),
-        partialPersistence: false,
         portfolio: dependencies.portfolio.getPortfolio(),
         retryable: false,
         status: 'synced',
@@ -822,7 +832,6 @@ export function createPortfolioCoordinator(
       return {
         fundCode: input.fundCode,
         ok: false,
-        partialPersistence: false,
         portfolio: dependencies.portfolio.getPortfolio(),
         reason: 'fund-not-found',
         retryable: false,
@@ -833,7 +842,6 @@ export function createPortfolioCoordinator(
       return {
         fundCode: input.fundCode,
         ok: false,
-        partialPersistence: false,
         portfolio: dependencies.portfolio.getPortfolio(),
         reason: 'missing-fund-holding',
         retryable: false,
@@ -857,7 +865,6 @@ export function createPortfolioCoordinator(
       return {
         fundCode: input.fundCode,
         ok: false,
-        partialPersistence: false,
         portfolio: current,
         reason: 'empty-fund-holding',
         retryable: false,
@@ -898,12 +905,15 @@ export function createPortfolioCoordinator(
         : eventWasUpdated && existingInitialEvent !== undefined
           ? dependencies.portfolio.updateEvent(existingInitialEvent)
           : { ok: true as const }
-      if (rollback.ok) return portfolioFailure(input.fundCode, enabled, current)
+      if (rollback.ok) return portfolioFailure(input.fundCode, enabled, current, 'restored')
       return {
-        error: rollback.error ?? enabled.error,
+        failure: createCoordinationFailureFact(
+          'partial',
+          enabled.error,
+          rollback.error === undefined ? [] : [rollback.error],
+        ),
         fundCode: input.fundCode,
         ok: false,
-        partialPersistence: true,
         portfolio: dependencies.portfolio.getPortfolio(),
         reason: 'portfolio-persistence-failed',
         retryable: true,
@@ -996,10 +1006,9 @@ export function createPortfolioCoordinator(
 
     if (!result.ok) {
       return {
-        error: result.failure.primaryError ?? primaryError,
+        failure: result.failure,
         funds: dependencies.funds.getSettingsSnapshot(),
         ok: false,
-        partialPersistence: result.failure.persistence === 'partial',
         portfolio: dependencies.portfolio.getPortfolio(),
         reason,
         preview: currentPreview,
@@ -1089,9 +1098,7 @@ export function createPortfolioCoordinator(
     eventIsInitial: boolean,
     previousPortfolio: Portfolio,
     holding: FundHolding | undefined,
-  ):
-    | { readonly ok: true }
-    | { readonly ok: false; readonly error: unknown; readonly partialPersistence: boolean } {
+  ): { readonly ok: true } | { readonly ok: false; readonly error: unknown } {
     if (eventIsInitial) return { ok: true }
     const eventId = initialHoldingEventId(fundCode)
     const existing = previousPortfolio.events.find(({ id }) => id === eventId)
@@ -1100,7 +1107,6 @@ export function createPortfolioCoordinator(
         return {
           error: new Error(`Initial holding ID conflicts for ${fundCode}`),
           ok: false,
-          partialPersistence: false,
         }
       }
       return { ok: true }
@@ -1119,7 +1125,7 @@ export function createPortfolioCoordinator(
     }
     const initial = createInitialHoldingEvent(fundCode, holding, now())
     const result = dependencies.portfolio.addEvent(initial)
-    return result.ok ? { ok: true } : { error: result.error, ok: false, partialPersistence: false }
+    return result.ok ? { ok: true } : { error: result.error, ok: false }
   }
 }
 
@@ -1233,17 +1239,18 @@ function statusForCalculation(
 
 function coordinationResult(input: {
   readonly calculation?: PortfolioCalculation
-  readonly error?: unknown
+  readonly failure?: CoordinationFailureFact
   readonly fundCode: string
   readonly holding: FundHolding | null
   readonly ledger: PortfolioAggregateCalculation | null
-  readonly partialPersistence: boolean
   readonly portfolio: Portfolio
   readonly retryable: boolean
   readonly status: PortfolioCoordinationStatus
 }): PortfolioCoordinationResult {
+  const { failure, ...result } = input
   return {
-    ...input,
+    ...result,
+    ...(failure === undefined ? {} : { failure }),
     ok: input.status === 'synced',
   }
 }
@@ -1256,12 +1263,12 @@ function portfolioFailure(
   fundCode: string,
   result: Extract<PortfolioCommandResult, { readonly ok: false }>,
   current: Portfolio,
+  persistence: CoordinationPersistence = 'unchanged',
 ): EnsureFundLedgerResult {
   return {
-    error: result.error,
+    failure: createCoordinationFailureFact(persistence, result.error),
     fundCode,
     ok: false,
-    partialPersistence: false,
     portfolio: current,
     reason: 'portfolio-persistence-failed',
     retryable: true,

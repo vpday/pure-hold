@@ -6,6 +6,7 @@ import {
   type FundsPortfolioFacade,
   type RebuildHoldingProjectionsResult,
 } from '@/app/portfolio/portfolioCoordinator.ts'
+import { createCoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import { defaultIndexGroups } from '@/domains/indices/config/defaultIndexGroups.ts'
@@ -280,8 +281,8 @@ test('configuration transfer coordinator rolls back an earlier section when a la
 
   const result = coordinator.commitImport(packageValue, { funds: true, index: true })
   assert.deepEqual(result, {
+    failure: createCoordinationFailureFact('restored'),
     ok: false,
-    partialPersistence: false,
     reason: '基金配置保存失败，已恢复原指数配置',
   })
   assert.deepEqual(indexGroups, defaultIndexGroups)
@@ -290,6 +291,7 @@ test('configuration transfer coordinator rolls back an earlier section when a la
 
 test('configuration transfer reports partial persistence when rollback fails', () => {
   let indexWrites = 0
+  const rollbackError = new Error('rollback failed')
   const coordinator = createConfigurationTransferCoordinator({
     getFundSettings: () => fundSettings,
     getIndexGroups: () => defaultIndexGroups,
@@ -298,7 +300,7 @@ test('configuration transfer reports partial persistence when rollback fails', (
       indexWrites += 1
       return indexWrites === 1
         ? { groups, ok: true }
-        : { error: new Error('rollback failed'), ok: false, reason: 'persistence-failed' }
+        : { error: rollbackError, ok: false, reason: 'persistence-failed' }
     },
   })
   const packageValue = createConfigurationTransferPackage({
@@ -308,7 +310,7 @@ test('configuration transfer reports partial persistence when rollback fails', (
 
   assert.deepEqual(coordinator.commitImport(packageValue, { funds: true, index: true }), {
     ok: false,
-    partialPersistence: true,
+    failure: createCoordinationFailureFact('partial', undefined, [rollbackError]),
     reason: '基金配置保存失败，指数配置可能已部分写入',
   })
 })
@@ -325,7 +327,6 @@ test('configuration transfer overwrites portfolio conflicts by default', () => {
     getIndexGroups: () => defaultIndexGroups,
     getPortfolio: () => currentPortfolio,
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio: currentPortfolio,
       results: [],
       retryable: false,
@@ -362,7 +363,6 @@ test('configuration transfer routes explicit portfolio replacement through the r
     getIndexGroups: () => defaultIndexGroups,
     getPortfolio: () => currentPortfolio,
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio: currentPortfolio,
       results: [],
       retryable: false,
@@ -469,7 +469,7 @@ test('configuration restore keeps pending projection status and rolls back old s
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.equal(result.rebuild?.status, 'pending')
   assert.equal(result.rebuild?.results[0]?.status, 'pending-confirmation')
   assert.deepEqual(harness.portfolio.getPortfolio(), initialPortfolio)
@@ -538,7 +538,7 @@ test('configuration restore rolls back projection failures', () => {
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.equal(result.rebuild?.status, 'failed')
   assert.deepEqual(harness.portfolio.getPortfolio(), { events: [], fundCodes: [] })
   assert.deepEqual(harness.funds.getSettingsSnapshot(), exactFundSettings)
@@ -559,7 +559,7 @@ test('configuration restore leaves settings untouched when Portfolio persistence
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'unchanged')
   assert.equal(result.rebuild, undefined)
   assert.deepEqual(harness.portfolio.getPortfolio(), { events: [], fundCodes: [] })
   assert.deepEqual(harness.funds.getSettingsSnapshot(), exactFundSettings)
@@ -591,7 +591,7 @@ test('configuration restore reports partial persistence when compensation fails'
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, true)
+  assert.equal(result.failure?.persistence, 'partial')
   assert.deepEqual(harness.portfolio.getPortfolio(), { events: [], fundCodes: [] })
   assert.equal(harness.funds.getSettingsSnapshot().holdingsByCode['000001']?.units, 7)
 })
@@ -630,7 +630,6 @@ test('configuration restore rejects a portfolio without fund metadata', () => {
 
   assert.deepEqual(result, {
     ok: false,
-    partialPersistence: false,
     reason: '投资账本缺少基金元数据：000002',
   })
   assert.deepEqual(harness.portfolio.getPortfolio(), { events: [], fundCodes: [] })
@@ -668,7 +667,6 @@ test('configuration restore captures every selected snapshot before ordered writ
     rebuildHoldingProjections: () => {
       events.push('rebuild')
       return {
-        partialPersistence: false,
         portfolio,
         results: [],
         retryable: false,
@@ -729,7 +727,6 @@ test('configuration restore stops after an index write failure without compensat
     rebuildHoldingProjections: () => {
       events.push('rebuild')
       return {
-        partialPersistence: false,
         portfolio,
         results: [],
         retryable: false,
@@ -757,8 +754,8 @@ test('configuration restore stops after an index write failure without compensat
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.error, indexError)
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.primaryError, indexError)
+  assert.equal(result.failure?.persistence, 'unchanged')
   assert.equal(result.reason, '指数配置保存失败')
   assert.deepEqual(events, ['capture:index', 'capture:portfolio', 'capture:funds', 'write:index'])
 })
@@ -788,7 +785,6 @@ test('configuration restore only restores the earlier index after an internally 
     rebuildHoldingProjections: () => {
       events.push('rebuild')
       return {
-        partialPersistence: false,
         portfolio,
         results: [],
         retryable: false,
@@ -803,9 +799,8 @@ test('configuration restore only restores the earlier index after an internally 
       events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
       return portfolioCalls === 1
         ? {
-            error: portfolioError,
+            failure: createCoordinationFailureFact('restored', portfolioError),
             ok: false,
-            partialPersistence: false,
             reason: 'persistence-failed',
           }
         : { ok: true }
@@ -823,8 +818,8 @@ test('configuration restore only restores the earlier index after an internally 
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.error, portfolioError)
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.primaryError, portfolioError)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.equal(result.reason, '投资账本保存失败')
   assert.deepEqual(events, [
     'capture:index',
@@ -858,7 +853,6 @@ test('configuration restore compensates a partial portfolio failure before the e
       return portfolio
     },
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio,
       results: [],
       retryable: false,
@@ -869,9 +863,8 @@ test('configuration restore compensates a partial portfolio failure before the e
       events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
       return portfolioCalls === 1
         ? {
-            error: new Error('portfolio partial'),
+            failure: createCoordinationFailureFact('partial', new Error('portfolio partial')),
             ok: false,
-            partialPersistence: true,
             reason: 'persistence-failed',
           }
         : { ok: true }
@@ -889,7 +882,7 @@ test('configuration restore compensates a partial portfolio failure before the e
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.deepEqual(events, [
     'capture:index',
     'capture:portfolio',
@@ -925,7 +918,6 @@ test('configuration restore compensates a normal funds failure with portfolio th
       return portfolio
     },
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio,
       results: [],
       retryable: false,
@@ -934,7 +926,11 @@ test('configuration restore compensates a normal funds failure with portfolio th
     replaceFundSettings: () => {
       events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
       return fundsCalls === 1
-        ? { error: fundsError, ok: false, partialPersistence: false, reason: 'persistence-failed' }
+        ? {
+            failure: createCoordinationFailureFact('unchanged', fundsError),
+            ok: false,
+            reason: 'persistence-failed',
+          }
         : { ok: true }
     },
     replacePortfolio: () => {
@@ -954,8 +950,8 @@ test('configuration restore compensates a normal funds failure with portfolio th
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.error, fundsError)
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.primaryError, fundsError)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.equal(result.reason, '基金配置保存失败，已恢复原指数配置')
   assert.deepEqual(events, [
     'capture:index',
@@ -992,7 +988,6 @@ test('configuration restore compensates a partial funds failure with funds then 
       return portfolio
     },
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio,
       results: [],
       retryable: false,
@@ -1002,9 +997,8 @@ test('configuration restore compensates a partial funds failure with funds then 
       events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
       return fundsCalls === 1
         ? {
-            error: new Error('fund settings partial'),
+            failure: createCoordinationFailureFact('partial', new Error('fund settings partial')),
             ok: false,
-            partialPersistence: true,
             reason: 'persistence-failed',
           }
         : { ok: true }
@@ -1026,7 +1020,7 @@ test('configuration restore compensates a partial funds failure with funds then 
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.deepEqual(events, [
     'capture:index',
     'capture:portfolio',
@@ -1093,7 +1087,6 @@ function runRebuildFailureScenario(
 
 test('configuration restore uses portfolio then funds then index for pending, failed, and thrown rebuilds', () => {
   const pending = runRebuildFailureScenario(() => ({
-    partialPersistence: false,
     portfolio,
     results: [],
     retryable: true,
@@ -1102,7 +1095,7 @@ test('configuration restore uses portfolio then funds then index for pending, fa
   assert.equal(pending.result.ok, false)
   if (!pending.result.ok) {
     assert.equal(pending.result.rebuild?.status, 'pending')
-    assert.equal(pending.result.partialPersistence, false)
+    assert.equal(pending.result.failure?.persistence, 'restored')
     assert.equal(pending.result.reason, '投资账本恢复后持仓信息仍待确认或精确数据')
   }
   assert.deepEqual(pending.events.slice(-3), [
@@ -1112,7 +1105,6 @@ test('configuration restore uses portfolio then funds then index for pending, fa
   ])
 
   const failed = runRebuildFailureScenario(() => ({
-    partialPersistence: false,
     portfolio,
     results: [],
     retryable: true,
@@ -1121,7 +1113,7 @@ test('configuration restore uses portfolio then funds then index for pending, fa
   assert.equal(failed.result.ok, false)
   if (!failed.result.ok) {
     assert.equal(failed.result.rebuild?.status, 'failed')
-    assert.equal(failed.result.partialPersistence, false)
+    assert.equal(failed.result.failure?.persistence, 'restored')
     assert.equal(failed.result.reason, '投资账本恢复后持仓信息重建失败')
   }
   assert.deepEqual(failed.events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
@@ -1132,9 +1124,9 @@ test('configuration restore uses portfolio then funds then index for pending, fa
   })
   assert.equal(thrown.result.ok, false)
   if (!thrown.result.ok) {
-    assert.equal(thrown.result.error, rebuildError)
+    assert.equal(thrown.result.failure?.primaryError, rebuildError)
     assert.equal(thrown.result.rebuild, undefined)
-    assert.equal(thrown.result.partialPersistence, false)
+    assert.equal(thrown.result.failure?.persistence, 'restored')
   }
   assert.deepEqual(thrown.events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
 })
@@ -1193,8 +1185,9 @@ test('configuration restore continues after one recovery failure and reports par
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.error, rebuildError)
-  assert.equal(result.partialPersistence, true)
+  assert.equal(result.failure?.primaryError, rebuildError)
+  assert.equal(result.failure?.persistence, 'partial')
+  assert.equal(result.failure?.recoveryErrors.length, 2)
   assert.deepEqual(events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
 })
 
@@ -1217,7 +1210,6 @@ test('configuration restore of Portfolio alone captures and restores the Funds p
       return portfolio
     },
     rebuildHoldingProjections: () => ({
-      partialPersistence: false,
       portfolio,
       results: [],
       retryable: true,
@@ -1241,7 +1233,7 @@ test('configuration restore of Portfolio alone captures and restores the Funds p
 
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   assert.deepEqual(events, [
     'validate:funds',
     'capture:portfolio',

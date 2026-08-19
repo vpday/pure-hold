@@ -57,5 +57,5 @@ test('portfolio transfer replacement reports partial persistence when rollback f
 
   const result = adapter.replace(replacement)
   assert.equal(result.ok, false)
-  if (!result.ok) assert.equal(result.partialPersistence, true)
+  if (!result.ok) assert.equal(result.failure.persistence, 'partial')
 })

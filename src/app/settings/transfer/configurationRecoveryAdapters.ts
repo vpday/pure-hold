@@ -2,6 +2,7 @@ import type {
   DomainRecoveryAdapter,
   RecoveryAttempt,
 } from '@/app/coordination/compensatedCommit.ts'
+import type { CoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
 import type { CommitIndexGroupsResult } from '@/domains/indices/services/createIndexSettingsCommandModule.ts'
@@ -16,7 +17,7 @@ interface PortfolioRecoveryFacade {
   readonly getPortfolio: () => Portfolio
   readonly replacePortfolio: (portfolio: Portfolio) => {
     readonly ok: boolean
-    readonly error?: unknown
+    readonly failure?: CoordinationFailureFact
   }
 }
 
@@ -24,7 +25,7 @@ interface FundsRecoveryFacade {
   readonly getFundSettings: () => FundSettings
   readonly replaceFundSettings: (settings: FundSettings) => {
     readonly ok: boolean
-    readonly error?: unknown
+    readonly failure?: CoordinationFailureFact
   }
 }
 
@@ -85,6 +86,9 @@ function restoreFundSettings(facade: FundsRecoveryFacade, previous: FundSettings
 function toRecoveryAttempt(result: {
   readonly ok: boolean
   readonly error?: unknown
+  readonly failure?: CoordinationFailureFact
 }): RecoveryAttempt {
-  return result.ok ? { ok: true } : { error: result.error, ok: false }
+  return result.ok
+    ? { ok: true }
+    : { error: result.failure?.primaryError ?? result.error, ok: false }
 }

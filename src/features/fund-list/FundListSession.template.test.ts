@@ -142,7 +142,7 @@ test('uses transaction records as the detail section and keeps status in the led
   assert.doesNotMatch(transactionSectionSource, /<section\b/)
   assert.match(detailDrawerSource, /ledger\.statusText/)
   assert.match(detailDrawerSource, /ledger\.statusTone/)
-  assert.match(detailDrawerSource, /ledger\.partialPersistence/)
+  assert.match(detailDrawerSource, /ledger\.hasPartialPersistence/)
   assert.doesNotMatch(
     detailDrawerSource + transactionSectionSource,
     /账本记录|账本汇总|聚合持仓与收益|持仓对账/,

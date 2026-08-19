@@ -277,7 +277,10 @@ function submitCorrection(): void {
   })
   correctionSubmitting.value = false
   if (isBlockingCoordinationStatus(result.status)) {
-    correctionSubmitError.value = coordinationFailureText(result.status, result.partialPersistence)
+    correctionSubmitError.value = coordinationFailureText(
+      result.status,
+      result.failure?.persistence === 'partial',
+    )
     return
   }
 
@@ -298,7 +301,10 @@ function retryLedger(): void {
   const currentResult = result.results.find(({ fundCode }) => fundCode === code)
   if (currentResult && isBlockingCoordinationStatus(currentResult.status)) {
     MessagePlugin.error(
-      coordinationFailureText(currentResult.status, currentResult.partialPersistence),
+      coordinationFailureText(
+        currentResult.status,
+        currentResult.failure?.persistence === 'partial',
+      ),
     )
     return
   }
@@ -321,9 +327,9 @@ function isBlockingCoordinationStatus(status: PortfolioCoordinationStatus): bool
 
 function coordinationFailureText(
   status: PortfolioCoordinationStatus,
-  partialPersistence = false,
+  hasPartialPersistence = false,
 ): string {
-  const retryText = partialPersistence ? '数据可能已部分持久化，请重试并检查账本' : '请重试'
+  const retryText = hasPartialPersistence ? '数据可能已部分持久化，请重试并检查账本' : '请重试'
   if (status === 'ledger-error') return `账本计算异常，${retryText}`
   if (status === 'portfolio-persistence-failed') return `账本记录保存失败，${retryText}`
   if (status === 'holding-sync-failed') return `持仓同步失败，${retryText}`

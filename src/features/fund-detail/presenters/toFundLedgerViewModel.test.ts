@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { createCoordinationFailureFact } from '@/app/coordination/coordinationFailure.ts'
 import type {
   FieldValue,
   PortfolioAdjustmentEvent,
@@ -215,7 +216,6 @@ test('presents aggregate position and stable coordination status', () => {
     fundCode,
     holding: null,
     ledger: { costAmount: actual(98000), fundCode, units: actual(98) },
-    partialPersistence: false,
     portfolio: createEmptyPortfolio(),
     retryable: false,
     status: 'synced',
@@ -238,7 +238,6 @@ test('keeps correction available while exact facts are pending', () => {
     fundCode,
     holding: null,
     ledger: { costAmount: unknown(), fundCode, units: unknown() },
-    partialPersistence: false,
     portfolio: createEmptyPortfolio(),
     retryable: true,
     status: 'pending-exact-data',
@@ -260,7 +259,7 @@ test('does not present a ledger error as a synchronized projection', () => {
     fundCode,
     holding: null,
     ledger: null,
-    partialPersistence: true,
+    failure: createCoordinationFailureFact('partial'),
     portfolio: createEmptyPortfolio(),
     retryable: true,
     status: 'ledger-error',
@@ -270,6 +269,6 @@ test('does not present a ledger error as a synchronized projection', () => {
   assert.equal(model.status, 'ledger-error')
   assert.equal(model.statusText, '账本异常')
   assert.equal(model.statusTone, 'error')
-  assert.equal(model.partialPersistence, true)
+  assert.equal(model.hasPartialPersistence, true)
   assert.equal(model.position, null)
 })

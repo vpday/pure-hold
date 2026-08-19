@@ -36,7 +36,7 @@ try {
   const startupRebuild = portfolioCoordinator.rebuildHoldingProjections({
     asOfDate: todayInShanghai(),
   })
-  if (startupRebuild.status !== 'synced' || startupRebuild.partialPersistence) {
+  if (startupRebuild.status !== 'synced' || startupRebuild.failure?.persistence === 'partial') {
     console.warn('启动账本持仓重建未完成。', startupRebuild)
   }
 } catch (error) {

@@ -464,7 +464,6 @@ test('uses the first successful save Shanghai date and never invents a holding',
   assert.deepEqual(empty, {
     fundCode: '000002',
     ok: false,
-    partialPersistence: false,
     portfolio: emptyPortfolio(),
     reason: 'missing-fund-holding',
     retryable: false,
@@ -571,7 +570,7 @@ test('returns a retryable, idempotent result when automatic ledger persistence f
   if (first.ok || retry.ok) return
   assert.equal(first.reason, 'portfolio-persistence-failed')
   assert.equal(first.retryable, true)
-  assert.equal(first.partialPersistence, false)
+  assert.equal(first.failure?.persistence, 'unchanged')
   assert.deepEqual(first.portfolio, emptyPortfolio())
   assert.deepEqual(retry.portfolio, emptyPortfolio())
   assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
@@ -643,7 +642,7 @@ test('commitEvent and deleteEvent capture both domain snapshots before any write
     asOfDate: '2026-08-14',
     event: confirmedBuyEvent('000002', 'capture-commit'),
   })
-  assert.equal(commitResult.error, undefined)
+  assert.equal(commitResult.failure, undefined)
   assertSnapshotsBeforeFirstWrite(commitOperations)
 
   const deleteOperations: string[] = []
@@ -653,7 +652,7 @@ test('commitEvent and deleteEvent capture both domain snapshots before any write
     { operationLog: deleteOperations },
   )
   const deleteResult = deleted.coordinator.deleteEvent(initialHoldingEventId('000001'))
-  assert.equal(deleteResult.error, undefined)
+  assert.equal(deleteResult.failure, undefined)
   assertSnapshotsBeforeFirstWrite(deleteOperations)
 })
 
@@ -675,7 +674,7 @@ test('restores portfolio when Funds deletion fails and reports old state', () =>
   assert.equal(result.ok, false)
   if (result.ok) return
   assert.equal(result.reason, 'funds-persistence-failed')
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure.persistence, 'restored')
   assert.deepEqual(
     portfolio
       .getPortfolio()
@@ -711,7 +710,7 @@ test('returns a verifiable partial-persistence result when rollback also fails',
   const result = coordinator.confirmFundDeletion(prepared.preview)
   assert.equal(result.ok, false)
   if (result.ok) return
-  assert.equal(result.partialPersistence, true)
+  assert.equal(result.failure.persistence, 'partial')
   assert.equal(result.portfolio.events.length, 0)
   assert.equal(result.portfolio.fundCodes.includes('000001'), true)
 })
@@ -730,7 +729,6 @@ test('commits a correction through one seam and projects exact total cost cents'
   })
 
   assert.equal(result.status, 'synced')
-  assert.equal(result.partialPersistence, false)
   assert.equal(result.holding?.units, 120)
   assert.equal(result.holding?.totalCostCents, 15001)
   assert.deepEqual(
@@ -792,8 +790,8 @@ test('keeps a calculation error as a domain result without compensation', () => 
 
   assert.equal(result.status, 'ledger-error')
   assert.equal(result.retryable, true)
-  assert.equal(result.partialPersistence, false)
-  assert.equal(result.error, calculationError)
+  assert.equal(result.failure?.persistence, 'unchanged')
+  assert.equal(result.failure?.primaryError, calculationError)
   assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 0)
 })
 
@@ -857,9 +855,13 @@ test('rolls back portfolio facts when projection persistence fails', () => {
 
   assert.equal(result.status, 'holding-sync-failed')
   assert.equal(result.retryable, true)
-  assert.equal(result.error instanceof Error, true)
-  assert.equal((result.error as Error).message, 'projection quota exceeded')
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.primaryError instanceof Error, true)
+  const primaryError = result.failure?.primaryError
+  assert.equal(
+    primaryError instanceof Error ? primaryError.message : undefined,
+    'projection quota exceeded',
+  )
+  assert.equal(result.failure?.persistence, 'restored')
   assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
 })
 
@@ -881,7 +883,7 @@ test('restores Portfolio before Funds after projection failure', () => {
     totalCostCents: 15000,
   })
 
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   const projectionFailure = operations.indexOf('funds:projection')
   const recovery = operations.slice(projectionFailure + 1)
   const fundsRestore = recovery.indexOf('funds:restore')
@@ -911,8 +913,8 @@ test('continues Funds recovery after Portfolio recovery fails and keeps the old 
     totalCostCents: 15000,
   })
 
-  assert.equal(result.partialPersistence, true)
-  assert.equal('failure' in result, false)
+  assert.equal(result.failure?.persistence, 'partial')
+  assert.equal(result.failure?.recoveryErrors.length, 2)
   assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 1)
 })
 
@@ -930,7 +932,7 @@ test('writes metadata in Funds first and restores Portfolio then Funds when ledg
   })
 
   assert.equal(result.status, 'portfolio-persistence-failed')
-  assert.equal(result.partialPersistence, false)
+  assert.equal(result.failure?.persistence, 'restored')
   const metadata = operations.indexOf('funds:metadata')
   const portfolioWrite = operations.indexOf('portfolio:write')
   const fundsRestore = operations.indexOf('funds:restore')
