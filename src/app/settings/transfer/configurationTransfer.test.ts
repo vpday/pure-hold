@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   createPortfolioCoordinator,
   type FundsPortfolioFacade,
+  type RebuildHoldingProjectionsResult,
 } from '@/app/portfolio/portfolioCoordinator.ts'
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
@@ -640,4 +641,654 @@ test('configuration transfer rejects incompatible outer packages', () => {
     message: '配置文件版本或格式不兼容',
     ok: false,
   })
+})
+
+test('configuration restore captures every selected snapshot before ordered writes', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  let fundsCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      events.push('rebuild')
+      return {
+        partialPersistence: false,
+        portfolio,
+        results: [],
+        retryable: false,
+        status: 'synced' as const,
+      }
+    },
+    replaceFundSettings: () => {
+      events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(events, [
+    'capture:index',
+    'capture:portfolio',
+    'capture:funds',
+    'write:index',
+    'write:portfolio',
+    'write:funds',
+    'rebuild',
+  ])
+})
+
+test('configuration restore stops after an index write failure without compensation', () => {
+  const events: string[] = []
+  const indexError = new Error('index quota exceeded')
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: () => {
+      events.push('write:index')
+      return { error: indexError, ok: false, reason: 'persistence-failed' }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      events.push('rebuild')
+      return {
+        partialPersistence: false,
+        portfolio,
+        results: [],
+        retryable: false,
+        status: 'synced' as const,
+      }
+    },
+    replaceFundSettings: () => {
+      events.push('write:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push('write:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error, indexError)
+  assert.equal(result.partialPersistence, false)
+  assert.equal(result.reason, '指数配置保存失败')
+  assert.deepEqual(events, ['capture:index', 'capture:portfolio', 'capture:funds', 'write:index'])
+})
+
+test('configuration restore only restores the earlier index after an internally recovered portfolio failure', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  const portfolioError = new Error('portfolio write failed')
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      events.push('rebuild')
+      return {
+        partialPersistence: false,
+        portfolio,
+        results: [],
+        retryable: false,
+        status: 'synced' as const,
+      }
+    },
+    replaceFundSettings: () => {
+      events.push('write:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return portfolioCalls === 1
+        ? {
+            error: portfolioError,
+            ok: false,
+            partialPersistence: false,
+            reason: 'persistence-failed',
+          }
+        : { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error, portfolioError)
+  assert.equal(result.partialPersistence, false)
+  assert.equal(result.reason, '投资账本保存失败')
+  assert.deepEqual(events, [
+    'capture:index',
+    'capture:portfolio',
+    'capture:funds',
+    'write:index',
+    'write:portfolio',
+    'restore:index',
+  ])
+})
+
+test('configuration restore compensates a partial portfolio failure before the earlier index', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => ({
+      partialPersistence: false,
+      portfolio,
+      results: [],
+      retryable: false,
+      status: 'synced' as const,
+    }),
+    replaceFundSettings: () => ({ ok: true }),
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return portfolioCalls === 1
+        ? {
+            error: new Error('portfolio partial'),
+            ok: false,
+            partialPersistence: true,
+            reason: 'persistence-failed',
+          }
+        : { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.partialPersistence, false)
+  assert.deepEqual(events, [
+    'capture:index',
+    'capture:portfolio',
+    'capture:funds',
+    'write:index',
+    'write:portfolio',
+    'restore:portfolio',
+    'restore:index',
+  ])
+})
+
+test('configuration restore compensates a normal funds failure with portfolio then index', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  let fundsCalls = 0
+  const fundsError = new Error('fund settings write failed')
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => ({
+      partialPersistence: false,
+      portfolio,
+      results: [],
+      retryable: false,
+      status: 'synced' as const,
+    }),
+    replaceFundSettings: () => {
+      events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
+      return fundsCalls === 1
+        ? { error: fundsError, ok: false, partialPersistence: false, reason: 'persistence-failed' }
+        : { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error, fundsError)
+  assert.equal(result.partialPersistence, false)
+  assert.equal(result.reason, '基金配置保存失败，已恢复原指数配置')
+  assert.deepEqual(events, [
+    'capture:index',
+    'capture:portfolio',
+    'capture:funds',
+    'write:index',
+    'write:portfolio',
+    'write:funds',
+    'restore:portfolio',
+    'restore:index',
+  ])
+})
+
+test('configuration restore compensates a partial funds failure with funds then portfolio then index', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  let fundsCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => ({
+      partialPersistence: false,
+      portfolio,
+      results: [],
+      retryable: false,
+      status: 'synced' as const,
+    }),
+    replaceFundSettings: () => {
+      events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
+      return fundsCalls === 1
+        ? {
+            error: new Error('fund settings partial'),
+            ok: false,
+            partialPersistence: true,
+            reason: 'persistence-failed',
+          }
+        : { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.partialPersistence, false)
+  assert.deepEqual(events, [
+    'capture:index',
+    'capture:portfolio',
+    'capture:funds',
+    'write:index',
+    'write:portfolio',
+    'write:funds',
+    'restore:funds',
+    'restore:portfolio',
+    'restore:index',
+  ])
+})
+
+function runRebuildFailureScenario(
+  rebuildHoldingProjections: () => RebuildHoldingProjectionsResult,
+) {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  let fundsCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      events.push('rebuild')
+      return rebuildHoldingProjections()
+    },
+    replaceFundSettings: () => {
+      events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  return {
+    events,
+    result: coordinator.commitImport(
+      createConfigurationTransferPackage({
+        fundSettings: exactFundSettings,
+        indexGroups: defaultIndexGroups,
+        portfolio,
+      }),
+      { funds: true, index: true, portfolio: true },
+    ),
+  }
+}
+
+test('configuration restore uses portfolio then funds then index for pending, failed, and thrown rebuilds', () => {
+  const pending = runRebuildFailureScenario(() => ({
+    partialPersistence: false,
+    portfolio,
+    results: [],
+    retryable: true,
+    status: 'pending',
+  }))
+  assert.equal(pending.result.ok, false)
+  if (!pending.result.ok) {
+    assert.equal(pending.result.rebuild?.status, 'pending')
+    assert.equal(pending.result.partialPersistence, false)
+    assert.equal(pending.result.reason, '投资账本恢复后持仓信息仍待确认或精确数据')
+  }
+  assert.deepEqual(pending.events.slice(-3), [
+    'restore:portfolio',
+    'restore:funds',
+    'restore:index',
+  ])
+
+  const failed = runRebuildFailureScenario(() => ({
+    partialPersistence: false,
+    portfolio,
+    results: [],
+    retryable: true,
+    status: 'failed',
+  }))
+  assert.equal(failed.result.ok, false)
+  if (!failed.result.ok) {
+    assert.equal(failed.result.rebuild?.status, 'failed')
+    assert.equal(failed.result.partialPersistence, false)
+    assert.equal(failed.result.reason, '投资账本恢复后持仓信息重建失败')
+  }
+  assert.deepEqual(failed.events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
+
+  const rebuildError = new Error('rebuild threw')
+  const thrown = runRebuildFailureScenario(() => {
+    throw rebuildError
+  })
+  assert.equal(thrown.result.ok, false)
+  if (!thrown.result.ok) {
+    assert.equal(thrown.result.error, rebuildError)
+    assert.equal(thrown.result.rebuild, undefined)
+    assert.equal(thrown.result.partialPersistence, false)
+  }
+  assert.deepEqual(thrown.events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
+})
+
+test('configuration restore continues after one recovery failure and reports partial persistence', () => {
+  const events: string[] = []
+  let indexCalls = 0
+  let portfolioCalls = 0
+  let fundsCalls = 0
+  const rebuildError = new Error('rebuild threw')
+  const fundsRestoreError = new Error('fund restore failed')
+  const indexRestoreError = new Error('index restore failed')
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: (groups) => {
+      events.push(indexCalls++ === 0 ? 'write:index' : 'restore:index')
+      return indexCalls === 2
+        ? { error: indexRestoreError, ok: false, reason: 'persistence-failed' }
+        : { groups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => {
+      events.push('capture:index')
+      return defaultIndexGroups
+    },
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      events.push('rebuild')
+      throw rebuildError
+    },
+    replaceFundSettings: () => {
+      events.push(fundsCalls++ === 0 ? 'write:funds' : 'restore:funds')
+      return fundsCalls === 2
+        ? { error: fundsRestoreError, ok: false, reason: 'persistence-failed' }
+        : { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({
+      fundSettings: exactFundSettings,
+      indexGroups: defaultIndexGroups,
+      portfolio,
+    }),
+    { funds: true, index: true, portfolio: true },
+  )
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.error, rebuildError)
+  assert.equal(result.partialPersistence, true)
+  assert.deepEqual(events.slice(-3), ['restore:portfolio', 'restore:funds', 'restore:index'])
+})
+
+test('configuration restore of Portfolio alone captures and restores the Funds projection', () => {
+  const events: string[] = []
+  let fundReads = 0
+  let portfolioCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: () => {
+      events.push('unexpected:index')
+      return { groups: defaultIndexGroups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push(fundReads++ === 0 ? 'validate:funds' : 'capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => defaultIndexGroups,
+    getPortfolio: () => {
+      events.push('capture:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => ({
+      partialPersistence: false,
+      portfolio,
+      results: [],
+      retryable: true,
+      status: 'failed' as const,
+    }),
+    replaceFundSettings: () => {
+      events.push('restore:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push(portfolioCalls++ === 0 ? 'write:portfolio' : 'restore:portfolio')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(createConfigurationTransferPackage({ portfolio }), {
+    funds: false,
+    index: false,
+    portfolio: true,
+  })
+
+  assert.equal(result.ok, false)
+  if (result.ok) return
+  assert.equal(result.partialPersistence, false)
+  assert.deepEqual(events, [
+    'validate:funds',
+    'capture:portfolio',
+    'capture:funds',
+    'write:portfolio',
+    'restore:portfolio',
+    'restore:funds',
+  ])
+})
+
+test('configuration restore of FundSettings alone never runs a rebuild', () => {
+  const events: string[] = []
+  let rebuildCalls = 0
+  const coordinator = createConfigurationTransferCoordinator({
+    commitIndexGroups: () => {
+      events.push('unexpected:index')
+      return { groups: defaultIndexGroups, ok: true }
+    },
+    getFundSettings: () => {
+      events.push('capture:funds')
+      return exactFundSettings
+    },
+    getIndexGroups: () => defaultIndexGroups,
+    getPortfolio: () => {
+      events.push('unexpected:portfolio')
+      return portfolio
+    },
+    rebuildHoldingProjections: () => {
+      rebuildCalls += 1
+      throw new Error('rebuild must not run')
+    },
+    replaceFundSettings: () => {
+      events.push('write:funds')
+      return { ok: true }
+    },
+    replacePortfolio: () => {
+      events.push('unexpected:portfolio-write')
+      return { ok: true }
+    },
+  })
+
+  const result = coordinator.commitImport(
+    createConfigurationTransferPackage({ fundSettings: exactFundSettings }),
+    { funds: true, index: false, portfolio: false },
+  )
+
+  assert.deepEqual(result, { ok: true })
+  assert.equal(rebuildCalls, 0)
+  assert.deepEqual(events, ['capture:funds', 'write:funds'])
 })

@@ -1,9 +1,21 @@
+import {
+  defineCompensatedStage,
+  runCompensatedCommit,
+  type CompensatedStage,
+  type CompensatedStageAttempt,
+} from '@/app/coordination/compensatedCommit.ts'
+import type { CoordinationDomain } from '@/app/coordination/coordinationFailure.ts'
 import type { RebuildHoldingProjectionsResult } from '@/app/portfolio/portfolioCoordinator.ts'
 import type { IndexGroupDefinition } from '@/domains/indices/models/indexGroupDefinition.ts'
 import type { CommitIndexGroupsResult } from '@/domains/indices/services/createIndexSettingsCommandModule.ts'
 import type { FundSettings } from '@/domains/funds/models/fundSettings.ts'
 import type { Portfolio } from '@/domains/portfolio/models/index.ts'
 import type { ConfigurationTransferPackage } from './configurationTransfer.ts'
+import {
+  createFundsRecoveryAdapter,
+  createIndexRecoveryAdapter,
+  createPortfolioRecoveryAdapter,
+} from './configurationRecoveryAdapters.ts'
 import type { PortfolioTransferResult } from './portfolioTransfer.ts'
 
 export interface ConfigurationTransferStoreAdapters {
@@ -41,6 +53,13 @@ export type ConfigurationTransferCommitResult =
       readonly partialPersistence: boolean
     }
 
+type ConfigurationRecoveryRoute =
+  | 'none'
+  | 'index-only'
+  | 'portfolio-index'
+  | 'funds-portfolio-index'
+  | 'portfolio-funds-index'
+
 export function createConfigurationTransferCoordinator(
   adapters: ConfigurationTransferStoreAdapters,
 ) {
@@ -71,13 +90,11 @@ export function createConfigurationTransferCoordinator(
       return { ok: false, partialPersistence: false, reason: '投资账本恢复后无法重建持仓信息' }
     }
 
-    const originalIndexGroups = selection.index ? adapters.getIndexGroups() : undefined
-    const originalFundSettings =
-      selection.funds || portfolioSelected ? adapters.getFundSettings() : undefined
-    const originalPortfolio = portfolioSelected ? adapters.getPortfolio!() : undefined
+    const metadataFundSettings =
+      portfolioSelected && !selection.funds ? adapters.getFundSettings() : undefined
     if (portfolioSelected) {
       const availableFundCodes = new Set(
-        (selection.funds ? packageValue.funds! : originalFundSettings!).funds.map(
+        (selection.funds ? packageValue.funds! : metadataFundSettings!).funds.map(
           ({ code }) => code,
         ),
       )
@@ -93,120 +110,142 @@ export function createConfigurationTransferCoordinator(
       }
     }
 
+    const activeDomains: CoordinationDomain[] = []
+    if (selection.index) activeDomains.push('index')
+    if (portfolioSelected) activeDomains.push('portfolio')
+    if (selection.funds || portfolioSelected) activeDomains.push('funds')
+
+    const recoveryRoutes = createRecoveryRoutes(activeDomains)
+    const stages: CompensatedStage<ConfigurationRecoveryRoute>[] = []
+    let rebuild: RebuildHoldingProjectionsResult | undefined
+    let failureReason = '配置恢复失败'
+    let fundsWriteFailed = false
+
     if (selection.index) {
-      const result = commitIndexGroups(packageValue.index!.groups)
-      if (!result.ok) {
-        return {
-          ok: false,
-          ...(result.reason === 'persistence-failed' ? { error: result.error } : {}),
-          partialPersistence: false,
-          reason: result.reason === 'invalid-groups' ? '指数配置内容无效' : '指数配置保存失败',
-        }
-      }
+      const indexAdapter = createIndexRecoveryAdapter({
+        commitIndexGroups: adapters.commitIndexGroups,
+        getIndexGroups: adapters.getIndexGroups,
+      })
+      stages.push(
+        defineCompensatedStage<readonly IndexGroupDefinition[], ConfigurationRecoveryRoute>({
+          adapter: indexAdapter,
+          domain: 'index',
+          execute: () => {
+            const result = commitIndexGroups(packageValue.index!.groups)
+            if (result.ok) return { ok: true }
+            failureReason =
+              result.reason === 'invalid-groups' ? '指数配置内容无效' : '指数配置保存失败'
+            return stageFailure(
+              result.reason === 'persistence-failed' ? result.error : undefined,
+              'not-needed',
+              'none',
+            )
+          },
+          unexpectedRecoveryRoute: 'index-only',
+        }),
+      )
     }
 
     if (portfolioSelected) {
-      const result = replacePortfolio(packageValue.portfolio!)
-      if (!result.ok) {
-        const portfolioRollback =
-          result.partialPersistence && originalPortfolio !== undefined
-            ? replacePortfolio(originalPortfolio).ok
-            : true
-        const rollback = rollbackSnapshot({
-          funds: false,
-          index: selection.index,
-          portfolio: false,
-        })
-        return {
-          ...(result.error !== undefined ? { error: result.error } : {}),
-          ok: false,
-          partialPersistence: (result.partialPersistence && !portfolioRollback) || !rollback,
-          reason: portfolioFailureReason(result),
-        }
-      }
-    }
-
-    if (selection.funds) {
-      const result = replaceFundSettings(packageValue.funds!)
-      if (!result.ok) {
-        const fundsRollback =
-          result.partialPersistence && originalFundSettings !== undefined
-            ? replaceFundSettings(originalFundSettings).ok
-            : true
-        const rollback = rollbackSnapshot({
-          funds: false,
-          index: selection.index,
-          portfolio: portfolioSelected,
-        })
-        return {
-          ...(result.error !== undefined ? { error: result.error } : {}),
-          ok: false,
-          partialPersistence: (result.partialPersistence && !fundsRollback) || !rollback,
-          reason:
-            selection.index && rollback
-              ? '基金配置保存失败，已恢复原指数配置'
-              : selection.index
-                ? '基金配置保存失败，指数配置可能已部分写入'
-                : '基金配置保存失败',
-        }
-      }
-    }
-
-    if (!portfolioSelected) return { ok: true }
-
-    let rebuild: RebuildHoldingProjectionsResult
-    try {
-      rebuild = adapters.rebuildHoldingProjections!()
-    } catch (error) {
-      const rollback = rollbackSnapshot({
-        funds: true,
-        index: selection.index,
-        portfolio: true,
+      const portfolioAdapter = createPortfolioRecoveryAdapter({
+        getPortfolio: adapters.getPortfolio!,
+        replacePortfolio: adapters.replacePortfolio!,
       })
-      return {
-        error,
-        ok: false,
-        partialPersistence: !rollback,
-        reason: '投资账本恢复后持仓信息重建失败',
-      }
+      stages.push(
+        defineCompensatedStage<Portfolio, ConfigurationRecoveryRoute>({
+          adapter: portfolioAdapter,
+          domain: 'portfolio',
+          execute: () => {
+            const result = replacePortfolio(packageValue.portfolio!)
+            if (result.ok) return { ok: true }
+            failureReason = portfolioFailureReason(result)
+            const partial = result.partialPersistence
+            return stageFailure(
+              result.error,
+              partial ? 'required' : 'not-needed',
+              partial ? 'portfolio-index' : 'index-only',
+            )
+          },
+          unexpectedRecoveryRoute: 'portfolio-index',
+        }),
+      )
     }
-    if (rebuild.status !== 'synced' || rebuild.partialPersistence) {
-      const rebuildError = rebuild.results.find(({ error }) => error !== undefined)?.error
-      const rollback = rollbackSnapshot({
-        funds: true,
-        index: selection.index,
-        portfolio: true,
+
+    if (selection.funds || portfolioSelected) {
+      const fundsAdapter = createFundsRecoveryAdapter({
+        getFundSettings: adapters.getFundSettings,
+        replaceFundSettings: adapters.replaceFundSettings,
       })
-      return {
-        ...(rebuildError !== undefined ? { error: rebuildError } : {}),
-        ok: false,
-        partialPersistence: !rollback,
-        rebuild,
-        reason:
-          rebuild.status === 'pending'
-            ? '投资账本恢复后持仓信息仍待确认或精确数据'
-            : '投资账本恢复后持仓信息重建失败',
-      }
+      stages.push(
+        defineCompensatedStage<FundSettings, ConfigurationRecoveryRoute>({
+          adapter: fundsAdapter,
+          domain: 'funds',
+          execute: () => {
+            if (selection.funds) {
+              const result = replaceFundSettings(packageValue.funds!)
+              if (!result.ok) {
+                fundsWriteFailed = true
+                const partial = result.partialPersistence === true
+                return stageFailure(
+                  result.error,
+                  partial ? 'required' : 'not-needed',
+                  partial ? 'funds-portfolio-index' : 'portfolio-index',
+                )
+              }
+            }
+
+            if (!portfolioSelected) return { ok: true }
+
+            try {
+              rebuild = adapters.rebuildHoldingProjections!()
+            } catch (error) {
+              failureReason = '投资账本恢复后持仓信息重建失败'
+              return stageFailure(error, 'required', 'portfolio-funds-index')
+            }
+            if (rebuild.status !== 'synced' || rebuild.partialPersistence) {
+              const rebuildError = rebuild.results.find(({ error }) => error !== undefined)?.error
+              failureReason =
+                rebuild.status === 'pending'
+                  ? '投资账本恢复后持仓信息仍待确认或精确数据'
+                  : '投资账本恢复后持仓信息重建失败'
+              return stageFailure(rebuildError, 'required', 'portfolio-funds-index')
+            }
+
+            return { ok: true }
+          },
+          unexpectedRecoveryRoute: 'portfolio-funds-index',
+        }),
+      )
     }
 
-    return { ok: true, rebuild }
+    const result = runCompensatedCommit({ recoveryRoutes, stages })
+    if (result.ok) return portfolioSelected ? { ok: true, rebuild } : { ok: true }
 
-    function rollbackSnapshot(input: {
-      readonly funds: boolean
-      readonly index: boolean
-      readonly portfolio: boolean
-    }): boolean {
-      let ok = true
-      if (input.portfolio && originalPortfolio !== undefined) {
-        ok = replacePortfolio(originalPortfolio).ok && ok
+    const reason =
+      fundsWriteFailed && selection.index
+        ? result.failure.persistence === 'restored'
+          ? '基金配置保存失败，已恢复原指数配置'
+          : '基金配置保存失败，指数配置可能已部分写入'
+        : failureReason
+    return {
+      ...(result.failure.primaryError !== undefined ? { error: result.failure.primaryError } : {}),
+      ...(rebuild !== undefined ? { rebuild } : {}),
+      ok: false,
+      partialPersistence: result.failure.persistence === 'partial',
+      reason,
+    }
+
+    function stageFailure(
+      primaryError: unknown,
+      recovery: 'not-needed' | 'required',
+      recoveryRoute: ConfigurationRecoveryRoute,
+    ): CompensatedStageAttempt<ConfigurationRecoveryRoute> {
+      return {
+        ...(primaryError !== undefined ? { primaryError } : {}),
+        ok: false,
+        recovery,
+        recoveryRoute,
       }
-      if (input.funds && originalFundSettings !== undefined) {
-        ok = replaceFundSettings(originalFundSettings).ok && ok
-      }
-      if (input.index && originalIndexGroups !== undefined) {
-        ok = commitIndexGroups(originalIndexGroups).ok && ok
-      }
-      return ok
     }
 
     function commitIndexGroups(groups: readonly IndexGroupDefinition[]): CommitIndexGroupsResult {
@@ -235,6 +274,21 @@ export function createConfigurationTransferCoordinator(
   }
 
   return { commitImport }
+}
+
+function createRecoveryRoutes(
+  activeDomains: readonly CoordinationDomain[],
+): Readonly<Record<ConfigurationRecoveryRoute, readonly CoordinationDomain[]>> {
+  const active = new Set(activeDomains)
+  const filter = (route: readonly CoordinationDomain[]) =>
+    route.filter((domain) => active.has(domain))
+  return {
+    'funds-portfolio-index': filter(['funds', 'portfolio', 'index']),
+    'index-only': filter(['index']),
+    none: [],
+    'portfolio-funds-index': filter(['portfolio', 'funds', 'index']),
+    'portfolio-index': filter(['portfolio', 'index']),
+  }
 }
 
 function portfolioFundCodes(portfolio: Portfolio): string[] {
