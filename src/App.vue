@@ -32,6 +32,17 @@ const portfolioCoordinator = createPortfolioCoordinator({
   portfolio,
 })
 
+try {
+  const startupRebuild = portfolioCoordinator.rebuildHoldingProjections({
+    asOfDate: todayInShanghai(),
+  })
+  if (startupRebuild.status !== 'synced' || startupRebuild.partialPersistence) {
+    console.warn('启动持仓投影重建未完成。', startupRebuild)
+  }
+} catch (error) {
+  console.warn('启动持仓投影重建失败。', error)
+}
+
 function ensureFundLedger(fundCode: string): EnsureFundLedgerResult {
   return portfolioCoordinator.ensureFundLedger({ fundCode })
 }
@@ -46,6 +57,17 @@ async function refreshAllData(): Promise<void> {
   } finally {
     globalRefreshing.value = false
   }
+}
+
+function todayInShanghai(): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 </script>
 
@@ -126,7 +148,11 @@ async function refreshAllData(): Promise<void> {
       </t-footer>
     </t-layout>
     <FundSearchEntry ref="fundSearchEntry" :ensure-fund-ledger="ensureFundLedger" />
-    <SettingsEntry ref="settingsEntry" :portfolio="portfolio" />
+    <SettingsEntry
+      ref="settingsEntry"
+      :portfolio="portfolio"
+      :portfolio-coordinator="portfolioCoordinator"
+    />
   </t-config-provider>
 </template>
 

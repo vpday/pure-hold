@@ -9,6 +9,7 @@ import {
 } from '@/app/settings/transfer/configurationTransfer.ts'
 import { createConfigurationTransferCoordinator } from '@/app/settings/transfer/configurationTransferCoordinator.ts'
 import { createPortfolioTransferAdapter } from '@/app/settings/transfer/portfolioTransfer.ts'
+import type { PortfolioCoordinator } from '@/app/portfolio/portfolioCoordinator.ts'
 import { useFundsStore } from '@/domains/funds/stores/useFundsStore.ts'
 import { useIndexQuotesStore } from '@/domains/indices/stores/useIndexQuotesStore.ts'
 import type { PortfolioStore } from '@/domains/portfolio/stores/index.ts'
@@ -20,7 +21,10 @@ import type {
   SettingsImportState,
 } from './models/settingsViewModel.ts'
 
-const props = defineProps<{ portfolio: PortfolioStore }>()
+const props = defineProps<{
+  portfolio: PortfolioStore
+  portfolioCoordinator: PortfolioCoordinator
+}>()
 const appSettingsStore = useAppSettingsStore()
 const indexStore = useIndexQuotesStore()
 const fundStore = useFundsStore()
@@ -60,6 +64,8 @@ const transferCoordinator = createConfigurationTransferCoordinator({
   getPortfolio: props.portfolio.getPortfolio,
   replaceFundSettings: fundStore.replaceSettingsPersisted,
   replacePortfolio: portfolioTransfer.replace,
+  rebuildHoldingProjections: () =>
+    props.portfolioCoordinator.rebuildHoldingProjections({ asOfDate: todayInShanghai() }),
 })
 
 function open(): void {
@@ -193,7 +199,11 @@ function commitImport(): void {
   if (!state) return
   const result = transferCoordinator.commitImport(state.package, selection.value)
   if (!result.ok) {
-    MessagePlugin.error(result.reason)
+    MessagePlugin.error(
+      result.partialPersistence
+        ? `${result.reason}，数据可能已部分持久化，请检查后重试`
+        : result.reason,
+    )
     return
   }
 
@@ -207,6 +217,17 @@ function commitImport(): void {
 }
 
 defineExpose({ open })
+
+function todayInShanghai(): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
 </script>
 
 <template>
