@@ -137,7 +137,7 @@ defineExpose({ validate })
       v-if="holdingFactsReadonly"
       class="mb-4"
       theme="info"
-      message="该基金已建账，份额和总成本由成交记录投影，只能通过交易或手工修正改变。"
+      message="该基金已建账，份额和总成本由成交记录自动计算，只能通过交易或手工修正改变。"
     />
     <t-form-item v-if="groupOptions" label="自定义分组">
       <t-select

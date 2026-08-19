@@ -21,5 +21,5 @@ test('runs one startup projection rebuild after the initial stores are assembled
   assert.ok(rebuildIndex > coordinatorIndex)
   assert.equal(rebuildCalls.length, 1)
   assert.doesNotMatch(refreshFunction, /rebuildHoldingProjections/)
-  assert.match(appSource, /console\.warn\('启动持仓投影重建未完成。', startupRebuild\)/)
+  assert.match(appSource, /console\.warn\('启动账本持仓重建未完成。', startupRebuild\)/)
 })

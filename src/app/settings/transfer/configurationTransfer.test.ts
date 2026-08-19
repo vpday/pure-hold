@@ -197,7 +197,18 @@ test('configuration transfer round trips both domains without refresh preference
   assert.equal(result.ok, true)
   if (result.ok) {
     assert.deepEqual(result.package.index?.groups, defaultIndexGroups)
-    assert.deepEqual(result.package.funds, fundSettings)
+    assert.deepEqual(result.package.funds, {
+      ...fundSettings,
+      holdingsByCode: {
+        '000001': {
+          code: '000001',
+          dividendMode: 'reinvest',
+          purchaseDate: '2020-01-01',
+          totalCostCents: 247,
+          units: 2,
+        },
+      },
+    })
     assert.deepEqual(result.package.portfolio, portfolio)
     assert.deepEqual(result.warnings, [])
     assert.deepEqual(result.sectionErrors, [])

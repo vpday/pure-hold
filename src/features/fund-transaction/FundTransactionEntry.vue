@@ -532,7 +532,7 @@ function isBlockingCoordinationStatus(status: PortfolioCoordinationStatus): bool
 function coordinationStatusText(status: PortfolioCoordinationStatus): string {
   if (status === 'pending-confirmation') return '交易记录已保存，等待确认事实后同步持仓。'
   if (status === 'pending-exact-data') return '交易记录已保存，精确数据待补全。'
-  if (status === 'ledger-error') return '账本异常，交易事实未能完成投影，请重试。'
+  if (status === 'ledger-error') return '账本异常，交易记录未能更新当前持仓，请重试。'
   if (status === 'holding-sync-failed') return '持仓同步失败，请重试。'
   return '交易记录已保存，持仓已同步。'
 }
@@ -541,7 +541,7 @@ function coordinationFailureText(
   status: PortfolioCoordinationStatus,
   partialPersistence: boolean,
 ): string {
-  if (status === 'ledger-error') return '账本异常，交易事实未能完成投影，请重试。'
+  if (status === 'ledger-error') return '账本异常，交易记录未能更新当前持仓，请重试。'
   if (status === 'holding-sync-failed') {
     return partialPersistence
       ? '持仓同步失败，数据可能已部分持久化，请重试并检查账本。'
