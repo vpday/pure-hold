@@ -186,6 +186,41 @@ test('fund addition persists atomically and refreshes only the new funds', async
   })
 })
 
+test('fund addition accepts valid four-decimal units with floating-point noise', async () => {
+  await withEnvironment(async () => {
+    saveFundSettings(createTestFundSettings())
+    setActivePinia(createPinia())
+    const store = useFundsStore()
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ data: [], errorCode: 0, success: true, totalCount: 0 }), {
+        status: 200,
+      })
+    try {
+      assert.deepEqual(
+        store.addFunds([
+          {
+            code: '014674',
+            holding: {
+              code: '014674',
+              dividendMode: 'cash',
+              purchaseDate: '2025-08-21',
+              totalCostCents: 701326,
+              units: 10573.29,
+            },
+            name: '富国中证港股通互联网ETF发起式联接C',
+          },
+        ]),
+        {},
+      )
+      assert.equal(store.holdingsByCode['014674']?.units, 10573.29)
+    } finally {
+      globalThis.fetch = originalFetch
+      store.$dispose()
+    }
+  })
+})
+
 test('single holding update covers replacement, first creation and failures', async () => {
   await withEnvironment(async (storage) => {
     saveFundSettings(createTestFundSettings())

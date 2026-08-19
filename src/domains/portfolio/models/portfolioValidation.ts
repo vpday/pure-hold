@@ -468,8 +468,7 @@ function validateNumber(
   if (typeof value !== 'number' || !Number.isFinite(value) || (!allowNegative && value < 0)) {
     throw new TypeError(`${label} must be a non-negative number`)
   }
-  const scale = 10 ** maxDecimals
-  if (Math.abs(value * scale - Math.round(value * scale)) > 1e-8) {
+  if (Number(value.toFixed(maxDecimals)) !== value) {
     throw new TypeError(`${label} has invalid precision`)
   }
   if (maximum !== undefined && value > maximum) throw new TypeError(`${label} is out of range`)

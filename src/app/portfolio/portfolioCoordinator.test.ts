@@ -355,6 +355,36 @@ test('automatically creates and updates one stable initial-holding event', () =>
   assert.equal(writes.length, 3)
 })
 
+test('creates an initial ledger for a valid four-decimal holding with floating-point noise', () => {
+  const { coordinator, portfolio } = createCoordinator(
+    settings({
+      funds: [{ code: '014674', name: '富国中证港股通互联网ETF发起式联接C' }],
+      holdingOrder: ['014674'],
+      holdingsByCode: {
+        '014674': holding({
+          code: '014674',
+          purchaseDate: '2025-08-21',
+          totalCostCents: 701326,
+          units: 10573.29,
+        }),
+      },
+    }),
+    emptyPortfolio(),
+  )
+
+  const first = coordinator.ensureFundLedger({ fundCode: '014674' })
+  const retry = coordinator.ensureFundLedger({ fundCode: '014674' })
+
+  assert.equal(first.ok, true)
+  assert.equal(retry.ok, true)
+  if (!first.ok || !retry.ok) return
+  assert.deepEqual(first.event.units, actual(10573.29, 'migration'))
+  assert.deepEqual(first.event.costAmount, actual(701326, 'migration'))
+  assert.deepEqual(retry.event, first.event)
+  assert.deepEqual(portfolio.getPortfolio().fundCodes, ['014674'])
+  assert.equal(portfolio.getPortfolio().events.length, 1)
+})
+
 test('uses the first successful save Shanghai date and never invents a holding', () => {
   const nextDay = createCoordinator(settings(), emptyPortfolio(), {
     now: () => '2026-08-14T16:30:00.000Z',

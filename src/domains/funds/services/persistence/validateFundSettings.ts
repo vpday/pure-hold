@@ -185,8 +185,7 @@ function isFundCode(value: unknown): value is string {
 
 function isNonNegativeNumberWithFourDecimals(value: unknown): value is number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return false
-  const scaled = value * 10_000
-  return Math.abs(scaled - Math.round(scaled)) < 1e-8
+  return Number(value.toFixed(4)) === value
 }
 
 function isNonNegativeIntegerCents(value: unknown): value is number {
