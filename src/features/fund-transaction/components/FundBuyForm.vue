@@ -284,6 +284,7 @@ defineExpose({ validate })
           <t-date-picker
             :value="submissionDate"
             class="w-full"
+            allow-input
             :disable-date="disableSubmissionDate"
             format="YYYY-MM-DD"
             placeholder="请选择提交日期"
@@ -342,6 +343,7 @@ defineExpose({ validate })
           <t-date-picker
             :value="confirmedDate"
             class="w-full"
+            allow-input
             :disable-date="disableConfirmedDate"
             format="YYYY-MM-DD"
             placeholder="可留空，确认后补录"

@@ -14,7 +14,9 @@ import FundEditMobileDrawer from './components/FundEditMobileDrawer.vue'
 import {
   createFundEditDraft,
   type FundEditDraft,
+  type FundEditSubmitResult,
   type EnsureFundLedger,
+  hasSubsequentFundEvents,
   submitFundEditDraft,
 } from './models/fundEditDraft'
 import type { FundHoldingDraftErrors } from '../fund-holding-form/models/fundHoldingDraft'
@@ -35,7 +37,10 @@ function open(code: string): void {
     MessagePlugin.error('基金不存在，无法编辑')
     return
   }
-  holdingFactsReadonly.value = props.portfolioCoordinator.getPortfolio().fundCodes.includes(code)
+  holdingFactsReadonly.value = hasSubsequentFundEvents(
+    props.portfolioCoordinator.getPortfolio().events,
+    code,
+  )
   draft.value = createFundEditDraft(code, snapshot.name, store.holdingsByCode[code], store.groups)
   visible.value = true
 }
@@ -58,14 +63,33 @@ function confirm(): void {
     holdingFactsReadonly: holdingFactsReadonly.value,
   })
   errors.value = result.fieldErrors
-  submitError.value = result.error ?? ''
-  if (!result.success) return
+  if (!result.success) {
+    if (!result.error) return
+    if (isPersistentSubmitFailure(result)) {
+      submitError.value = result.error
+    } else {
+      submitError.value = ''
+      MessagePlugin.error(result.error)
+    }
+    return
+  }
+  submitError.value = ''
   if (result.status === 'synced' || result.status === undefined) {
     MessagePlugin.success('基金信息已保存')
   } else {
     MessagePlugin.warning(`基金信息已保存，当前状态：${coordinationStatusText(result.status)}`)
   }
   close()
+}
+
+function isPersistentSubmitFailure(result: FundEditSubmitResult): boolean {
+  return (
+    result.holdingSaved === true ||
+    result.partialPersistence === true ||
+    result.status === 'ledger-error' ||
+    result.status === 'portfolio-persistence-failed' ||
+    result.status === 'holding-sync-failed'
+  )
 }
 
 function coordinationStatusText(status: PortfolioCoordinationStatus): string {

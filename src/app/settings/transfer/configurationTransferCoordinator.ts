@@ -68,7 +68,7 @@ export function createConfigurationTransferCoordinator(
       return { ok: false, partialPersistence: false, reason: '投资账本快照暂不可用' }
     }
     if (portfolioSelected && adapters.rebuildHoldingProjections === undefined) {
-      return { ok: false, partialPersistence: false, reason: '投资账本恢复后无法重建持仓投影' }
+      return { ok: false, partialPersistence: false, reason: '投资账本恢复后无法重建持仓信息' }
     }
 
     const originalIndexGroups = selection.index ? adapters.getIndexGroups() : undefined
@@ -167,7 +167,7 @@ export function createConfigurationTransferCoordinator(
         error,
         ok: false,
         partialPersistence: !rollback,
-        reason: '投资账本恢复后持仓投影重建失败',
+        reason: '投资账本恢复后持仓信息重建失败',
       }
     }
     if (rebuild.status !== 'synced' || rebuild.partialPersistence) {
@@ -184,8 +184,8 @@ export function createConfigurationTransferCoordinator(
         rebuild,
         reason:
           rebuild.status === 'pending'
-            ? '投资账本恢复后持仓投影仍待确认或精确数据'
-            : '投资账本恢复后持仓投影重建失败',
+            ? '投资账本恢复后持仓信息仍待确认或精确数据'
+            : '投资账本恢复后持仓信息重建失败',
       }
     }
 

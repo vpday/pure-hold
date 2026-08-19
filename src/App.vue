@@ -37,10 +37,10 @@ try {
     asOfDate: todayInShanghai(),
   })
   if (startupRebuild.status !== 'synced' || startupRebuild.partialPersistence) {
-    console.warn('启动持仓投影重建未完成。', startupRebuild)
+    console.warn('启动持仓信息重建未完成。', startupRebuild)
   }
 } catch (error) {
-  console.warn('启动持仓投影重建失败。', error)
+  console.warn('启动持仓信息重建失败。', error)
 }
 
 function ensureFundLedger(fundCode: string): EnsureFundLedgerResult {

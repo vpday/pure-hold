@@ -132,7 +132,9 @@ test('surfaces submission failures and reset clears the complete session', () =>
   session.open([])
   session.toggleSelection({ code: '000001', name: '一号基金' })
   assert.equal(session.addWithoutHoldings(), undefined)
-  assert.equal(session.model.value.content.submitError, '保存失败')
+  assert.equal(session.takeTransientSubmitError(), '保存失败')
+  assert.equal(session.takeTransientSubmitError(), undefined)
+  assert.equal(session.model.value.content.submitError, '')
 
   session.reset()
   assert.equal(session.model.value.step, 'search')

@@ -214,6 +214,7 @@ defineExpose({ validate })
           v-if="draft.timeMode === 'date'"
           v-model="draft.purchaseDate"
           class="w-full"
+          allow-input
           :disable-date="disablePurchaseDate"
           format="YYYY-MM-DD"
           placeholder="请选择购买日期"

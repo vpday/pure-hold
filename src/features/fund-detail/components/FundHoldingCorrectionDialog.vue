@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { watch } from 'vue'
+import { MessagePlugin } from 'tdesign-vue-next'
+
 import type {
   FundHoldingCorrectionDraft,
   FundHoldingCorrectionDraftErrors,
@@ -25,6 +28,19 @@ function close(): void {
 function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown): void {
   props.draft[key] = value === undefined || value === null || value === '' ? '' : String(value)
 }
+
+watch(
+  () => props.submitError,
+  (message) => {
+    if (message) MessagePlugin.error(message)
+  },
+)
+watch(
+  () => props.errors,
+  (errors) => {
+    if (errors.target) MessagePlugin.warning(errors.target)
+  },
+)
 </script>
 
 <template>
@@ -34,24 +50,20 @@ function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown):
     :cancel-btn="false"
     :close-on-esc-keydown="false"
     :close-on-overlay-click="false"
-    :dialog-style="{ maxWidth: 'calc(100vw - 32px)' }"
     header="手工修正持仓"
     placement="center"
     width="min(520px, calc(100vw - 32px))"
     @close="close"
   >
     <t-form :data="draft" layout="vertical">
-      <t-alert v-if="submitError" class="mb-4" theme="error" :message="submitError" />
-      <t-alert v-if="errors.target" class="mb-4" theme="warning" :message="errors.target" />
       <t-form-item
-        label="目标份额"
+        label="份额"
         name="targetUnits"
         :status="errors.targetUnits ? 'error' : undefined"
         :tips="errors.targetUnits"
       >
         <t-input-number
           :value="draft.targetUnits"
-          align="right"
           :decimal-places="4"
           :min="0"
           placeholder="0.0000"
@@ -62,14 +74,13 @@ function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown):
         />
       </t-form-item>
       <t-form-item
-        label="目标总成本"
+        label="总成本"
         name="totalCostYuan"
         :status="errors.totalCostYuan ? 'error' : undefined"
         :tips="errors.totalCostYuan"
       >
         <t-input-number
           :value="draft.totalCostYuan"
-          align="right"
           :decimal-places="2"
           :min="0"
           placeholder="0.00"
@@ -77,6 +88,21 @@ function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown):
           suffix="元"
           theme="normal"
           @change="updateDraftValue('totalCostYuan', $event)"
+        />
+      </t-form-item>
+      <t-form-item
+        label="事件日期"
+        name="confirmedDate"
+        :status="errors.confirmedDate ? 'error' : undefined"
+        :tips="errors.confirmedDate"
+      >
+        <t-date-picker
+          v-model="draft.confirmedDate"
+          class="w-full"
+          allow-input
+          format="YYYY-MM-DD"
+          placeholder="请选择事件日期"
+          value-type="YYYY-MM-DD"
         />
       </t-form-item>
       <t-form-item
@@ -91,28 +117,12 @@ function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown):
           placeholder="请说明本次修正的依据"
         />
       </t-form-item>
-      <t-form-item
-        label="事件日期"
-        name="confirmedDate"
-        :status="errors.confirmedDate ? 'error' : undefined"
-        :tips="errors.confirmedDate"
-      >
-        <t-date-picker
-          v-model="draft.confirmedDate"
-          class="w-full"
-          format="YYYY-MM-DD"
-          placeholder="请选择事件日期"
-          value-type="YYYY-MM-DD"
-        />
-      </t-form-item>
     </t-form>
 
     <template #footer>
       <div class="flex justify-end gap-2">
         <t-button variant="outline" @click="close">取消</t-button>
-        <t-button :loading="submitting" theme="primary" @click="emit('submit')">
-          保存修正
-        </t-button>
+        <t-button :loading="submitting" theme="primary" @click="emit('submit')">保存</t-button>
       </div>
     </template>
   </t-dialog>

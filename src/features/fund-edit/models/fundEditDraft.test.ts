@@ -4,7 +4,11 @@ import test from 'node:test'
 import type { PortfolioCoordinationResult } from '@/app/portfolio/portfolioCoordinator.ts'
 import { createEmptyPortfolio } from '@/domains/portfolio/services/persistence/loadPortfolio.ts'
 import type { FundEditSubmitters } from './fundEditDraft.ts'
-import { createFundEditDraft, submitFundEditDraft } from './fundEditDraft.ts'
+import {
+  createFundEditDraft,
+  hasSubsequentFundEvents,
+  submitFundEditDraft,
+} from './fundEditDraft.ts'
 
 test('edit draft fills current holding and custom group memberships', () => {
   assert.deepEqual(
@@ -55,6 +59,24 @@ test('reopening creates a fresh draft from the latest store values', () => {
   const reopened = createFundEditDraft('000001', '测试基金', { ...holding, units: 20 }, groups)
   assert.equal(reopened.holding.units, '20')
   assert.deepEqual(reopened.selectedGroupIds, ['one'])
+})
+
+test('only locks holding facts after a subsequent fund event', () => {
+  const fundCode = '000001'
+
+  assert.equal(hasSubsequentFundEvents([], fundCode), false)
+  assert.equal(hasSubsequentFundEvents([{ fundCode, kind: 'initial-holding' }], fundCode), false)
+  assert.equal(
+    hasSubsequentFundEvents(
+      [
+        { fundCode, kind: 'initial-holding' },
+        { fundCode, kind: 'buy' },
+      ],
+      fundCode,
+    ),
+    true,
+  )
+  assert.equal(hasSubsequentFundEvents([{ fundCode: '000002', kind: 'buy' }], fundCode), false)
 })
 
 test('blank holding saves only groups and surfaces a direct group failure', () => {
@@ -129,7 +151,12 @@ test('group failure reports partial success and every retry restarts from holdin
   const submitters = createSubmitters(calls, true)
 
   const first = submitFundEditDraft(draft, submitters, new Date(2026, 6, 27))
-  assert.equal(first.error, '持仓信息已保存，基金分组保存失败')
+  assert.deepEqual(first, {
+    error: '持仓信息已保存，基金分组保存失败',
+    fieldErrors: {},
+    holdingSaved: true,
+    success: false,
+  })
   assert.deepEqual(calls, ['holding', 'groups:one'])
   submitFundEditDraft(draft, submitters, new Date(2026, 6, 27))
   assert.deepEqual(calls, ['holding', 'groups:one', 'holding', 'groups:one'])

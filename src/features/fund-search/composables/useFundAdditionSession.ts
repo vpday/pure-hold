@@ -26,6 +26,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
   const holdingErrors = ref<Readonly<Record<string, FundHoldingDraftErrors>>>({})
   const pendingLedgerRetries = ref<readonly string[]>([])
   const submitError = ref('')
+  const transientSubmitError = ref('')
 
   const model = computed<FundAdditionSessionModel>(() => ({
     actions:
@@ -79,6 +80,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
     holdingErrors.value = {}
     pendingLedgerRetries.value = []
     submitError.value = ''
+    transientSubmitError.value = ''
   }
 
   function toggleSelectedPanel(): void {
@@ -99,6 +101,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
   }
 
   function addWithoutHoldings(): number | undefined {
+    transientSubmitError.value = ''
     return submit(
       search.selected.value.map(({ code, name }) => ({
         code,
@@ -108,6 +111,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
   }
 
   function confirmHoldings(): number | undefined {
+    transientSubmitError.value = ''
     const result = validateFundHoldingDrafts(holdingDrafts.value)
     holdingErrors.value = result.errors
     return result.additions ? submit(result.additions) : undefined
@@ -116,7 +120,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
   function submit(additions: readonly FundAddition[]): number | undefined {
     const result = addFunds(additions)
     if (result.error) {
-      submitError.value = result.error
+      transientSubmitError.value = result.error
       return undefined
     }
 
@@ -154,6 +158,12 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
     return retryCodes.length
   }
 
+  function takeTransientSubmitError(): string | undefined {
+    const error = transientSubmitError.value || undefined
+    transientSubmitError.value = ''
+    return error
+  }
+
   return {
     addWithoutHoldings,
     backToSearch,
@@ -167,6 +177,7 @@ export function useFundAdditionSession(addFunds: AddFunds, ensureFundLedger?: En
     retryLedger,
     retry: search.retry,
     setKeyword: search.setKeyword,
+    takeTransientSubmitError,
     toggleSelectedPanel,
     toggleSelection: search.toggleSelection,
   }

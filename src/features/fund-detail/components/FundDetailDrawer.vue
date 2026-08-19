@@ -266,14 +266,14 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
               </dl>
             </div>
 
-            <div class="ledger-status-panel">
+            <div class="ledger-status-panel" v-if="ledger.retryAvailable">
               <div class="ledger-status-header">
                 <div>
                   <p class="font-medium">投资账本</p>
                   <p class="mt-1 text-sm text-(--td-text-color-secondary)">
                     {{
                       ledger.status === 'synced'
-                        ? '交易记录和持仓投影已同步。'
+                        ? '交易记录和持仓信息已同步。'
                         : '交易记录已保留，请按状态补全或重试同步。'
                     }}
                   </p>
@@ -282,12 +282,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
                   <t-tag :theme="ledger.statusTone" variant="light">
                     {{ ledger.statusText }}
                   </t-tag>
-                  <t-button
-                    v-if="ledger.retryAvailable"
-                    size="small"
-                    variant="outline"
-                    @click="emit('retryLedger')"
-                  >
+                  <t-button size="small" variant="outline" @click="emit('retryLedger')">
                     重试同步
                   </t-button>
                 </div>
@@ -416,14 +411,6 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 
 .ledger-status-header {
   @apply flex flex-wrap items-center justify-between gap-3;
-}
-
-.ledger-comparison-panel {
-  @apply mt-2;
-}
-
-.ledger-comparison-grid {
-  @apply mt-2 grid gap-3 sm:grid-cols-2;
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {

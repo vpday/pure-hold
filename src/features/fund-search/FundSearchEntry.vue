@@ -25,11 +25,15 @@ function close(): void {
 }
 
 function addWithoutHoldings(): void {
-  handleSuccess(session.addWithoutHoldings())
+  const addedCount = session.addWithoutHoldings()
+  notifyTransientSubmitError()
+  handleSuccess(addedCount)
 }
 
 function confirmHoldings(): void {
-  handleSuccess(session.confirmHoldings())
+  const addedCount = session.confirmHoldings()
+  notifyTransientSubmitError()
+  handleSuccess(addedCount)
 }
 
 function retryLedger(): void {
@@ -43,6 +47,11 @@ function handleSuccess(addedCount: number | undefined): void {
   if (addedCount === undefined) return
   MessagePlugin.success(`已添加 ${addedCount} 只基金`)
   close()
+}
+
+function notifyTransientSubmitError(): void {
+  const message = session.takeTransientSubmitError()
+  if (message) MessagePlugin.error(message)
 }
 
 defineExpose({ open })

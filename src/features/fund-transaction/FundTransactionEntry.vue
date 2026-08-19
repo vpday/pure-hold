@@ -329,9 +329,7 @@ function saveBuy(): void {
     ? updateBuyDraft(props.portfolioCoordinator, draft)
     : saveBuyDraft(props.portfolioCoordinator, draft)
   if (isBlockingCoordinationStatus(saveResult.status)) {
-    errors.value = {
-      form: coordinationFailureText(saveResult.status, saveResult.partialPersistence),
-    }
+    handleTransactionSaveFailure(saveResult.status, saveResult.partialPersistence)
     return
   }
   completeSave(
@@ -366,9 +364,7 @@ function saveSell(): void {
     ? updateSellDraft(props.portfolioCoordinator, draft)
     : saveSellDraft(props.portfolioCoordinator, draft)
   if (isBlockingCoordinationStatus(saveResult.status)) {
-    errors.value = {
-      form: coordinationFailureText(saveResult.status, saveResult.partialPersistence),
-    }
+    handleTransactionSaveFailure(saveResult.status, saveResult.partialPersistence)
     return
   }
   completeSave(
@@ -554,6 +550,19 @@ function coordinationFailureText(
   return partialPersistence
     ? '交易记录可能已部分保存，请重试并检查账本。'
     : '交易记录保存失败，账本未改变，请重试。'
+}
+
+function handleTransactionSaveFailure(
+  status: PortfolioCoordinationStatus,
+  partialPersistence: boolean,
+): void {
+  const message = coordinationFailureText(status, partialPersistence)
+  if (status === 'ledger-error' || partialPersistence) {
+    errors.value = { form: message }
+    return
+  }
+  errors.value = {}
+  MessagePlugin.error(message)
 }
 
 defineExpose({ open, openBuy: open, openEdit, openSell })
