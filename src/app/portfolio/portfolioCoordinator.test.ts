@@ -212,10 +212,16 @@ function createFundsFacade(
   initial: FundSettings,
   failDelete = false,
   failProjection = false,
+  options: {
+    readonly failSettingsRestore?: boolean
+    readonly mutateProjectionBeforeFailure?: boolean
+    readonly operationLog?: string[]
+  } = {},
 ): TestFundsFacade {
   let current = structuredClone(initial)
   return {
     deleteFund(code) {
+      options.operationLog?.push('funds:delete')
       if (failDelete) return { error: '保存失败' }
       current = {
         ...current,
@@ -232,9 +238,20 @@ function createFundsFacade(
       return {}
     },
     getSettingsSnapshot() {
+      options.operationLog?.push('funds:snapshot')
       return structuredClone(current)
     },
     replaceHoldingProjection(nextHolding: FundHolding) {
+      options.operationLog?.push('funds:projection')
+      if (failProjection && options.mutateProjectionBeforeFailure) {
+        current = {
+          ...current,
+          holdingOrder: current.holdingOrder.includes(nextHolding.code)
+            ? current.holdingOrder
+            : [...current.holdingOrder, nextHolding.code],
+          holdingsByCode: { ...current.holdingsByCode, [nextHolding.code]: nextHolding },
+        }
+      }
       if (failProjection) {
         return {
           error: new Error('projection quota exceeded'),
@@ -252,6 +269,14 @@ function createFundsFacade(
       return { ok: true as const }
     },
     replaceSettingsPersisted(nextSettings: FundSettings) {
+      options.operationLog?.push('funds:restore')
+      if (options.failSettingsRestore) {
+        return {
+          error: new Error('settings restore failed'),
+          ok: false,
+          reason: 'persistence-failed' as const,
+        }
+      }
       current = structuredClone(nextSettings)
       return { ok: true as const }
     },
@@ -265,6 +290,7 @@ function createFundsFacade(
       }
     },
     updateHoldingMetadata(input) {
+      options.operationLog?.push('funds:metadata')
       const existing = current.holdingsByCode[input.code]
       current = {
         ...current,
@@ -291,16 +317,38 @@ function createCoordinator(
   options: {
     readonly failDeleteFund?: boolean
     readonly failPortfolioWrites?: boolean
+    readonly failPortfolioWritesAfter?: number
     readonly failProjection?: boolean
+    readonly failSettingsRestore?: boolean
+    readonly mutateProjectionBeforeFailure?: boolean
     readonly now?: () => string
+    readonly operationLog?: string[]
   } = {},
 ) {
-  const funds = createFundsFacade(initialSettings, options.failDeleteFund, options.failProjection)
+  const funds = createFundsFacade(initialSettings, options.failDeleteFund, options.failProjection, {
+    failSettingsRestore: options.failSettingsRestore,
+    mutateProjectionBeforeFailure: options.mutateProjectionBeforeFailure,
+    operationLog: options.operationLog,
+  })
   const writes: Portfolio[] = []
-  const portfolio = createPortfolioStore(initial, (candidate) => {
-    if (options.failPortfolioWrites) throw new Error('quota exceeded')
+  const portfolioStore = createPortfolioStore(initial, (candidate) => {
+    options.operationLog?.push('portfolio:write')
+    if (
+      options.failPortfolioWrites ||
+      (options.failPortfolioWritesAfter !== undefined &&
+        writes.length >= options.failPortfolioWritesAfter)
+    ) {
+      throw new Error('quota exceeded')
+    }
     writes.push(candidate)
   })
+  const portfolio = {
+    ...portfolioStore,
+    getPortfolio() {
+      options.operationLog?.push('portfolio:snapshot')
+      return portfolioStore.getPortfolio()
+    },
+  }
   return {
     coordinator: createPortfolioCoordinator({
       funds,
@@ -311,6 +359,21 @@ function createCoordinator(
     portfolio,
     writes,
   }
+}
+
+function assertSnapshotsBeforeFirstWrite(operations: readonly string[]): void {
+  const writeOperations = new Set([
+    'funds:delete',
+    'funds:metadata',
+    'funds:projection',
+    'funds:restore',
+    'portfolio:write',
+  ])
+  const firstWrite = operations.findIndex((operation) => writeOperations.has(operation))
+  assert.notEqual(firstWrite, -1, operations.join(' → '))
+  const beforeWrite = operations.slice(0, firstWrite)
+  assert.ok(beforeWrite.filter((operation) => operation === 'portfolio:snapshot').length >= 2)
+  assert.ok(beforeWrite.filter((operation) => operation === 'funds:snapshot').length >= 2)
 }
 
 test('automatically creates and updates one stable initial-holding event', () => {
@@ -571,13 +634,38 @@ test('confirms deletion only for the target fund and is idempotent', () => {
   assert.deepEqual(portfolio.getPortfolio().fundCodes, ['000002'])
 })
 
+test('commitEvent and deleteEvent capture both domain snapshots before any write', () => {
+  const commitOperations: string[] = []
+  const committed = createCoordinator(settings({ holdingsByCode: {} }), emptyPortfolio(), {
+    operationLog: commitOperations,
+  })
+  const commitResult = committed.coordinator.commitEvent({
+    asOfDate: '2026-08-14',
+    event: confirmedBuyEvent('000002', 'capture-commit'),
+  })
+  assert.equal(commitResult.error, undefined)
+  assertSnapshotsBeforeFirstWrite(commitOperations)
+
+  const deleteOperations: string[] = []
+  const deleted = createCoordinator(
+    settings(),
+    { events: [initialHoldingEvent('000001')], fundCodes: ['000001'] },
+    { operationLog: deleteOperations },
+  )
+  const deleteResult = deleted.coordinator.deleteEvent(initialHoldingEventId('000001'))
+  assert.equal(deleteResult.error, undefined)
+  assertSnapshotsBeforeFirstWrite(deleteOperations)
+})
+
 test('restores portfolio when Funds deletion fails and reports old state', () => {
   const initial: Portfolio = {
     events: [initialHoldingEvent('000001'), initialHoldingEvent('000002')],
     fundCodes: ['000001', '000002'],
   }
+  const operations: string[] = []
   const { coordinator, funds, portfolio } = createCoordinator(settings(), initial, {
     failDeleteFund: true,
+    operationLog: operations,
   })
   const prepared = coordinator.prepareFundDeletion('000001')
   assert.equal(prepared.ok, true)
@@ -597,6 +685,10 @@ test('restores portfolio when Funds deletion fails and reports old state', () =>
   )
   assert.deepEqual([...portfolio.getPortfolio().fundCodes].sort(), [...initial.fundCodes].sort())
   assert.equal(funds.getSettingsSnapshot().funds.length, 2)
+  assert.equal(operations.filter((operation) => operation === 'funds:delete').length, 1)
+  assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 0)
+  const fundsDelete = operations.indexOf('funds:delete')
+  assert.ok(operations.slice(fundsDelete + 1).includes('portfolio:write'))
 })
 
 test('returns a verifiable partial-persistence result when rollback also fails', () => {
@@ -649,7 +741,10 @@ test('commits a correction through one seam and projects exact total cost cents'
 })
 
 test('keeps the last valid projection while a pending event awaits confirmation', () => {
-  const { coordinator, funds, portfolio } = createCoordinator()
+  const operations: string[] = []
+  const { coordinator, funds, portfolio } = createCoordinator(settings(), emptyPortfolio(), {
+    operationLog: operations,
+  })
   const result = coordinator.commitEvent({
     asOfDate: '2026-08-14',
     event: pendingBuyEvent('000001', 'pending-1'),
@@ -664,6 +759,42 @@ test('keeps the last valid projection while a pending event awaits confirmation'
     true,
   )
   assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.units, 100)
+  assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 0)
+})
+
+test('keeps a calculation error as a domain result without compensation', () => {
+  const calculationError = new Error('calculation failed')
+  const operations: string[] = []
+  const funds = createFundsFacade(settings(), false, false, { operationLog: operations })
+  const portfolioStore = createPortfolioStore(emptyPortfolio(), () => {
+    operations.push('portfolio:write')
+  })
+  const portfolio = {
+    ...portfolioStore,
+    calculate: (_input: Parameters<typeof portfolioStore.calculate>[0]) => {
+      throw calculationError
+    },
+    getPortfolio() {
+      operations.push('portfolio:snapshot')
+      return portfolioStore.getPortfolio()
+    },
+  }
+  const coordinator = createPortfolioCoordinator({
+    funds,
+    now: () => '2026-08-14T09:00:00.000Z',
+    portfolio,
+  })
+
+  const result = coordinator.commitEvent({
+    asOfDate: '2026-08-14',
+    event: confirmedBuyEvent('000001', 'calculation-fails'),
+  })
+
+  assert.equal(result.status, 'ledger-error')
+  assert.equal(result.retryable, true)
+  assert.equal(result.partialPersistence, false)
+  assert.equal(result.error, calculationError)
+  assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 0)
 })
 
 test('does not invent an initial event for a new fund first bought through the coordinator', () => {
@@ -726,7 +857,86 @@ test('rolls back portfolio facts when projection persistence fails', () => {
 
   assert.equal(result.status, 'holding-sync-failed')
   assert.equal(result.retryable, true)
+  assert.equal(result.error instanceof Error, true)
+  assert.equal((result.error as Error).message, 'projection quota exceeded')
   assert.equal(result.partialPersistence, false)
+  assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
+})
+
+test('restores Portfolio before Funds after projection failure', () => {
+  const operations: string[] = []
+  const { coordinator } = createCoordinator(settings(), emptyPortfolio(), {
+    failProjection: true,
+    mutateProjectionBeforeFailure: true,
+    operationLog: operations,
+  })
+
+  const result = coordinator.commitHoldingCorrection({
+    asOfDate: '2026-08-14',
+    confirmedDate: '2026-08-14',
+    eventId: 'projection-route',
+    fundCode: '000001',
+    reason: '补偿顺序',
+    targetUnits: 120,
+    totalCostCents: 15000,
+  })
+
+  assert.equal(result.partialPersistence, false)
+  const projectionFailure = operations.indexOf('funds:projection')
+  const recovery = operations.slice(projectionFailure + 1)
+  const fundsRestore = recovery.indexOf('funds:restore')
+  assert.notEqual(projectionFailure, -1)
+  assert.notEqual(fundsRestore, -1)
+  assert.ok(recovery.slice(0, fundsRestore).includes('portfolio:write'))
+  assert.equal(recovery.slice(0, fundsRestore).includes('funds:restore'), false)
+})
+
+test('continues Funds recovery after Portfolio recovery fails and keeps the old public result shape', () => {
+  const operations: string[] = []
+  const { coordinator } = createCoordinator(settings(), emptyPortfolio(), {
+    failPortfolioWritesAfter: 3,
+    failProjection: true,
+    failSettingsRestore: true,
+    mutateProjectionBeforeFailure: true,
+    operationLog: operations,
+  })
+
+  const result = coordinator.commitHoldingCorrection({
+    asOfDate: '2026-08-14',
+    confirmedDate: '2026-08-14',
+    eventId: 'multiple-recovery-failures',
+    fundCode: '000001',
+    reason: '多重恢复失败',
+    targetUnits: 120,
+    totalCostCents: 15000,
+  })
+
+  assert.equal(result.partialPersistence, true)
+  assert.equal('failure' in result, false)
+  assert.equal(operations.filter((operation) => operation === 'funds:restore').length, 1)
+})
+
+test('writes metadata in Funds first and restores Portfolio then Funds when ledger setup fails', () => {
+  const operations: string[] = []
+  const { coordinator, funds, portfolio } = createCoordinator(settings(), emptyPortfolio(), {
+    failPortfolioWrites: true,
+    operationLog: operations,
+  })
+
+  const result = coordinator.updateHoldingMetadata({
+    code: '000001',
+    dividendMode: 'reinvest',
+    purchaseDate: '2025-01-01',
+  })
+
+  assert.equal(result.status, 'portfolio-persistence-failed')
+  assert.equal(result.partialPersistence, false)
+  const metadata = operations.indexOf('funds:metadata')
+  const portfolioWrite = operations.indexOf('portfolio:write')
+  const fundsRestore = operations.indexOf('funds:restore')
+  assert.ok(metadata >= 0 && metadata < portfolioWrite)
+  assert.ok(portfolioWrite < fundsRestore)
+  assert.equal(funds.getSettingsSnapshot().holdingsByCode['000001']?.dividendMode, 'cash')
   assert.deepEqual(portfolio.getPortfolio(), emptyPortfolio())
 })
 

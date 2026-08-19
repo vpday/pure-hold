@@ -1,4 +1,9 @@
 import {
+  defineCompensatedStage,
+  runCompensatedCommit,
+  type CompensatedStageAttempt,
+} from '@/app/coordination/compensatedCommit.ts'
+import {
   createFundHolding,
   holdingTotalCostCents,
   type FundHolding,
@@ -21,6 +26,10 @@ import type {
   PortfolioCommandResult,
   PortfolioStore,
 } from '@/domains/portfolio/stores/createPortfolioStore.ts'
+import {
+  createFundsRecoveryAdapter,
+  createPortfolioRecoveryAdapter,
+} from './portfolioRecoveryAdapters.ts'
 
 export type FundsSettingsWriteResult =
   | { readonly ok: true }
@@ -67,6 +76,21 @@ export type PortfolioCoordinationStatus =
   | 'ledger-error'
   | 'portfolio-persistence-failed'
   | 'holding-sync-failed'
+
+type PortfolioRecoveryRoute = 'none' | 'portfolio-then-funds'
+type MetadataRecoveryRoute = 'none' | 'portfolio-then-funds'
+type FundDeletionRecoveryRoute = 'none' | 'portfolio-only' | 'portfolio-then-funds'
+
+interface ProjectionCommitState {
+  calculation?: PortfolioCalculation
+  error?: unknown
+  holding: FundHolding | null
+  ledger: PortfolioAggregateCalculation | null
+  projectedHolding?: FundHolding
+  retryable: boolean
+  shouldProject: boolean
+  status: PortfolioCoordinationStatus
+}
 
 export interface PortfolioCoordinationResult {
   readonly ok: boolean
@@ -244,6 +268,134 @@ export function createPortfolioCoordinator(
   dependencies: PortfolioCoordinatorDependencies,
 ): PortfolioCoordinator {
   const now = dependencies.now ?? (() => new Date().toISOString())
+  const portfolioRecoveryAdapter = createPortfolioRecoveryAdapter(dependencies.portfolio)
+  const fundsRecoveryAdapter = createFundsRecoveryAdapter(dependencies.funds)
+
+  function runProjectionCommit(input: {
+    readonly executePortfolio: (
+      state: ProjectionCommitState,
+    ) => CompensatedStageAttempt<PortfolioRecoveryRoute>
+    readonly fundCode: string
+    readonly holding: FundHolding | null
+  }): PortfolioCoordinationResult {
+    const state: ProjectionCommitState = {
+      holding: input.holding,
+      ledger: null,
+      retryable: false,
+      shouldProject: false,
+      status: 'synced',
+    }
+    const result = runCompensatedCommit<PortfolioRecoveryRoute>({
+      recoveryRoutes: {
+        none: [],
+        'portfolio-then-funds': ['portfolio', 'funds'],
+      },
+      stages: [
+        defineCompensatedStage<Portfolio, PortfolioRecoveryRoute>({
+          adapter: portfolioRecoveryAdapter,
+          domain: 'portfolio',
+          execute: () => input.executePortfolio(state),
+          unexpectedRecoveryRoute: 'portfolio-then-funds',
+        }),
+        defineCompensatedStage<FundSettings, PortfolioRecoveryRoute>({
+          adapter: fundsRecoveryAdapter,
+          domain: 'funds',
+          execute: () => {
+            if (!state.shouldProject) return { ok: true }
+
+            const writer = dependencies.funds.replaceHoldingProjection
+            if (writer === undefined) {
+              state.error = new Error('Funds projection adapter is unavailable')
+              state.retryable = true
+              state.status = 'holding-sync-failed'
+              return {
+                ok: false,
+                primaryError: state.error,
+                recovery: 'required' as const,
+                recoveryRoute: 'portfolio-then-funds' as const,
+              }
+            }
+
+            let writeResult: FundsSettingsWriteResult
+            try {
+              writeResult = writer(state.projectedHolding as FundHolding)
+            } catch (error) {
+              writeResult = { error, ok: false, reason: 'persistence-failed' }
+            }
+            if (!writeResult.ok) {
+              state.error = writeResult.error ?? new Error(writeResult.reason)
+              state.retryable = true
+              state.status = 'holding-sync-failed'
+              return {
+                ok: false,
+                primaryError: state.error,
+                recovery: 'required' as const,
+                recoveryRoute: 'portfolio-then-funds' as const,
+              }
+            }
+
+            state.holding =
+              dependencies.funds.getSettingsSnapshot().holdingsByCode[input.fundCode] ??
+              state.projectedHolding ??
+              null
+            return { ok: true }
+          },
+          unexpectedRecoveryRoute: 'portfolio-then-funds',
+        }),
+      ],
+    })
+
+    const failure = result.ok ? undefined : result.failure
+    return coordinationResult({
+      calculation: state.calculation,
+      error: failure?.primaryError ?? state.error,
+      fundCode: input.fundCode,
+      holding: state.holding,
+      ledger: state.ledger,
+      partialPersistence: failure?.persistence === 'partial',
+      portfolio: dependencies.portfolio.getPortfolio(),
+      retryable: state.retryable,
+      status: state.status,
+    })
+  }
+
+  function calculateProjection(
+    state: ProjectionCommitState,
+    input: ReconcileFundInput,
+  ): CompensatedStageAttempt<PortfolioRecoveryRoute> {
+    try {
+      state.calculation = dependencies.portfolio.calculate({
+        asOfDate: input.asOfDate,
+        currentNavByFund: input.currentNavByFund,
+      })
+    } catch (error) {
+      state.error = error
+      state.retryable = true
+      state.status = 'ledger-error'
+      return { ok: true }
+    }
+
+    state.status = statusForCalculation(state.calculation, input.fundCode)
+    state.ledger = aggregateFor(state.calculation, input.fundCode)
+    state.retryable = state.status !== 'synced'
+    if (
+      state.status !== 'synced' ||
+      state.ledger === null ||
+      state.ledger.units.value === null ||
+      state.ledger.costAmount.value === null
+    ) {
+      return { ok: true }
+    }
+
+    state.projectedHolding = createProjectedHolding(
+      input.fundCode,
+      state.ledger,
+      state.holding,
+      dependencies.portfolio.getPortfolio(),
+    )
+    state.shouldProject = true
+    return { ok: true }
+  }
 
   function commitEvent(input: CommitEventInput): PortfolioCoordinationResult {
     const fundCode = input.event.fundCode
@@ -264,67 +416,66 @@ export function createPortfolioCoordinator(
       })
     }
 
-    const initial = ensureInitialEventForCommit(
+    return runProjectionCommit({
+      executePortfolio: (state) => {
+        const initial = ensureInitialEventForCommit(
+          fundCode,
+          input.event.kind === 'initial-holding',
+          previousPortfolio,
+          settingsHolding,
+        )
+        if (!initial.ok) {
+          state.error = initial.error
+          state.retryable = true
+          state.status = 'portfolio-persistence-failed'
+          return {
+            ok: false,
+            primaryError: initial.error,
+            recovery: 'not-needed' as const,
+            recoveryRoute: 'none' as const,
+          }
+        }
+
+        const currentAfterInitial = dependencies.portfolio.getPortfolio()
+        const existingEvent = currentAfterInitial.events.find(({ id }) => id === input.event.id)
+        const eventResult = existingEvent
+          ? existingEvent.kind !== input.event.kind
+            ? failureResult(new Error(`Portfolio event ID ${input.event.id} conflicts`))
+            : dependencies.portfolio.updateEvent(input.event)
+          : dependencies.portfolio.addEvent(input.event)
+        if (!eventResult.ok) {
+          state.error = eventResult.error
+          state.retryable = true
+          state.status = 'portfolio-persistence-failed'
+          return {
+            ok: false,
+            primaryError: eventResult.error,
+            recovery: 'required' as const,
+            recoveryRoute: 'portfolio-then-funds' as const,
+          }
+        }
+
+        const enabled = dependencies.portfolio.enableFund(fundCode)
+        if (!enabled.ok) {
+          state.error = enabled.error
+          state.retryable = true
+          state.status = 'portfolio-persistence-failed'
+          return {
+            ok: false,
+            primaryError: enabled.error,
+            recovery: 'required' as const,
+            recoveryRoute: 'portfolio-then-funds' as const,
+          }
+        }
+
+        return calculateProjection(state, {
+          asOfDate: input.asOfDate ?? shanghaiDate(now()),
+          currentNavByFund: input.currentNavByFund ?? {},
+          fundCode,
+        })
+      },
       fundCode,
-      input.event.kind === 'initial-holding',
-      previousPortfolio,
-      settingsHolding,
-    )
-    if (!initial.ok) {
-      return coordinationResult({
-        error: initial.error,
-        fundCode,
-        holding: settingsHolding ?? null,
-        ledger: null,
-        partialPersistence: initial.partialPersistence,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'portfolio-persistence-failed',
-      })
-    }
-
-    const currentAfterInitial = dependencies.portfolio.getPortfolio()
-    const existingEvent = currentAfterInitial.events.find(({ id }) => id === input.event.id)
-    const eventResult = existingEvent
-      ? existingEvent.kind !== input.event.kind
-        ? failureResult(new Error(`Portfolio event ID ${input.event.id} conflicts`))
-        : dependencies.portfolio.updateEvent(input.event)
-      : dependencies.portfolio.addEvent(input.event)
-    if (!eventResult.ok) {
-      const rollback = restoreCrossDomainSnapshot(previousPortfolio, previousSettings)
-      return coordinationResult({
-        error: eventResult.error,
-        fundCode,
-        holding: settingsHolding ?? null,
-        ledger: null,
-        partialPersistence: !rollback.ok,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'portfolio-persistence-failed',
-      })
-    }
-
-    const enabled = dependencies.portfolio.enableFund(fundCode)
-    if (!enabled.ok) {
-      const rollback = restoreCrossDomainSnapshot(previousPortfolio, previousSettings)
-      return coordinationResult({
-        error: enabled.error,
-        fundCode,
-        holding: settingsHolding ?? null,
-        ledger: null,
-        partialPersistence: !rollback.ok,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'portfolio-persistence-failed',
-      })
-    }
-
-    return synchronizeProjection({
-      asOfDate: input.asOfDate ?? shanghaiDate(now()),
-      currentNavByFund: input.currentNavByFund ?? {},
-      fundCode,
-      previousPortfolio,
-      previousSettings,
+      holding: settingsHolding ?? null,
     })
   }
 
@@ -342,46 +493,47 @@ export function createPortfolioCoordinator(
       })
     }
 
-    const deleted = dependencies.portfolio.deleteEvent(normalized.eventId)
-    if (!deleted.ok) {
-      return coordinationResult({
-        error: deleted.error,
-        fundCode,
-        holding: previousSettings.holdingsByCode[fundCode] ?? null,
-        ledger: null,
-        partialPersistence: false,
-        portfolio: previousPortfolio,
-        retryable: true,
-        status: 'portfolio-persistence-failed',
-      })
-    }
+    return runProjectionCommit({
+      executePortfolio: (state) => {
+        const deleted = dependencies.portfolio.deleteEvent(normalized.eventId)
+        if (!deleted.ok) {
+          state.error = deleted.error
+          state.retryable = true
+          state.status = 'portfolio-persistence-failed'
+          return {
+            ok: false,
+            primaryError: deleted.error,
+            recovery: 'not-needed' as const,
+            recoveryRoute: 'none' as const,
+          }
+        }
 
-    const hasRemainingEvents = dependencies.portfolio
-      .getPortfolio()
-      .events.some((candidate) => candidate.fundCode === fundCode)
-    if (!hasRemainingEvents) {
-      const disabled = dependencies.portfolio.disableFund(fundCode)
-      if (!disabled.ok) {
-        const rollback = restoreCrossDomainSnapshot(previousPortfolio, previousSettings)
-        return coordinationResult({
-          error: disabled.error,
+        const hasRemainingEvents = dependencies.portfolio
+          .getPortfolio()
+          .events.some((candidate) => candidate.fundCode === fundCode)
+        if (!hasRemainingEvents) {
+          const disabled = dependencies.portfolio.disableFund(fundCode)
+          if (!disabled.ok) {
+            state.error = disabled.error
+            state.retryable = true
+            state.status = 'portfolio-persistence-failed'
+            return {
+              ok: false,
+              primaryError: disabled.error,
+              recovery: 'required' as const,
+              recoveryRoute: 'portfolio-then-funds' as const,
+            }
+          }
+        }
+
+        return calculateProjection(state, {
+          asOfDate: normalized.asOfDate ?? shanghaiDate(now()),
+          currentNavByFund: normalized.currentNavByFund ?? {},
           fundCode,
-          holding: previousSettings.holdingsByCode[fundCode] ?? null,
-          ledger: null,
-          partialPersistence: !rollback.ok,
-          portfolio: dependencies.portfolio.getPortfolio(),
-          retryable: true,
-          status: 'portfolio-persistence-failed',
         })
-      }
-    }
-
-    return synchronizeProjection({
-      asOfDate: normalized.asOfDate ?? shanghaiDate(now()),
-      currentNavByFund: normalized.currentNavByFund ?? {},
+      },
       fundCode,
-      previousPortfolio,
-      previousSettings,
+      holding: previousSettings.holdingsByCode[fundCode] ?? null,
     })
   }
 
@@ -494,38 +646,107 @@ export function createPortfolioCoordinator(
     readonly dividendMode: FundHolding['dividendMode']
     readonly purchaseDate: string
   }): PortfolioCoordinationResult {
-    const previousPortfolio = dependencies.portfolio.getPortfolio()
     const previousSettings = dependencies.funds.getSettingsSnapshot()
-    const writer = dependencies.funds.updateHoldingMetadata
-    if (writer === undefined) {
-      return coordinationResult({
-        error: new Error('Funds metadata adapter is unavailable'),
-        fundCode: input.code,
-        holding: previousSettings.holdingsByCode[input.code] ?? null,
-        ledger: null,
-        partialPersistence: false,
-        portfolio: previousPortfolio,
-        retryable: true,
-        status: 'holding-sync-failed',
-      })
-    }
+    let primaryError: unknown
+    let status: PortfolioCoordinationStatus = 'synced'
+    let retryable = false
+    let ensured: EnsureFundLedgerResult | undefined
+    const result = runCompensatedCommit<MetadataRecoveryRoute>({
+      recoveryRoutes: {
+        none: [],
+        'portfolio-then-funds': ['portfolio', 'funds'],
+      },
+      stages: [
+        defineCompensatedStage<FundSettings, MetadataRecoveryRoute>({
+          adapter: fundsRecoveryAdapter,
+          domain: 'funds',
+          execute: () => {
+            const writer = dependencies.funds.updateHoldingMetadata
+            if (writer === undefined) {
+              primaryError = new Error('Funds metadata adapter is unavailable')
+              retryable = true
+              status = 'holding-sync-failed'
+              return {
+                ok: false,
+                primaryError,
+                recovery: 'not-needed' as const,
+                recoveryRoute: 'none' as const,
+              }
+            }
 
-    let result: FundsSettingsWriteResult
-    try {
-      result = writer(input)
-    } catch (error) {
-      result = { error, ok: false, reason: 'persistence-failed' }
-    }
+            let writeResult: FundsSettingsWriteResult
+            try {
+              writeResult = writer(input)
+            } catch (error) {
+              writeResult = { error, ok: false, reason: 'persistence-failed' }
+            }
+            if (!writeResult.ok) {
+              primaryError = writeResult.error
+              retryable = writeResult.reason !== 'unknown-fund'
+              status = 'holding-sync-failed'
+              return {
+                ok: false,
+                primaryError,
+                recovery: 'not-needed' as const,
+                recoveryRoute: 'none' as const,
+              }
+            }
+            return { ok: true }
+          },
+          unexpectedRecoveryRoute: 'portfolio-then-funds',
+        }),
+        defineCompensatedStage<Portfolio, MetadataRecoveryRoute>({
+          adapter: portfolioRecoveryAdapter,
+          domain: 'portfolio',
+          execute: () => {
+            const holding =
+              dependencies.funds.getSettingsSnapshot().holdingsByCode[input.code] ?? null
+            if (holding === null || holding.units <= 0) return { ok: true }
+
+            try {
+              ensured = ensureFundLedger({ fundCode: input.code })
+            } catch (error) {
+              primaryError = error
+              retryable = true
+              status = 'portfolio-persistence-failed'
+              return {
+                ok: false,
+                primaryError,
+                recovery: 'required' as const,
+                recoveryRoute: 'portfolio-then-funds' as const,
+              }
+            }
+            if (!ensured.ok) {
+              primaryError = ensured.error
+              retryable = true
+              status = 'portfolio-persistence-failed'
+              return {
+                ok: false,
+                primaryError,
+                recovery: 'required' as const,
+                recoveryRoute: 'portfolio-then-funds' as const,
+              }
+            }
+            return { ok: true }
+          },
+          unexpectedRecoveryRoute: 'portfolio-then-funds',
+        }),
+      ],
+    })
+
     if (!result.ok) {
+      const partialPersistence =
+        result.failure.persistence === 'partial' ||
+        (ensured !== undefined && !ensured.ok && ensured.partialPersistence)
       return coordinationResult({
-        error: result.error,
+        error: result.failure.primaryError ?? primaryError,
         fundCode: input.code,
         holding: previousSettings.holdingsByCode[input.code] ?? null,
         ledger: null,
-        partialPersistence: false,
-        portfolio: previousPortfolio,
-        retryable: result.reason !== 'unknown-fund',
-        status: 'holding-sync-failed',
+        partialPersistence,
+        portfolio: dependencies.portfolio.getPortfolio(),
+        retryable,
+        status,
       })
     }
 
@@ -539,21 +760,6 @@ export function createPortfolioCoordinator(
         portfolio: dependencies.portfolio.getPortfolio(),
         retryable: false,
         status: 'synced',
-      })
-    }
-
-    const ensured = ensureFundLedger({ fundCode: input.code })
-    if (!ensured.ok) {
-      const restored = restoreCrossDomainSnapshot(previousPortfolio, previousSettings)
-      return coordinationResult({
-        error: ensured.error,
-        fundCode: input.code,
-        holding: previousSettings.holdingsByCode[input.code] ?? null,
-        ledger: null,
-        partialPersistence: !restored.ok || ensured.partialPersistence,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'portfolio-persistence-failed',
       })
     }
     return getFundLedgerState({
@@ -739,34 +945,64 @@ export function createPortfolioCoordinator(
     }
     const hasPortfolioData = hasPortfolioDataForFund(previousPortfolio, preview.fundCode)
 
-    if (hasPortfolioData) {
-      const portfolioResult = deletePortfolioData(preview.fundCode, previousPortfolio)
-      if (!portfolioResult.ok) {
-        return {
-          error: portfolioResult.error,
-          funds: currentSettings,
-          ok: false,
-          partialPersistence: portfolioResult.partialPersistence,
-          portfolio: dependencies.portfolio.getPortfolio(),
-          reason: 'portfolio-persistence-failed',
-          preview: currentPreview,
-        }
-      }
-    }
+    let primaryError: unknown
+    let reason: 'funds-persistence-failed' | 'portfolio-persistence-failed' =
+      'portfolio-persistence-failed'
+    const result = runCompensatedCommit<FundDeletionRecoveryRoute>({
+      recoveryRoutes: {
+        none: [],
+        'portfolio-only': ['portfolio'],
+        'portfolio-then-funds': ['portfolio', 'funds'],
+      },
+      stages: [
+        defineCompensatedStage<Portfolio, FundDeletionRecoveryRoute>({
+          adapter: portfolioRecoveryAdapter,
+          domain: 'portfolio',
+          execute: () => {
+            if (!hasPortfolioData) return { ok: true }
+            const portfolioResult = deletePortfolioData(preview.fundCode, previousPortfolio)
+            if (portfolioResult.ok) return { ok: true }
+            primaryError = portfolioResult.error
+            reason = 'portfolio-persistence-failed'
+            return {
+              ok: false,
+              primaryError,
+              recovery: 'required' as const,
+              recoveryRoute: 'portfolio-only' as const,
+            }
+          },
+          unexpectedRecoveryRoute: 'portfolio-only',
+        }),
+        defineCompensatedStage<FundSettings, FundDeletionRecoveryRoute>({
+          adapter: fundsRecoveryAdapter,
+          domain: 'funds',
+          execute: () => {
+            if (currentFund === undefined) return { ok: true }
+            const fundsResult = dependencies.funds.deleteFund(preview.fundCode)
+            if (fundsResult.error === undefined) return { ok: true }
+            primaryError = fundsResult.error
+            reason = 'funds-persistence-failed'
+            return {
+              ok: false,
+              primaryError,
+              recovery: 'not-needed' as const,
+              recoveryRoute: 'portfolio-only' as const,
+            }
+          },
+          unexpectedRecoveryRoute: 'portfolio-then-funds',
+        }),
+      ],
+    })
 
-    if (currentFund !== undefined) {
-      const fundsResult = dependencies.funds.deleteFund(preview.fundCode)
-      if (fundsResult.error !== undefined) {
-        const rollback = restorePortfolioSnapshot(previousPortfolio)
-        return {
-          error: fundsResult.error,
-          funds: dependencies.funds.getSettingsSnapshot(),
-          ok: false,
-          partialPersistence: !rollback.ok,
-          portfolio: dependencies.portfolio.getPortfolio(),
-          reason: 'funds-persistence-failed',
-          preview: currentPreview,
-        }
+    if (!result.ok) {
+      return {
+        error: result.failure.primaryError ?? primaryError,
+        funds: dependencies.funds.getSettingsSnapshot(),
+        ok: false,
+        partialPersistence: result.failure.persistence === 'partial',
+        portfolio: dependencies.portfolio.getPortfolio(),
+        reason,
+        preview: currentPreview,
       }
     }
 
@@ -788,30 +1024,16 @@ export function createPortfolioCoordinator(
   function deletePortfolioData(
     fundCode: string,
     previous: Portfolio,
-  ):
-    | { readonly ok: true }
-    | { readonly ok: false; readonly error?: unknown; readonly partialPersistence: boolean } {
+  ): { readonly ok: true } | { readonly ok: false; readonly error?: unknown } {
     for (const event of previous.events.filter(
       ({ fundCode: eventFundCode }) => eventFundCode === fundCode,
     )) {
       const result = dependencies.portfolio.deleteEvent(event.id)
-      if (!result.ok) return recoverPortfolioFailure(result, previous)
+      if (!result.ok) return { error: result.error, ok: false }
     }
     const result = dependencies.portfolio.disableFund(fundCode)
-    if (!result.ok) return recoverPortfolioFailure(result, previous)
+    if (!result.ok) return { error: result.error, ok: false }
     return { ok: true }
-  }
-
-  function recoverPortfolioFailure(
-    result: Extract<PortfolioCommandResult, { readonly ok: false }>,
-    previous: Portfolio,
-  ): { readonly ok: false; readonly error?: unknown; readonly partialPersistence: boolean } {
-    const rollback = restorePortfolioSnapshot(previous)
-    return {
-      error: result.error,
-      ok: false,
-      partialPersistence: !rollback.ok,
-    }
   }
 
   function synchronizeProjection(input: {
@@ -821,99 +1043,15 @@ export function createPortfolioCoordinator(
     readonly previousPortfolio: Portfolio
     readonly previousSettings: FundSettings
   }): PortfolioCoordinationResult {
-    const holding = input.previousSettings.holdingsByCode[input.fundCode] ?? null
-    let calculation: PortfolioCalculation
-    try {
-      calculation = dependencies.portfolio.calculate({
-        asOfDate: input.asOfDate,
-        currentNavByFund: input.currentNavByFund,
-      })
-    } catch (error) {
-      return coordinationResult({
-        error,
-        fundCode: input.fundCode,
-        holding,
-        ledger: null,
-        partialPersistence: false,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'ledger-error',
-      })
-    }
-
-    const status = statusForCalculation(calculation, input.fundCode)
-    const ledger = aggregateFor(calculation, input.fundCode)
-    if (
-      status !== 'synced' ||
-      ledger === null ||
-      ledger.units.value === null ||
-      ledger.costAmount.value === null
-    ) {
-      return coordinationResult({
-        calculation,
-        fundCode: input.fundCode,
-        holding,
-        ledger,
-        partialPersistence: false,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: status !== 'synced',
-        status,
-      })
-    }
-
-    const projectedHolding = createProjectedHolding(
-      input.fundCode,
-      ledger,
-      holding,
-      dependencies.portfolio.getPortfolio(),
-    )
-    const writer = dependencies.funds.replaceHoldingProjection
-    if (writer === undefined) {
-      const rollback = restoreCrossDomainSnapshot(input.previousPortfolio, input.previousSettings)
-      return coordinationResult({
-        calculation,
-        error: new Error('Funds projection adapter is unavailable'),
-        fundCode: input.fundCode,
-        holding,
-        ledger,
-        partialPersistence: !rollback.ok,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'holding-sync-failed',
-      })
-    }
-
-    let writeResult: FundsSettingsWriteResult
-    try {
-      writeResult = writer(projectedHolding)
-    } catch (error) {
-      writeResult = { error, ok: false, reason: 'persistence-failed' }
-    }
-    if (!writeResult.ok) {
-      const rollback = restoreCrossDomainSnapshot(input.previousPortfolio, input.previousSettings)
-      return coordinationResult({
-        calculation,
-        error: writeResult.error ?? new Error(writeResult.reason),
-        fundCode: input.fundCode,
-        holding,
-        ledger,
-        partialPersistence: !rollback.ok,
-        portfolio: dependencies.portfolio.getPortfolio(),
-        retryable: true,
-        status: 'holding-sync-failed',
-      })
-    }
-
-    return coordinationResult({
-      calculation,
+    return runProjectionCommit({
+      executePortfolio: (state) =>
+        calculateProjection(state, {
+          asOfDate: input.asOfDate,
+          currentNavByFund: input.currentNavByFund,
+          fundCode: input.fundCode,
+        }),
       fundCode: input.fundCode,
-      holding:
-        dependencies.funds.getSettingsSnapshot().holdingsByCode[input.fundCode] ?? projectedHolding,
-      ledger,
-      partialPersistence: false,
-      portfolio: dependencies.portfolio.getPortfolio(),
-      retryable: false,
-      status: 'synced',
+      holding: input.previousSettings.holdingsByCode[input.fundCode] ?? null,
     })
   }
 
@@ -982,75 +1120,6 @@ export function createPortfolioCoordinator(
     const initial = createInitialHoldingEvent(fundCode, holding, now())
     const result = dependencies.portfolio.addEvent(initial)
     return result.ok ? { ok: true } : { error: result.error, ok: false, partialPersistence: false }
-  }
-
-  function restoreSettingsIfChanged(previous: FundSettings): boolean {
-    if (stableSerialize(previous) === stableSerialize(dependencies.funds.getSettingsSnapshot())) {
-      return true
-    }
-    const restore = dependencies.funds.replaceSettingsPersisted
-    if (restore === undefined) return false
-    try {
-      return restore(previous).ok
-    } catch {
-      return false
-    }
-  }
-
-  function restoreCrossDomainSnapshot(
-    previousPortfolio: Portfolio,
-    previousSettings: FundSettings,
-  ): { readonly ok: boolean; readonly error?: unknown } {
-    const portfolioRollback = restorePortfolioSnapshot(previousPortfolio)
-    const settingsRollback = restoreSettingsIfChanged(previousSettings)
-    return {
-      error: portfolioRollback.error,
-      ok: portfolioRollback.ok && settingsRollback,
-    }
-  }
-
-  function restorePortfolioSnapshot(previous: Portfolio): {
-    readonly ok: boolean
-    readonly error?: unknown
-  } {
-    try {
-      let current = dependencies.portfolio.getPortfolio()
-      for (const event of current.events) {
-        if (!previous.events.some(({ id }) => id === event.id)) {
-          const result = dependencies.portfolio.deleteEvent(event.id)
-          if (!result.ok) return { error: result.error, ok: false }
-        }
-      }
-      current = dependencies.portfolio.getPortfolio()
-      for (const event of previous.events) {
-        const existing = current.events.find(({ id }) => id === event.id)
-        const result =
-          existing === undefined
-            ? dependencies.portfolio.addEvent(event)
-            : stableSerialize(existing) === stableSerialize(event)
-              ? { ok: true as const }
-              : dependencies.portfolio.updateEvent(event)
-        if (!result.ok) return { error: result.error, ok: false }
-        current = dependencies.portfolio.getPortfolio()
-      }
-      current = dependencies.portfolio.getPortfolio()
-      for (const code of current.fundCodes) {
-        if (!previous.fundCodes.includes(code)) {
-          const result = dependencies.portfolio.disableFund(code)
-          if (!result.ok) return { error: result.error, ok: false }
-        }
-      }
-      current = dependencies.portfolio.getPortfolio()
-      for (const code of previous.fundCodes) {
-        if (!current.fundCodes.includes(code)) {
-          const result = dependencies.portfolio.enableFund(code)
-          if (!result.ok) return { error: result.error, ok: false }
-        }
-      }
-      return { ok: true }
-    } catch (error) {
-      return { error, ok: false }
-    }
   }
 }
 
@@ -1229,25 +1298,4 @@ function hasPortfolioDataForFund(portfolio: Portfolio, fundCode: string): boolea
     portfolio.fundCodes.includes(fundCode) ||
     portfolio.events.some(({ fundCode: code }) => code === fundCode)
   )
-}
-
-function stableSerialize(value: unknown): string {
-  return JSON.stringify(canonicalize(value))
-}
-
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize)
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.keys(value)
-        .filter((key) => value[key] !== undefined)
-        .sort()
-        .map((key) => [key, canonicalize(value[key])]),
-    )
-  }
-  return value
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
