@@ -220,7 +220,7 @@ function toLedgerRecordViewModel(
       return {
         ...base,
         amount: toMoneyField(result?.totalAmount ?? event.totalAmount),
-        fee: toMoneyField(purchaseFee, true, shouldShowSourceText(event.source, purchaseFee)),
+        fee: toMoneyField(purchaseFee, shouldShowSourceText(event.source, purchaseFee)),
         unitNav: toNavField(unitNav, shouldShowSourceText(event.source, unitNav)),
         units: toUnitsField(units, false, shouldShowSourceText(event.source, units)),
       }
@@ -237,7 +237,7 @@ function toLedgerRecordViewModel(
         amountLabel: '净额',
         costBasisAmount: toMoneyField(sellResult?.costBasisAmount ?? unknownField()),
         costBasisLabel: '移动平均成本',
-        fee: toMoneyField(fee, true, shouldShowSourceText(event.source, fee)),
+        fee: toMoneyField(fee, shouldShowSourceText(event.source, fee)),
         unitNav: toNavField(unitNav, shouldShowSourceText(event.source, unitNav)),
         units: toUnitsField(units, false, shouldShowSourceText(event.source, units)),
       }
@@ -347,16 +347,12 @@ function toAverageCostField(
   }
 }
 
-function toMoneyField(
-  field: MoneyFieldValue,
-  signed = false,
-  sourceVisible = true,
-): LedgerFieldViewModel {
+function toMoneyField(field: MoneyFieldValue, sourceVisible = true): LedgerFieldViewModel {
   return {
     confidenceText: confidenceText(field.confidence),
     sourceVisible,
     sourceText: sourceText(field.source),
-    text: formatMoney(field.value, signed),
+    text: formatMoney(field.value),
   }
 }
 
@@ -394,11 +390,9 @@ function unknownField(): MoneyFieldValue {
   return emptyFieldValue()
 }
 
-function formatMoney(value: number | null, signed: boolean): string {
+function formatMoney(value: number | null): string {
   if (value === null) return '--'
-  const absolute = `¥${Math.abs(value / 100).toFixed(2)}`
-  if (!signed || value === 0) return absolute
-  return value > 0 ? `+${absolute}` : `-${absolute}`
+  return `¥${Math.abs(value / 100).toFixed(2)}`
 }
 
 function formatUnitsValue(value: number | null, signed: boolean): string {
@@ -413,7 +407,7 @@ function formatDecimal(value: number, digits: number): string {
 }
 
 function confidenceText(confidence: PortfolioFieldConfidence): string {
-  if (confidence === 'actual') return '实际'
+  if (confidence === 'actual') return ''
   if (confidence === 'estimated') return '估算'
   return '未知'
 }
