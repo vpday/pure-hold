@@ -40,8 +40,6 @@ test('fund detail exposes average-cost sell facts without FIFO outputs', async (
     'utf8',
   )
 
-  assert.match(source, /row\.kind === 'sell'/)
   assert.match(source, /row\.costBasisAmount/)
-  assert.match(source, /realizedGainStatusText/)
-  assert.doesNotMatch(source, /remainingBatches|allocations|FIFO/)
+  assert.doesNotMatch(source, /#result|realizedGain|resultText|remainingBatches|allocations|FIFO/)
 })

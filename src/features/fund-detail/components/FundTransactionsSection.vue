@@ -21,11 +21,10 @@ const emit = defineEmits<{
 const transactionColumns: TableProps<LedgerRecordViewModel>['columns'] = [
   { cell: 'kind', colKey: 'kind', title: '类型', fixed: 'left' },
   { cell: 'date', colKey: 'dateText', title: '日期' },
-  { cell: 'units', colKey: 'units', title: '份额摘要' },
-  { cell: 'amount', colKey: 'amount', title: '金额摘要' },
+  { cell: 'units', colKey: 'units', title: '份额' },
+  { cell: 'amount', colKey: 'amount', title: '金额' },
   { cell: 'fee', colKey: 'fee', title: '费用' },
   { cell: 'cost', colKey: 'costBasisAmount', title: '成本基础' },
-  { cell: 'result', colKey: 'realizedGain', title: '收益/说明' },
   { cell: 'status', colKey: 'status', title: '状态' },
   { cell: 'actions', colKey: 'actions', title: '操作', fixed: 'right' },
 ]
@@ -79,7 +78,7 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
         row-key="id"
         size="small"
         table-layout="auto"
-        table-content-width="1250px"
+        table-content-width="1110px"
       >
         <template #kind="{ row }">
           <span>{{ row.kindText }}</span>
@@ -100,41 +99,33 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
             v-if="row.units.text !== '--'"
             class="ml-1 text-xs text-(--td-text-color-secondary)"
           >
-            {{ row.units.confidenceText }} · {{ row.units.sourceText }}
+            {{ row.units.confidenceText }}
           </span>
         </template>
         <template #amount="{ row }">
-          <span class="block font-mono tabular-nums"
-            >{{ row.amountLabel }} {{ row.amount.text }}</span
-          >
+          <span class="block font-mono tabular-nums">
+            <template v-if="row.amountLabel">{{ row.amountLabel }} </template>{{ row.amount.text }}
+          </span>
           <span v-if="row.reasonText" class="text-xs text-(--td-text-color-secondary)">
             {{ row.reasonText }}
           </span>
         </template>
         <template #fee="{ row }">
-          <span class="font-mono tabular-nums">{{ row.feeLabel }} {{ row.fee.text }}</span>
+          <span class="font-mono tabular-nums">
+            <template v-if="row.feeLabel">{{ row.feeLabel }} </template>{{ row.fee.text }}
+          </span>
           <span v-if="row.fee.text !== '--'" class="ml-1 text-xs text-(--td-text-color-secondary)">
-            {{ row.fee.confidenceText }} · {{ row.fee.sourceText }}
+            {{ row.fee.confidenceText }}
+            <template v-if="row.fee.sourceVisible"> · {{ row.fee.sourceText }}</template>
           </span>
         </template>
         <template #cost="{ row }">
-          <span class="block font-mono tabular-nums"
-            >{{ row.costBasisLabel }} {{ row.costBasisAmount.text }}</span
-          >
+          <span class="block font-mono tabular-nums">
+            <template v-if="row.costBasisLabel">{{ row.costBasisLabel }} </template
+            >{{ row.costBasisAmount.text }}
+          </span>
           <span v-if="row.unitNav.text !== '--'" class="text-xs text-(--td-text-color-secondary)">
-            净值 {{ row.unitNav.text }} · {{ row.navDateText }} · {{ row.unitNav.sourceText }}
-          </span>
-        </template>
-        <template #result="{ row }">
-          <span v-if="row.kind === 'sell'" class="block font-mono tabular-nums">
-            {{ row.realizedGain.text }}
-          </span>
-          <span v-if="row.kind === 'sell'" class="block text-xs text-(--td-text-color-secondary)">
-            {{ row.realizedGainStatusText }}
-          </span>
-          <span v-else class="text-sm">{{ row.resultText }}</span>
-          <span v-if="row.issueText" class="mt-1 block text-xs text-(--td-error-color)">
-            {{ row.issueText }}
+            净值 {{ row.unitNav.text }} · {{ row.navDateText }}
           </span>
         </template>
         <template #status="{ row }">
@@ -165,7 +156,6 @@ function deleteConfirmationText(transaction: LedgerRecordViewModel): string {
               <t-button size="small" theme="danger" variant="text">删除</t-button>
             </t-popconfirm>
           </div>
-          <span v-else class="text-xs text-(--td-text-color-secondary)">只读</span>
         </template>
       </t-table>
     </div>

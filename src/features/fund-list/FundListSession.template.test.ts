@@ -122,7 +122,7 @@ test('keeps transaction facts and recovery inside the portfolio coordinator', ()
   assert.match(transactionSectionSource, /row\.canDelete/)
   assert.match(transactionSectionSource, /row\.costBasisLabel/)
   assert.match(ledgerPresenterSource, /移动平均成本/)
-  for (const label of ['期初持仓', '买入', '卖出', '现金分红', '红利再投资', '手工修正']) {
+  for (const label of ['初始持仓', '买入', '卖出', '现金分红', '红利再投资', '手工修正']) {
     assert.match(ledgerPresenterSource, new RegExp(label))
   }
   assert.doesNotMatch(

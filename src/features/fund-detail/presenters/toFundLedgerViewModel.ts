@@ -21,6 +21,7 @@ export type LedgerStatusTone = 'default' | 'success' | 'warning' | 'error'
 
 export interface LedgerFieldViewModel {
   readonly confidenceText: string
+  readonly sourceVisible: boolean
   readonly sourceText: string
   readonly text: string
 }
@@ -37,17 +38,12 @@ export interface LedgerRecordViewModel {
   readonly expectedConfirmationDateText: string
   readonly fee: LedgerFieldViewModel
   readonly feeLabel: string
-  readonly hasIssue: boolean
   readonly id: string
-  readonly issueText: string
   readonly kind: PortfolioEventKind
   readonly kindText: string
   readonly navDateText: string
   readonly pending: boolean
-  readonly realizedGain: LedgerFieldViewModel
-  readonly realizedGainStatusText: string
   readonly reasonText: string
-  readonly resultText: string
   readonly sourceText: string
   readonly status: LedgerRecordStatus
   readonly statusText: string
@@ -92,7 +88,7 @@ const kindText: Record<PortfolioEventKind, string> = {
   'cash-dividend': '现金分红',
   'dividend-reinvestment': '红利再投资',
   buy: '买入',
-  'initial-holding': '期初持仓',
+  'initial-holding': '初始持仓',
   sell: '卖出',
 }
 
@@ -147,33 +143,27 @@ function toLedgerRecordViewModel(
 ): OrderedLedgerRecord {
   const calculated = findCalculation(event, calculation)
   const pending = isPending(event, calculated)
-  const issueText = issues.map(formatIssue).join('；')
   const status: LedgerRecordStatus = issues.length ? 'issue' : pending ? 'pending' : 'settled'
 
   const base = {
     amount: emptyField(),
-    amountLabel: '金额',
+    amountLabel: '',
     canDelete: event.kind === 'buy' || event.kind === 'sell',
     canEdit: event.kind === 'buy' || event.kind === 'sell',
     confirmedDateText: 'confirmedDate' in event ? (event.confirmedDate ?? '--') : '--',
     costBasisAmount: emptyField(),
-    costBasisLabel: '成本',
+    costBasisLabel: '',
     dateText: eventDateText(event),
     expectedConfirmationDateText:
       'expectedConfirmationDate' in event ? (event.expectedConfirmationDate ?? '--') : '--',
     fee: emptyField(),
-    feeLabel: '费用',
-    hasIssue: issues.length > 0,
+    feeLabel: '',
     id: event.id,
-    issueText,
     kind: event.kind,
     kindText: kindText[event.kind],
     navDateText: 'navDate' in event ? event.navDate : '--',
     pending,
-    realizedGain: emptyField(),
-    realizedGainStatusText: '--',
     reasonText: 'reason' in event ? event.reason : '',
-    resultText: resultText(event.kind),
     sourceText: eventSourceText(event.source),
     status,
     statusText: statusText(status, pending, event, calculated),
@@ -188,11 +178,12 @@ function toLedgerRecordViewModel(
   switch (event.kind) {
     case 'adjustment': {
       const result = calculated && 'targetUnits' in calculated ? calculated : undefined
+      const targetUnits = result?.targetUnits ?? event.targetUnits
       return {
         ...base,
         amount: toMoneyField(result?.targetCostAmount ?? event.targetCostAmount),
-        amountLabel: '目标总成本',
-        units: toUnitsField(result?.targetUnits ?? event.targetUnits),
+        amountLabel: '目标成本',
+        units: toUnitsField(targetUnits, false, shouldShowSourceText(event.source, targetUnits)),
       }
     }
     case 'cash-dividend': {
@@ -200,57 +191,55 @@ function toLedgerRecordViewModel(
       return {
         ...base,
         amount: toMoneyField(result?.cashAmount ?? event.cashAmount),
-        amountLabel: '现金分红',
       }
     }
     case 'dividend-reinvestment': {
       const result = calculated && 'dividendAmount' in calculated ? calculated : undefined
       const dividendAmount = result?.dividendAmount ?? event.dividendAmount
+      const unitNav = result?.unitNav ?? event.unitNav
+      const units = result?.units ?? event.units
       return {
         ...base,
         amount: toMoneyField(dividendAmount),
-        amountLabel: '再投资金额',
         costBasisAmount: toMoneyField(dividendAmount),
-        costBasisLabel: '新增成本',
-        unitNav: toNavField(result?.unitNav ?? event.unitNav),
-        units: toUnitsField(result?.units ?? event.units),
+        unitNav: toNavField(unitNav, shouldShowSourceText(event.source, unitNav)),
+        units: toUnitsField(units, false, shouldShowSourceText(event.source, units)),
       }
     }
     case 'initial-holding':
       return {
         ...base,
         amount: toMoneyField(event.costAmount),
-        amountLabel: '期初成本',
-        units: toUnitsField(event.units),
+        units: toUnitsField(event.units, false, shouldShowSourceText(event.source, event.units)),
       }
     case 'buy': {
       const result = calculated && 'totalAmount' in calculated ? calculated : undefined
+      const purchaseFee = result?.purchaseFee ?? event.purchaseFee
+      const unitNav = result?.unitNav ?? event.unitNav
+      const units = result?.units ?? event.units
       return {
         ...base,
         amount: toMoneyField(result?.totalAmount ?? event.totalAmount),
-        amountLabel: '买入金额',
-        fee: toMoneyField(result?.purchaseFee ?? event.purchaseFee, true),
-        feeLabel: '申购费',
-        unitNav: toNavField(result?.unitNav ?? event.unitNav),
-        units: toUnitsField(result?.units ?? event.units),
+        fee: toMoneyField(purchaseFee, true, shouldShowSourceText(event.source, purchaseFee)),
+        unitNav: toNavField(unitNav, shouldShowSourceText(event.source, unitNav)),
+        units: toUnitsField(units, false, shouldShowSourceText(event.source, units)),
       }
     }
     case 'sell': {
       const result = calculated && 'netAmount' in calculated ? calculated : undefined
       const sellResult = result as PortfolioSellCalculation | undefined
+      const fee = sellResult?.redemptionFee ?? event.redemptionFee
+      const unitNav = sellResult?.unitNav ?? event.unitNav
+      const units = sellResult?.units ?? event.units
       return {
         ...base,
         amount: toMoneyField(sellResult?.netAmount ?? event.netAmount),
-        amountLabel: '卖出净额',
+        amountLabel: '净额',
         costBasisAmount: toMoneyField(sellResult?.costBasisAmount ?? unknownField()),
         costBasisLabel: '移动平均成本',
-        fee: toMoneyField(sellResult?.redemptionFee ?? event.redemptionFee, true),
-        feeLabel: '赎回费',
-        realizedGain: toMoneyField(sellResult?.realizedGain ?? unknownField(), true),
-        realizedGainStatusText:
-          sellResult?.realizedGainStatus === 'complete' ? '收益已计算' : '收益待补全',
-        unitNav: toNavField(sellResult?.unitNav ?? event.unitNav),
-        units: toUnitsField(sellResult?.units ?? event.units),
+        fee: toMoneyField(fee, true, shouldShowSourceText(event.source, fee)),
+        unitNav: toNavField(unitNav, shouldShowSourceText(event.source, unitNav)),
+        units: toUnitsField(units, false, shouldShowSourceText(event.source, units)),
       }
     }
   }
@@ -300,15 +289,6 @@ function statusText(
   return '待确认或待补全'
 }
 
-function resultText(kind: PortfolioEventKind): string {
-  if (kind === 'cash-dividend') return '计入现金分红'
-  if (kind === 'dividend-reinvestment') return '计入持仓成本'
-  if (kind === 'initial-holding') return '账本期初余额'
-  if (kind === 'adjustment') return '按目标持仓应用'
-  if (kind === 'buy') return '增加持仓成本'
-  return '按平均成本计算收益'
-}
-
 function statusTone(status: LedgerRecordStatus): LedgerStatusTone {
   if (status === 'issue') return 'error'
   if (status === 'pending') return 'warning'
@@ -336,16 +316,11 @@ function groupIssuesByEvent(
   return grouped
 }
 
-function formatIssue(issue: PortfolioCalculationIssue): string {
-  if (issue.code === 'insufficient-units') {
-    return `份额不足：请求 ${formatUnits(issue.requestedUnits)} 份，可用 ${formatUnits(issue.availableUnits)} 份`
-  }
-  if (issue.code === 'missing-sell-units') return '卖出份额未能确认，成本基础暂不可计算'
-  return '修正目标份额与总成本必须同时为零或同时为正'
-}
-
-function formatUnits(field: FieldValue<number>): string {
-  return field.value === null ? '--' : formatDecimal(field.value, 4)
+function shouldShowSourceText(
+  eventSource: PortfolioEvent['source'],
+  field: FieldValue<number>,
+): boolean {
+  return eventSource !== 'manual' || field.source !== 'manual' || field.confidence !== 'actual'
 }
 
 function toPositionViewModel(
@@ -366,37 +341,49 @@ function toAverageCostField(
   if (costAmount.value === null || units.value === null || units.value <= 0) return emptyField()
   return {
     confidenceText: confidenceText(mergeConfidence(costAmount.confidence, units.confidence)),
+    sourceVisible: true,
     sourceText: sourceText('formula'),
     text: `¥${formatDecimal(costAmount.value / units.value / 100, 6)}`,
   }
 }
 
-function toMoneyField(field: MoneyFieldValue, signed = false): LedgerFieldViewModel {
+function toMoneyField(
+  field: MoneyFieldValue,
+  signed = false,
+  sourceVisible = true,
+): LedgerFieldViewModel {
   return {
     confidenceText: confidenceText(field.confidence),
+    sourceVisible,
     sourceText: sourceText(field.source),
     text: formatMoney(field.value, signed),
   }
 }
 
-function toUnitsField(field: FieldValue<number>, signed = false): LedgerFieldViewModel {
+function toUnitsField(
+  field: FieldValue<number>,
+  signed = false,
+  sourceVisible = true,
+): LedgerFieldViewModel {
   return {
     confidenceText: confidenceText(field.confidence),
+    sourceVisible,
     sourceText: sourceText(field.source),
     text: formatUnitsValue(field.value, signed),
   }
 }
 
-function toNavField(field: FieldValue<number>): LedgerFieldViewModel {
+function toNavField(field: FieldValue<number>, sourceVisible = true): LedgerFieldViewModel {
   return {
     confidenceText: confidenceText(field.confidence),
+    sourceVisible,
     sourceText: sourceText(field.source),
     text: field.value === null ? '--' : formatDecimal(field.value, 4),
   }
 }
 
 function emptyField(): LedgerFieldViewModel {
-  return { confidenceText: '未知', sourceText: '--', text: '--' }
+  return { confidenceText: '未知', sourceVisible: false, sourceText: '--', text: '--' }
 }
 
 function emptyFieldValue(): FieldValue<number> {
@@ -422,10 +409,7 @@ function formatUnitsValue(value: number | null, signed: boolean): string {
 }
 
 function formatDecimal(value: number, digits: number): string {
-  return value
-    .toFixed(digits)
-    .replace(/\.\d*0$/, '')
-    .replace(/\.$/, '')
+  return value.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function confidenceText(confidence: PortfolioFieldConfidence): string {
@@ -444,7 +428,7 @@ function sourceText(source: PortfolioValueSource): string {
 }
 
 function eventSourceText(source: PortfolioEvent['source']): string {
-  if (source === 'initial-holding') return '自动建账'
+  if (source === 'initial-holding') return ''
   if (source === 'dividend-reinvestment') return '系统事件'
   if (source === 'adjustment') return '手工修正'
   return '手工记录'

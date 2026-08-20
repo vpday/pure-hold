@@ -17,8 +17,11 @@ import { toFundLedgerViewModel, toLedgerRecordViewModels } from './toFundLedgerV
 
 const fundCode = '000001'
 
-function actual(value: number): FieldValue<number> {
-  return { confidence: 'actual', source: 'manual', value }
+function actual(
+  value: number,
+  source: FieldValue<number>['source'] = 'manual',
+): FieldValue<number> {
+  return { confidence: 'actual', source, value }
 }
 
 function unknown(value: null = null): FieldValue<number> {
@@ -156,7 +159,41 @@ test('maps all ledger event kinds and restricts editing to buy and sell', () => 
     ],
   )
   assert.equal(rows.find(({ kind }) => kind === 'sell')?.costBasisAmount.text, '¥20.00')
+  assert.equal(rows.find(({ kind }) => kind === 'initial-holding')?.kindText, '初始持仓')
+  assert.equal(rows.find(({ kind }) => kind === 'initial-holding')?.amountLabel, '')
+  assert.equal(rows.find(({ kind }) => kind === 'buy')?.amountLabel, '')
+  assert.equal(rows.find(({ kind }) => kind === 'buy')?.feeLabel, '')
+  assert.equal(rows.find(({ kind }) => kind === 'sell')?.amountLabel, '净额')
+  assert.equal(rows.find(({ kind }) => kind === 'sell')?.costBasisLabel, '移动平均成本')
   assert.equal(rows.find(({ kind }) => kind === 'adjustment')?.reasonText, '手工对账修正')
+})
+
+test('preserves fractional units and hides only duplicate manual field sources', () => {
+  const event = {
+    ...buyEvent('fractional', '2026-08-10', '2026-08-10 10:00'),
+    unitNav: actual(0.665, 'nav-history'),
+    units: actual(750.125),
+  }
+  const row = toLedgerRecordViewModels([event], undefined, fundCode)[0]
+
+  assert.equal(row?.units.text, '750.125')
+  assert.equal(row?.units.sourceVisible, false)
+  assert.equal(row?.fee.sourceVisible, false)
+  assert.equal(row?.unitNav.text, '0.665')
+  assert.equal(row?.unitNav.sourceVisible, true)
+
+  const estimatedRow = toLedgerRecordViewModels(
+    [
+      {
+        ...event,
+        id: 'estimated',
+        units: { confidence: 'estimated' as const, source: 'manual' as const, value: 750.125 },
+      },
+    ],
+    undefined,
+    fundCode,
+  )[0]
+  assert.equal(estimatedRow?.units.sourceVisible, true)
 })
 
 test('puts pending records first and reverses saved order for equal dates without mutating input', () => {
@@ -194,8 +231,6 @@ test('keeps an insufficient sell visible as an issue while preserving edit and d
   const row = toLedgerRecordViewModels(events, calculate(events), fundCode)[0]
 
   assert.equal(row?.status, 'issue')
-  assert.equal(row?.hasIssue, true)
-  assert.match(row?.issueText ?? '', /份额不足/)
   assert.equal(row?.canEdit, true)
   assert.equal(row?.canDelete, true)
   assert.equal(row?.costBasisAmount.text, '--')

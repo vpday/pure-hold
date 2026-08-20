@@ -89,8 +89,13 @@ test('shows transaction provenance and edit/delete operations in details', () =>
   assert.match(transactionSectionSource, /:data="transactions"/)
   assert.match(transactionSectionSource, /row\.submittedAtText/)
   assert.match(transactionSectionSource, /row\.navDateText/)
-  assert.match(transactionSectionSource, /row\.units\.sourceText/)
-  assert.match(transactionSectionSource, /row\.unitNav\.sourceText/)
+  assert.match(transactionSectionSource, /v-if="row\.amountLabel"/)
+  assert.match(transactionSectionSource, /v-if="row\.feeLabel"/)
+  assert.match(transactionSectionSource, /v-if="row\.costBasisLabel"/)
+  assert.doesNotMatch(
+    transactionSectionSource,
+    /#result|realizedGain|realizedGainStatusText|resultText|issueText/,
+  )
   assert.match(transactionSectionSource, /row\.statusText/)
   assert.match(transactionSectionSource, /<t-popconfirm/)
   assert.match(transactionSectionSource, /emit\('editTransaction', row\.id\)/)
