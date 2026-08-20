@@ -10,7 +10,8 @@ test('uses official TDesign controls for the auditable correction form', () => {
   }
   assert.match(source, /MessagePlugin/)
   assert.match(source, /份额/)
-  assert.match(source, /总成本/)
+  assert.match(source, /持仓金额/)
+  assert.match(source, /持仓收益/)
   assert.match(source, /修正原因/)
   assert.match(source, /事件日期/)
 })

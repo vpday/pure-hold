@@ -55,10 +55,11 @@ export function createFundEditDraft(
   name: string,
   holding: FundHolding | undefined,
   groups: readonly FundGroupDefinition[],
+  currentNav: number | null = null,
 ): FundEditDraft {
   return {
     code,
-    holding: holding ? createFundHoldingDraft(holding) : createEmptyFundHoldingDraft(),
+    holding: holding ? createFundHoldingDraft(holding, currentNav) : createEmptyFundHoldingDraft(),
     name,
     selectedGroupIds: groups
       .filter(({ fundCodes }) => fundCodes.includes(code))
@@ -162,7 +163,8 @@ export function submitFundEditDraft(
 function isFundHoldingDraftEmpty(draft: FundHoldingDraft): boolean {
   return (
     String(draft.units).trim() === '' &&
-    String(draft.totalCostYuan).trim() === '' &&
+    String(draft.holdingAmountYuan).trim() === '' &&
+    String(draft.holdingIncomeYuan).trim() === '' &&
     String(draft.purchaseDate).trim() === '' &&
     String(draft.holdingDays).trim() === ''
   )

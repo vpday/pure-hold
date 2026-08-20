@@ -41,7 +41,13 @@ function open(code: string): void {
     props.portfolioCoordinator.getPortfolio().events,
     code,
   )
-  draft.value = createFundEditDraft(code, snapshot.name, store.holdingsByCode[code], store.groups)
+  draft.value = createFundEditDraft(
+    code,
+    snapshot.name,
+    store.holdingsByCode[code],
+    store.groups,
+    snapshot.nav,
+  )
   visible.value = true
 }
 

@@ -61,7 +61,8 @@ test('owns holding-step creation, validation and rebuilding', () => {
   Object.assign(draft.holding, {
     dividendMode: 'cash',
     purchaseDate: '2026-07-29',
-    totalCostYuan: '1.25',
+    holdingAmountYuan: '1.25',
+    holdingIncomeYuan: '0',
     units: '10',
   })
   assert.equal(session.confirmHoldings(), 1)
@@ -72,7 +73,7 @@ test('owns holding-step creation, validation and rebuilding', () => {
   const rebuilt = session.model.value.content
   assert.equal(rebuilt.step, 'holdings')
   if (rebuilt.step !== 'holdings') assert.fail('expected holdings step')
-  assert.equal(rebuilt.holdings.drafts[0]?.holding.totalCostYuan, '')
+  assert.equal(rebuilt.holdings.drafts[0]?.holding.holdingAmountYuan, '')
   scope.stop()
 })
 
@@ -104,7 +105,8 @@ test('saves holdings before automatic ledger setup and exposes an idempotent ret
   Object.assign(content.holdings.drafts[0]!.holding, {
     dividendMode: 'cash',
     purchaseDate: '2026-07-29',
-    totalCostYuan: '1.25',
+    holdingAmountYuan: '1.25',
+    holdingIncomeYuan: '0',
     units: '10',
   })
 

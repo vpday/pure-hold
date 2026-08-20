@@ -27,14 +27,16 @@ test('edit draft fills current holding and custom group memberships', () => {
         { fundCodes: ['000001'], id: 'one', name: '一组' },
         { fundCodes: [], id: 'two', name: '二组' },
       ],
+      2,
     ),
     {
       code: '000001',
       holding: {
         dividendMode: 'cash',
+        holdingAmountYuan: '40.00',
         holdingDays: '',
+        holdingIncomeYuan: '10.00',
         purchaseDate: '2020-01-01',
-        totalCostYuan: '30',
         timeMode: 'date',
         units: '20',
       },
@@ -53,11 +55,11 @@ test('reopening creates a fresh draft from the latest store values', () => {
     totalCostCents: 1000,
     units: 10,
   }
-  const first = createFundEditDraft('000001', '测试基金', holding, groups)
+  const first = createFundEditDraft('000001', '测试基金', holding, groups, 2)
   first.holding.units = '99'
   first.selectedGroupIds = []
 
-  const reopened = createFundEditDraft('000001', '测试基金', { ...holding, units: 20 }, groups)
+  const reopened = createFundEditDraft('000001', '测试基金', { ...holding, units: 20 }, groups, 2)
   assert.equal(reopened.holding.units, '20')
   assert.deepEqual(reopened.selectedGroupIds, ['one'])
 })
@@ -182,7 +184,8 @@ test('submits numeric values emitted by the holding number inputs', () => {
   Object.assign(draft.holding, {
     dividendMode: 'cash',
     holdingDays: 1000,
-    totalCostYuan: 0.89,
+    holdingAmountYuan: 0.89,
+    holdingIncomeYuan: 0,
     timeMode: 'days',
     units: 6817.77,
   })
@@ -236,8 +239,9 @@ test('saves only metadata after a fund ledger has been created', () => {
 function fillValidHolding(draft: ReturnType<typeof createFundEditDraft>): void {
   Object.assign(draft.holding, {
     dividendMode: 'reinvest',
-    purchaseDate: '2026-07-27',
-    totalCostYuan: '1',
+    holdingAmountYuan: '1',
+    holdingIncomeYuan: '0',
+    purchaseDate: '2026-07-24',
     units: '10',
   })
 }

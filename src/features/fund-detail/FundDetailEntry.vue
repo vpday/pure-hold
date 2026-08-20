@@ -245,7 +245,8 @@ function openCorrection(): void {
   if (!code || !state?.canCorrect) return
   correctionDraft.value = createFundHoldingCorrectionDraft(
     state.ledger?.units.value ?? 0,
-    state.ledger?.costAmount.value ?? 0,
+    holdingMetrics.value?.holdingAmount ?? 0,
+    holdingMetrics.value?.holdingIncome ?? 0,
   )
   correctionErrors.value = {}
   correctionSubmitError.value = ''

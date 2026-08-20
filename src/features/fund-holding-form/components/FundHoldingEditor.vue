@@ -6,6 +6,10 @@ import type {
   FundHoldingDraftErrors,
   FundHoldingTimeMode,
 } from '../models/fundHoldingDraft'
+import {
+  holdingDaysFromPurchaseDate,
+  purchaseDateFromHoldingDays,
+} from '../models/fundHoldingDraft'
 
 interface FundHoldingGroupOption {
   readonly label: string
@@ -30,13 +34,13 @@ const dividendOptions = [
   { label: '红利再投资', value: 'reinvest' },
   { label: '现金分红', value: 'cash' },
 ]
-const latestPurchaseDate = formatLocalDate(new Date())
+const latestPurchaseDate = formatLocalDate(yesterday())
 const rules = computed(() => ({
-  totalCostYuan: props.holdingFactsReadonly
+  holdingAmountYuan: props.holdingFactsReadonly
     ? []
     : [
         {
-          message: '请输入大于 0、最多 2 位小数的总成本',
+          message: '请输入大于 0、最多 2 位小数的持仓金额',
           required: true,
           validator: (value: unknown) => isPositiveDecimal(value, 2),
         },
@@ -44,14 +48,23 @@ const rules = computed(() => ({
   dividendMode: [{ enum: ['cash', 'reinvest'], message: '请选择分红方式', required: true }],
   holdingDays: [
     {
-      message: '请输入正整数持仓天数',
+      message: '请输入正整数持仓天数，且换算后的购买日期须早于今天且非周末',
       required: true,
-      validator: (value: unknown) => /^[1-9]\d*$/.test(String(value ?? '').trim()),
+      validator: (value: unknown) => isValidHoldingDays(value),
     },
   ],
+  holdingIncomeYuan: props.holdingFactsReadonly
+    ? []
+    : [
+        {
+          message: '请输入可带负号、最多 2 位小数的持仓收益',
+          required: true,
+          validator: (value: unknown) => isSignedDecimal(value, 2),
+        },
+      ],
   purchaseDate: [
     {
-      message: '请选择不晚于今天且非周末的购买日期',
+      message: '请选择早于今天且非周末的购买日期',
       required: true,
       validator: (value: unknown) => isValidPurchaseDate(value),
     },
@@ -68,13 +81,25 @@ const rules = computed(() => ({
 }))
 
 function changeMode(mode: FundHoldingTimeMode): void {
+  if (mode === props.draft.timeMode) return
+  if (mode === 'date') {
+    props.draft.purchaseDate = purchaseDateFromHoldingDays(props.draft.holdingDays) ?? ''
+  } else {
+    props.draft.holdingDays = holdingDaysFromPurchaseDate(props.draft.purchaseDate) ?? ''
+  }
   props.draft.timeMode = mode
-  if (mode === 'date') props.draft.holdingDays = ''
-  else props.draft.purchaseDate = ''
 }
 
-function updateDraftValue(key: 'holdingDays' | 'totalCostYuan' | 'units', value: unknown): void {
-  if (props.holdingFactsReadonly && (key === 'totalCostYuan' || key === 'units')) return
+function updateDraftValue(
+  key: 'holdingAmountYuan' | 'holdingDays' | 'holdingIncomeYuan' | 'units',
+  value: unknown,
+): void {
+  if (
+    props.holdingFactsReadonly &&
+    (key === 'holdingAmountYuan' || key === 'holdingIncomeYuan' || key === 'units')
+  ) {
+    return
+  }
   props.draft[key] = toDraftValue(value)
 }
 
@@ -89,9 +114,19 @@ function isPositiveDecimal(value: unknown, maxDecimals: number): boolean {
   )
 }
 
+function isSignedDecimal(value: unknown, maxDecimals: number): boolean {
+  const normalized = String(value ?? '').trim()
+  return new RegExp(`^-?\\d+(?:\\.\\d{1,${maxDecimals}})?$`).test(normalized)
+}
+
 function isValidPurchaseDate(value: unknown): boolean {
   const date = toIsoDate(value)
   return date !== undefined && date <= latestPurchaseDate && !isWeekend(date)
+}
+
+function isValidHoldingDays(value: unknown): boolean {
+  const purchaseDate = purchaseDateFromHoldingDays(String(value ?? '').trim())
+  return isValidPurchaseDate(purchaseDate)
 }
 
 function disablePurchaseDate(value: string | number | Date): boolean {
@@ -124,6 +159,12 @@ function formatLocalDate(date: Date): string {
   ].join('-')
 }
 
+function yesterday(): Date {
+  const date = new Date()
+  date.setDate(date.getDate() - 1)
+  return date
+}
+
 async function validate(): Promise<boolean> {
   return (await formRef.value?.validate({ showErrorMessage: true })) === true
 }
@@ -137,7 +178,7 @@ defineExpose({ validate })
       v-if="holdingFactsReadonly"
       class="mb-4"
       theme="info"
-      message="该基金已建账，份额和总成本由成交记录自动计算，只能通过交易或手工修正改变。"
+      message="该基金已有成交记录，份额、持仓金额和持仓收益由成交记录自动计算，只能通过交易或手工修正改变。"
     />
     <t-form-item v-if="groupOptions" label="自定义分组">
       <t-select
@@ -154,6 +195,42 @@ defineExpose({ validate })
 
     <div class="grid grid-cols-1 sm:gap-x-4 sm:grid-cols-2">
       <t-form-item
+        label="持仓金额"
+        name="holdingAmountYuan"
+        :status="errors.holdingAmountYuan ? 'error' : undefined"
+        :tips="errors.holdingAmountYuan"
+      >
+        <t-input-number
+          :value="draft.holdingAmountYuan"
+          :decimal-places="2"
+          :min="holdingFactsReadonly ? undefined : 0.01"
+          placeholder="0.00"
+          step="0.01"
+          suffix="元"
+          theme="normal"
+          :readonly="holdingFactsReadonly"
+          @change="updateDraftValue('holdingAmountYuan', $event)"
+        />
+      </t-form-item>
+      <t-form-item
+        label="持仓收益"
+        name="holdingIncomeYuan"
+        :status="errors.holdingIncomeYuan ? 'error' : undefined"
+        :tips="errors.holdingIncomeYuan"
+      >
+        <t-input-number
+          :value="draft.holdingIncomeYuan"
+          :decimal-places="2"
+          :min="undefined"
+          placeholder="0.00"
+          step="0.01"
+          suffix="元"
+          theme="normal"
+          :readonly="holdingFactsReadonly"
+          @change="updateDraftValue('holdingIncomeYuan', $event)"
+        />
+      </t-form-item>
+      <t-form-item
         label="持有份额"
         name="units"
         :status="errors.units ? 'error' : undefined"
@@ -161,7 +238,6 @@ defineExpose({ validate })
       >
         <t-input-number
           :value="draft.units"
-          align="right"
           :decimal-places="4"
           :min="0.0001"
           placeholder="0.0000"
@@ -170,25 +246,6 @@ defineExpose({ validate })
           theme="normal"
           :readonly="holdingFactsReadonly"
           @change="updateDraftValue('units', $event)"
-        />
-      </t-form-item>
-      <t-form-item
-        label="总成本"
-        name="totalCostYuan"
-        :status="errors.totalCostYuan ? 'error' : undefined"
-        :tips="errors.totalCostYuan"
-      >
-        <t-input-number
-          :value="draft.totalCostYuan"
-          align="right"
-          :decimal-places="2"
-          :min="holdingFactsReadonly ? undefined : 0.01"
-          placeholder="0.00"
-          step="0.01"
-          :readonly="holdingFactsReadonly"
-          suffix="元"
-          theme="normal"
-          @change="updateDraftValue('totalCostYuan', $event)"
         />
       </t-form-item>
       <t-form-item

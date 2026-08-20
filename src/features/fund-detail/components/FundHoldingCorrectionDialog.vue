@@ -25,7 +25,10 @@ function close(): void {
   emit('close')
 }
 
-function updateDraftValue(key: 'targetUnits' | 'totalCostYuan', value: unknown): void {
+function updateDraftValue(
+  key: 'holdingAmountYuan' | 'holdingIncomeYuan' | 'targetUnits',
+  value: unknown,
+): void {
   props.draft[key] = value === undefined || value === null || value === '' ? '' : String(value)
 }
 
@@ -57,6 +60,39 @@ watch(
   >
     <t-form :data="draft" layout="vertical">
       <t-form-item
+        label="持仓金额"
+        name="holdingAmountYuan"
+        :status="errors.holdingAmountYuan ? 'error' : undefined"
+        :tips="errors.holdingAmountYuan"
+      >
+        <t-input-number
+          :value="draft.holdingAmountYuan"
+          :decimal-places="2"
+          :min="0"
+          placeholder="0.00"
+          step="0.01"
+          suffix="元"
+          theme="normal"
+          @change="updateDraftValue('holdingAmountYuan', $event)"
+        />
+      </t-form-item>
+      <t-form-item
+        label="持仓收益"
+        name="holdingIncomeYuan"
+        :status="errors.holdingIncomeYuan ? 'error' : undefined"
+        :tips="errors.holdingIncomeYuan"
+      >
+        <t-input-number
+          :value="draft.holdingIncomeYuan"
+          :decimal-places="2"
+          placeholder="0.00"
+          step="0.01"
+          suffix="元"
+          theme="normal"
+          @change="updateDraftValue('holdingIncomeYuan', $event)"
+        />
+      </t-form-item>
+      <t-form-item
         label="份额"
         name="targetUnits"
         :status="errors.targetUnits ? 'error' : undefined"
@@ -71,23 +107,6 @@ watch(
           suffix="份"
           theme="normal"
           @change="updateDraftValue('targetUnits', $event)"
-        />
-      </t-form-item>
-      <t-form-item
-        label="总成本"
-        name="totalCostYuan"
-        :status="errors.totalCostYuan ? 'error' : undefined"
-        :tips="errors.totalCostYuan"
-      >
-        <t-input-number
-          :value="draft.totalCostYuan"
-          :decimal-places="2"
-          :min="0"
-          placeholder="0.00"
-          step="0.01"
-          suffix="元"
-          theme="normal"
-          @change="updateDraftValue('totalCostYuan', $event)"
         />
       </t-form-item>
       <t-form-item
