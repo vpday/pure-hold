@@ -667,12 +667,15 @@ defineExpose({ open, openBuy: open, openEdit, openSell })
     v-else
     v-model:visible="visible"
     attach="body"
+    :showOverlay="false"
     :close-btn="false"
     :close-on-esc-keydown="false"
     :close-on-overlay-click="false"
     drawer-class-name="fund-transaction-drawer"
+    :footer="false"
     placement="bottom"
     size="100dvh"
+    :z-index="1600"
   >
     <template #header>
       <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center">
@@ -685,7 +688,17 @@ defineExpose({ open, openBuy: open, openEdit, openSell })
           <template #icon><t-icon name="close" /></template>
         </t-button>
         <span class="text-lg font-medium">{{ mode === 'buy' ? '记录买入' : '记录卖出' }}</span>
-        <span aria-hidden="true" />
+        <t-button
+          class="justify-self-end"
+          shape="square"
+          size="large"
+          theme="primary"
+          variant="text"
+          :loading="isSaving"
+          @click="saveCurrentTransaction"
+        >
+          保存
+        </t-button>
       </div>
     </template>
     <div class="fund-transaction-mobile-content">
@@ -760,14 +773,6 @@ defineExpose({ open, openBuy: open, openEdit, openSell })
         @update-submitted-at="updateSubmittedAt"
       />
     </div>
-    <template #footer>
-      <div class="flex justify-end gap-2 pb-[env(safe-area-inset-bottom)]">
-        <t-button type="button" variant="outline" @click="close">取消</t-button>
-        <t-button type="button" theme="primary" :loading="isSaving" @click="saveCurrentTransaction">
-          保存
-        </t-button>
-      </div>
-    </template>
   </t-drawer>
 </template>
 

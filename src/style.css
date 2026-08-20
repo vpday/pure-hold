@@ -37,3 +37,10 @@
     overscroll-behavior: contain;
   }
 }
+
+@media (max-width: 40rem) {
+  .t-input__inner,
+  .t-textarea__inner {
+    font-size: 16px;
+  }
+}

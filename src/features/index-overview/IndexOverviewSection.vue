@@ -131,6 +131,7 @@ function openIndexSettings(): void {
     <t-drawer
       v-model:visible="drawerVisible"
       attach="body"
+      :showOverlay="false"
       :close-btn="true"
       :footer="false"
       header="自选指数"

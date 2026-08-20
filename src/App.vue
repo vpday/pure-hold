@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { MessagePlugin as $Message } from 'tdesign-vue-next'
 import zhCNConfig from 'tdesign-vue-next/es/locale/zh_CN'
 
 import PwaUpdateNotification from '@/app/components/PwaUpdateNotification.vue'
@@ -52,11 +53,14 @@ async function refreshAllData(): Promise<void> {
     return
   }
   globalRefreshing.value = true
+  const msg = $Message.info({ content: '刷新中', duration: 0 })
   try {
     await requestGlobalRefresh()
   } finally {
+    $Message.close(msg)
     globalRefreshing.value = false
   }
+  $Message.success({ content: '刷新完成' })
 }
 
 function todayInShanghai(): string {

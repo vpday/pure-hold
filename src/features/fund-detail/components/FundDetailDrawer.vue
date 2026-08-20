@@ -11,7 +11,6 @@ defineProps<{
   error: string
   isLoading: boolean
   ledger: FundLedgerViewModel
-  size: string
   viewModel: FundDetailViewModel
   visible: boolean
 }>()
@@ -66,7 +65,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
     :footer="false"
     placement="bottom"
     prevent-scroll-through
-    :size="size"
+    size="100dvh"
     :visible="visible"
     :size-draggable="true"
     @close="emit('close')"
@@ -456,7 +455,7 @@ function preventAnchorHash(context: { e: MouseEvent }): void {
 }
 
 :global(.fund-detail-drawer .t-drawer__content-wrapper) {
-  @apply max-w-none rounded-none sm:left-1/2 sm:max-w-7xl sm:-translate-x-1/2 sm:rounded-t-md;
+  @apply sm:left-1/2 sm:max-w-7xl sm:-translate-x-1/2;
 }
 
 :global(.t-collapse-panel__wrapper .t-collapse-panel__content) {

@@ -355,7 +355,6 @@ defineExpose({ open })
     :error="detail.error.value"
     :is-loading="detail.isLoading.value"
     :ledger="ledger"
-    size="100dvh"
     :view-model="viewModel"
     :visible="detail.visible.value"
     @close="close"

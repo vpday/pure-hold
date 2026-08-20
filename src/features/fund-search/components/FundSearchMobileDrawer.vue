@@ -13,6 +13,7 @@ const emit = defineEmits<{
   <t-drawer
     v-model:visible="visible"
     attach="body"
+    :showOverlay="false"
     :close-btn="false"
     :destroy-on-close="true"
     :footer="false"

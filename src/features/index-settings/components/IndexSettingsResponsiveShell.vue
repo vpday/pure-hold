@@ -50,6 +50,7 @@ const { isSmUp } = useBreakpoints()
     v-else
     v-model:visible="visible"
     attach="body"
+    :showOverlay="false"
     :close-btn="false"
     :close-on-esc-keydown="false"
     :close-on-overlay-click="false"
