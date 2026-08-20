@@ -33,8 +33,13 @@ test('provides desktop dialog and mobile drawer entry surfaces', () => {
   assert.match(sellFormSource, /<t-tag[\s\S]*只记录本地卖出信息，不会提交真实交易。[\s\S]*<section/)
 })
 
-test('keeps one shared confirmation footer for each transaction surface', () => {
-  assert.equal(entrySource.match(/<template #footer>/g)?.length, 2)
+test('keeps the desktop footer and mobile header save actions', () => {
+  assert.equal(entrySource.match(/<template #footer>/g)?.length, 1)
+  assert.match(entrySource, /<t-dialog[\s\S]*<template #footer>[\s\S]*saveCurrentTransaction/)
+  assert.match(
+    entrySource,
+    /<t-drawer[\s\S]*:footer="false"[\s\S]*<template #header>[\s\S]*@click="saveCurrentTransaction"[\s\S]*保存/,
+  )
   assert.match(entrySource, /saveCurrentTransaction/)
   assert.doesNotMatch(entrySource, /@cancel="close"/)
   assert.match(formSource, /<t-form[\s\S]*@submit="handleSubmit"/)

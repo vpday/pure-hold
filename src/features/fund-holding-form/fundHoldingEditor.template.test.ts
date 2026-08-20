@@ -15,7 +15,7 @@ test('uses TDesign form controls for holding facts and preserves group selection
   assert.match(source, /label="持仓收益"/)
   assert.match(source, /holdingFactsReadonly/)
   assert.match(source, /:readonly="holdingFactsReadonly"/)
-  assert.match(source, /message="该基金已建账/)
+  assert.match(source, /message="该基金已有成交记录/)
   assert.match(source, /<t-date-picker/)
   assert.match(source, /<t-radio-group/)
   assert.match(source, /<t-select[\s\S]*multiple/)
