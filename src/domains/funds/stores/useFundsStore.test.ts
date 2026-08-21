@@ -12,8 +12,8 @@ test('fund store deduplicates refreshes, merges partial success and reports save
     saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
-    assert.equal(store.snapshotsByCode['161726']?.estimatedNav, null)
-    assert.equal(store.snapshotsByCode['161726']?.name, '基金 161726')
+    assert.equal(store.marketDataByCode['161726']?.estimatedNav, null)
+    assert.equal(store.marketDataByCode['161726']?.name, '基金 161726')
     let fetchCalls = 0
     let releaseFetch: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -45,7 +45,7 @@ test('fund store deduplicates refreshes, merges partial success and reports save
       releaseFetch()
       await Promise.all([first, second])
       assert.equal(fetchCalls, 1)
-      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.5)
+      assert.equal(store.marketDataByCode['161726']?.estimatedNav, 1.5)
       assert.equal(
         store.lastRefreshIssues.some((issue) => issue.code === 'missing-record'),
         true,
@@ -57,7 +57,7 @@ test('fund store deduplicates refreshes, merges partial success and reports save
         store.lastRefreshIssues.some((issue) => issue.code === 'persistence-failed'),
         true,
       )
-      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.6)
+      assert.equal(store.marketDataByCode['161726']?.estimatedNav, 1.6)
     } finally {
       globalThis.fetch = originalFetch
       store.$dispose()
@@ -78,7 +78,7 @@ test('fund deletion persists first and removes every group relation', async () =
     const store = useFundsStore()
     assert.deepEqual(store.deleteFund('161726'), {})
     assert.equal(store.fundOrder.includes('161726'), false)
-    assert.equal(store.snapshotsByCode['161726'], undefined)
+    assert.equal(store.marketDataByCode['161726'], undefined)
     assert.equal(store.holdingsByCode['161726'], undefined)
     assert.equal(store.holdingOrder.includes('161726'), false)
     assert.equal(
@@ -164,8 +164,8 @@ test('fund addition persists atomically and refreshes only the new funds', async
       )
       assert.deepEqual(store.fundOrder.slice(-2), ['000001', '000002'])
       assert.deepEqual(store.holdingOrder, ['161726', '000001'])
-      assert.equal(store.snapshotsByCode['000002']?.nav, null)
-      assert.equal(store.snapshotsByCode['000002']?.name, '空行情基金')
+      assert.equal(store.marketDataByCode['000002']?.nav, null)
+      assert.equal(store.marketDataByCode['000002']?.name, '空行情基金')
       assert.equal(store.holdingsByCode['000001']?.units, 10)
       assert.equal(store.holdingsByCode['000002'], undefined)
       assert.deepEqual(store.groups, groupsBefore)

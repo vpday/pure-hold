@@ -4,9 +4,9 @@ import { nextTick, ref } from 'vue'
 
 import type { FundGroupDefinition } from '@/domains/funds/models/fundGroupDefinition.ts'
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData.ts'
 import type { FundRefreshIssue } from '@/domains/funds/services/tiantian/fundRefreshIssue.ts'
-import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '@/domains/funds/testing/createTestFundMarketData.ts'
 import { useFundListSession } from './useFundListSession.ts'
 
 test('projects the holdings category through metrics, sorting, dates and refresh notices', () => {
@@ -23,10 +23,10 @@ test('projects the holdings category through metrics, sorting, dates and refresh
       { code: 'cache-fallback', fundCode: 'a' },
       { code: 'request-failed', fundCode: 'b' },
     ],
-    snapshotsByCode: {
-      a: snapshot('a', { estimatedAt: '2026-08-12 14:30', fetchedAt: 1, nav: 2 }),
-      b: snapshot('b', { estimatedAt: '2026-08-12 15:00', fetchedAt: null, nav: 1.5 }),
-      c: snapshot('c', { nav: 1 }),
+    marketDataByCode: {
+      a: marketData('a', { estimatedAt: '2026-08-12 14:30', fetchedAt: 1, nav: 2 }),
+      b: marketData('b', { estimatedAt: '2026-08-12 15:00', fetchedAt: null, nav: 1.5 }),
+      c: marketData('c', { nav: 1 }),
     },
   })
   const session = useFundListSession({
@@ -62,7 +62,7 @@ test('restores all when a category disappears and keeps sorts isolated by catego
     groups: [{ fundCodes: ['a'], id: 'custom', name: '自定义' }],
     holdingOrder: ['a'],
     holdingsByCode: { a: holding('a', 10, 1) },
-    snapshotsByCode: { a: snapshot('a') },
+    marketDataByCode: { a: marketData('a') },
   })
   const session = useFundListSession(state.inputs)
 
@@ -87,15 +87,15 @@ test('restores all when a category disappears and keeps sorts isolated by catego
   assert.deepEqual(session.model.value.activeSort, { descending: true, sortBy: 'oneYear' })
 })
 
-test('skips missing or mismatched snapshots and only builds holding models in holdings', () => {
+test('skips missing or mismatched market data and only builds holding models in holdings', () => {
   const state = createState({
     fundOrder: ['a', 'b', 'c'],
     groups: [{ fundCodes: ['c'], id: 'custom', name: '自定义' }],
     holdingOrder: ['c'],
     holdingsByCode: { c: holding('c', 10, 1) },
-    snapshotsByCode: {
-      a: snapshot('wrong'),
-      c: snapshot('c'),
+    marketDataByCode: {
+      a: marketData('wrong'),
+      c: marketData('c'),
     },
   })
   const session = useFundListSession(state.inputs)
@@ -116,11 +116,11 @@ test('skips missing or mismatched snapshots and only builds holding models in ho
 test('owns stable ascending and descending null-last sorting', () => {
   const state = createState({
     fundOrder: ['a', 'b', 'c', 'd'],
-    snapshotsByCode: {
-      a: snapshot('a', { dailyChangePercent: 2 }),
-      b: snapshot('b', { dailyChangePercent: null }),
-      c: snapshot('c', { dailyChangePercent: 1 }),
-      d: snapshot('d', { dailyChangePercent: 2 }),
+    marketDataByCode: {
+      a: marketData('a', { dailyChangePercent: 2 }),
+      b: marketData('b', { dailyChangePercent: null }),
+      c: marketData('c', { dailyChangePercent: 1 }),
+      d: marketData('d', { dailyChangePercent: 2 }),
     },
   })
   const session = useFundListSession(state.inputs)
@@ -143,8 +143,8 @@ test('uses the injected Shanghai date for display and holding days', () => {
     fundOrder: ['a'],
     holdingOrder: ['a'],
     holdingsByCode: { a: holding('a', 10, 1, '2026-08-11') },
-    snapshotsByCode: {
-      a: snapshot('a', { estimatedAt: '2026-08-12 09:30', nav: 2 }),
+    marketDataByCode: {
+      a: marketData('a', { estimatedAt: '2026-08-12 09:30', nav: 2 }),
     },
   })
   const session = useFundListSession({
@@ -165,9 +165,9 @@ test('excludes zero-unit projections from the active holdings category', () => {
       active: holding('active', 2, 1),
       zero: holding('zero', 0, 10),
     },
-    snapshotsByCode: {
-      active: snapshot('active'),
-      zero: snapshot('zero'),
+    marketDataByCode: {
+      active: marketData('active'),
+      zero: marketData('zero'),
     },
   })
   const session = useFundListSession(state.inputs)
@@ -185,15 +185,15 @@ function createState(options: {
   readonly holdingOrder?: readonly string[]
   readonly holdingsByCode?: Readonly<Record<string, FundHolding>>
   readonly issues?: readonly FundRefreshIssue[]
-  readonly snapshotsByCode?: Readonly<Record<string, FundSnapshot>>
+  readonly marketDataByCode?: Readonly<Record<string, FundMarketData>>
 }) {
   const fundOrder = ref(options.fundOrder ?? [])
   const groups = ref(options.groups ?? [])
   const holdingOrder = ref(options.holdingOrder ?? [])
   const holdingsByCode = ref(options.holdingsByCode ?? {})
   const lastRefreshIssues = ref(options.issues ?? [])
-  const previousSnapshotsByCode = ref<Readonly<Record<string, FundSnapshot>>>({})
-  const snapshotsByCode = ref(options.snapshotsByCode ?? {})
+  const previousConfirmedMarketDataByCode = ref<Readonly<Record<string, FundMarketData>>>({})
+  const marketDataByCode = ref(options.marketDataByCode ?? {})
   return {
     groups,
     inputs: {
@@ -202,8 +202,8 @@ function createState(options: {
       holdingOrder,
       holdingsByCode,
       lastRefreshIssues,
-      previousSnapshotsByCode,
-      snapshotsByCode,
+      previousConfirmedMarketDataByCode,
+      marketDataByCode,
     },
   }
 }
@@ -223,9 +223,9 @@ function holding(
   }
 }
 
-function snapshot(code: string, overrides: Partial<FundSnapshot> = {}): FundSnapshot {
+function marketData(code: string, overrides: Partial<FundMarketData> = {}): FundMarketData {
   return {
-    ...createTestFundSnapshot(code),
+    ...createTestFundMarketData(code),
     estimatedAt: '2026-08-12 14:00',
     fetchedAt: 1,
     nav: 1,

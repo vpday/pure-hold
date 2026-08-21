@@ -15,7 +15,7 @@ const emit = defineEmits<{
   saved: [reorderedCategoryIds: readonly string[]]
 }>()
 const store = useFundsStore()
-const { snapshotsByCode } = storeToRefs(store)
+const { marketDataByCode } = storeToRefs(store)
 const { isSmUp } = useBreakpoints()
 const visible = ref(false)
 const mobileView = ref<MobileView>('groups')
@@ -117,7 +117,7 @@ defineExpose({ open })
         <FundOrderList
           :category-name="draft.selectedCategoryName.value"
           :fund-codes="draft.selectedFundCodes.value"
-          :snapshots-by-code="snapshotsByCode"
+          :market-data-by-code="marketDataByCode"
           @reorder="handleReorderFunds"
         />
       </div>
@@ -184,7 +184,7 @@ defineExpose({ open })
       <FundOrderList
         :category-name="draft.selectedCategoryName.value"
         :fund-codes="draft.selectedFundCodes.value"
-        :snapshots-by-code="snapshotsByCode"
+        :market-data-by-code="marketDataByCode"
         @reorder="handleReorderFunds"
       />
     </div>

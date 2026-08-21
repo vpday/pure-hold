@@ -36,8 +36,8 @@ const {
   holdingsByCode,
   isRefreshing,
   lastRefreshIssues,
-  previousSnapshotsByCode,
-  snapshotsByCode,
+  previousConfirmedMarketDataByCode,
+  marketDataByCode,
 } = storeToRefs(store)
 const { preferences } = storeToRefs(appSettingsStore)
 const groupSettings = ref<{ open: () => void }>()
@@ -59,8 +59,8 @@ const { clearCategorySorts, model, selectCategory, setSort } = useFundListSessio
   holdingOrder,
   holdingsByCode,
   lastRefreshIssues,
-  previousSnapshotsByCode,
-  snapshotsByCode,
+  previousConfirmedMarketDataByCode,
+  marketDataByCode,
 })
 
 const refreshObserver = () => store.refreshAll({ force: true })

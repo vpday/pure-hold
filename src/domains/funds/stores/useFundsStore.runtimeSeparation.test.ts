@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { installLocalStorage, MemoryStorage } from '@/shared/testing/browserStorageTestSupport.ts'
 import type { FundSettings } from '../models/fundSettings.ts'
-import type { FundSnapshot } from '../models/fundSnapshot.ts'
+import type { FundMarketData } from '../models/fundMarketData.ts'
 import { fundSettingsStorageKey } from '../services/persistence/fundSettingsSchemaVersion.ts'
 import { saveFundSettings } from '../services/persistence/saveFundSettings.ts'
 import { useFundsStore } from './useFundsStore.ts'
@@ -16,10 +16,10 @@ test('retries same-name persistence after a previous refresh failure', async () 
     setActivePinia(createPinia())
     const store = useFundsStore()
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async () => createSnapshotResponse('新名称', '1.5')
+    globalThis.fetch = async () => createMarketDataResponse('新名称', '1.5')
     try {
       await store.refreshAll()
-      assert.equal(store.snapshotsByCode['161726']?.name, '新名称')
+      assert.equal(store.marketDataByCode['161726']?.name, '新名称')
       assert.equal(
         store.lastRefreshIssues.some((issue) => issue.code === 'persistence-failed'),
         true,
@@ -45,7 +45,7 @@ test('later settings changes persist the latest observed name', async () => {
     setActivePinia(createPinia())
     const store = useFundsStore()
     const originalFetch = globalThis.fetch
-    globalThis.fetch = async () => createSnapshotResponse('行情名称', '1.5')
+    globalThis.fetch = async () => createMarketDataResponse('行情名称', '1.5')
     try {
       storage.writeError = new Error('quota exceeded')
       await store.refreshAll()
@@ -73,7 +73,7 @@ test('group changes do not cancel an active market refresh', async () => {
     globalThis.fetch = async () => {
       fetchCalls += 1
       await gate
-      return createSnapshotResponse('刷新名称', '1.6')
+      return createMarketDataResponse('刷新名称', '1.6')
     }
     try {
       const refresh = store.refreshAll()
@@ -81,7 +81,7 @@ test('group changes do not cancel an active market refresh', async () => {
       assert.deepEqual(store.replaceGroups([]), {})
       releaseFetch()
       await refresh
-      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.6)
+      assert.equal(store.marketDataByCode['161726']?.estimatedNav, 1.6)
     } finally {
       globalThis.fetch = originalFetch
       store.$dispose()
@@ -126,8 +126,8 @@ test('deleting a fund invalidates a late refresh result', async () => {
       assert.deepEqual(store.deleteFund('161726'), {})
       releaseFetch()
       await refresh
-      assert.equal(store.snapshotsByCode['161726'], undefined)
-      assert.equal(store.snapshotsByCode['161725']?.fetchedAt, null)
+      assert.equal(store.marketDataByCode['161726'], undefined)
+      assert.equal(store.marketDataByCode['161725']?.fetchedAt, null)
     } finally {
       globalThis.fetch = originalFetch
       store.$dispose()
@@ -165,10 +165,10 @@ test('complete settings replacement reconciles runtime snapshots and refreshes i
         holdingsByCode: {},
       })
       assert.deepEqual(result, { ok: true })
-      assert.equal(store.snapshotsByCode['161726']?.name, '导入配置名称')
-      assert.equal(store.snapshotsByCode['000001']?.name, '新增基金')
-      await delayUntil(() => store.snapshotsByCode['000001']?.estimatedNav === 2.1)
-      assert.equal(store.snapshotsByCode['161726']?.estimatedNav, 1.7)
+      assert.equal(store.marketDataByCode['161726']?.name, '导入配置名称')
+      assert.equal(store.marketDataByCode['000001']?.name, '新增基金')
+      await delayUntil(() => store.marketDataByCode['000001']?.estimatedNav === 2.1)
+      assert.equal(store.marketDataByCode['161726']?.estimatedNav, 1.7)
       assert.equal(readStoredSettings(storage).funds[1]?.code, '000001')
     } finally {
       globalThis.fetch = originalFetch
@@ -177,37 +177,40 @@ test('complete settings replacement reconciles runtime snapshots and refreshes i
   })
 })
 
-test('retains only the previous confirmed snapshot when the NAV date advances', async () => {
+test('retains only the previous confirmed market data when the NAV date advances', async () => {
   await withEnvironment(async () => {
     saveFundSettings(createTestFundSettings())
     setActivePinia(createPinia())
     const store = useFundsStore()
     const responses = [
-      createConfirmedSnapshotResponse('2026-08-07', '1.5'),
-      createConfirmedSnapshotResponse('2026-08-07', '1.6'),
-      createConfirmedSnapshotResponse('2026-08-10', '1.7'),
-      createConfirmedSnapshotResponse('2026-08-07', '1.4'),
+      createConfirmedMarketDataResponse('2026-08-07', '1.5'),
+      createConfirmedMarketDataResponse('2026-08-07', '1.6'),
+      createConfirmedMarketDataResponse('2026-08-10', '1.7'),
+      createConfirmedMarketDataResponse('2026-08-07', '1.4'),
     ]
     const originalFetch = globalThis.fetch
     globalThis.fetch = async () => responses.shift()!
     try {
       await store.refreshAll()
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+      assert.equal(marketDataAt(store.previousConfirmedMarketDataByCode, '161726'), undefined)
 
       await store.refreshAll()
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+      assert.equal(marketDataAt(store.previousConfirmedMarketDataByCode, '161726'), undefined)
 
       await store.refreshAll()
-      assert.equal(store.snapshotsByCode['161726']?.nav, 1.7)
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.nav, 1.6)
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.navDate, '2026-08-07')
+      assert.equal(store.marketDataByCode['161726']?.nav, 1.7)
+      assert.equal(marketDataAt(store.previousConfirmedMarketDataByCode, '161726')?.nav, 1.6)
+      assert.equal(
+        marketDataAt(store.previousConfirmedMarketDataByCode, '161726')?.navDate,
+        '2026-08-07',
+      )
 
       await store.refreshAll()
-      assert.equal(store.snapshotsByCode['161726']?.nav, 1.7)
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726')?.nav, 1.6)
+      assert.equal(store.marketDataByCode['161726']?.nav, 1.7)
+      assert.equal(marketDataAt(store.previousConfirmedMarketDataByCode, '161726')?.nav, 1.6)
 
       assert.deepEqual(store.deleteFund('161726'), {})
-      assert.equal(snapshotAt(store.previousSnapshotsByCode, '161726'), undefined)
+      assert.equal(marketDataAt(store.previousConfirmedMarketDataByCode, '161726'), undefined)
     } finally {
       globalThis.fetch = originalFetch
       store.$dispose()
@@ -215,7 +218,7 @@ test('retains only the previous confirmed snapshot when the NAV date advances', 
   })
 })
 
-function createSnapshotResponse(name: string, estimatedNav: string): Response {
+function createMarketDataResponse(name: string, estimatedNav: string): Response {
   return new Response(
     JSON.stringify({
       data: [{ FCODE: '161726', GSZ: estimatedNav, SHORTNAME: name }],
@@ -227,14 +230,14 @@ function createSnapshotResponse(name: string, estimatedNav: string): Response {
   )
 }
 
-function snapshotAt(
-  snapshots: Readonly<Record<string, FundSnapshot>>,
+function marketDataAt(
+  marketDataByCode: Readonly<Record<string, FundMarketData>>,
   code: string,
-): FundSnapshot | undefined {
-  return snapshots[code]
+): FundMarketData | undefined {
+  return marketDataByCode[code]
 }
 
-function createConfirmedSnapshotResponse(navDate: string, nav: string): Response {
+function createConfirmedMarketDataResponse(navDate: string, nav: string): Response {
   return new Response(
     JSON.stringify({
       data: [

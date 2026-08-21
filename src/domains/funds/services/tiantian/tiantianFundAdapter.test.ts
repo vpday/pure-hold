@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createTiantianFundRequestBody } from './createTiantianFundRequestBody.ts'
-import { fetchTiantianFundSnapshots } from './fetchTiantianFundSnapshots.ts'
+import { fetchTiantianFundMarketData } from './fetchTiantianFundMarketData.ts'
 import { parseTiantianFundResponse } from './parseTiantianFundResponse.ts'
 
 test('creates fixed Tiantian form fields and a fresh UUID for each request', () => {
@@ -62,7 +62,7 @@ test('maps valid records, nullable values, tags and all return periods', () => {
     123,
   )
   assert.deepEqual(result.issues, [])
-  assert.deepEqual(result.snapshots[0], {
+  assert.deepEqual(result.marketData[0], {
     code: '161726',
     dailyChangePercent: null,
     estimatedAt: '2026-07-25 15:00',
@@ -100,7 +100,7 @@ test('keeps valid records when another record is malformed or unexpected', () =>
     123,
   )
   assert.deepEqual(
-    result.snapshots.map((item) => item.code),
+    result.marketData.map((item) => item.code),
     ['161726'],
   )
   assert.deepEqual(
@@ -116,7 +116,7 @@ test('rejects unsuccessful and malformed top-level responses', () => {
     { data: [], errorCode: 0, success: true, totalCount: -1 },
   ]) {
     const result = parseTiantianFundResponse(response, ['161726'], 123)
-    assert.deepEqual(result.snapshots, [])
+    assert.deepEqual(result.marketData, [])
     assert.deepEqual(result.issues, [{ code: 'business-response-failed', fundCode: '161726' }])
   }
 })
@@ -139,11 +139,11 @@ test('uses response cache metadata and forwards force refresh intent', async (co
     })
   }
 
-  const cached = await fetchTiantianFundSnapshots(['161726'])
-  const forced = await fetchTiantianFundSnapshots(['161726'], undefined, { force: true })
+  const cached = await fetchTiantianFundMarketData(['161726'])
+  const forced = await fetchTiantianFundMarketData(['161726'], undefined, { force: true })
   assert.equal(cached.source, 'cache')
   assert.equal(cached.fetchedAt, 123)
-  assert.equal(cached.snapshots[0]?.fetchedAt, 123)
+  assert.equal(cached.marketData[0]?.fetchedAt, 123)
   assert.equal(forced.source, 'cache')
   assert.equal(requests[0]?.cache, 'default')
   assert.equal(requests[1]?.cache, 'no-store')
@@ -164,7 +164,7 @@ test('reports cache fallback batches as structured issues', async (context) => {
     globalThis.fetch = originalFetch
   })
 
-  const result = await fetchTiantianFundSnapshots(['161726'])
+  const result = await fetchTiantianFundMarketData(['161726'])
   assert.equal(result.source, 'cache-fallback')
   assert.equal(result.fetchedAt, 456)
   assert.deepEqual(result.issues, [{ code: 'cache-fallback', fundCode: '161726' }])

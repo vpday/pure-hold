@@ -32,8 +32,8 @@ const holdingFactsReadonly = ref(false)
 
 function open(code: string): void {
   close()
-  const snapshot = store.snapshotsByCode[code]
-  if (!store.fundOrder.includes(code) || !snapshot) {
+  const marketData = store.marketDataByCode[code]
+  if (!store.fundOrder.includes(code) || !marketData) {
     MessagePlugin.error('基金不存在，无法编辑')
     return
   }
@@ -43,10 +43,10 @@ function open(code: string): void {
   )
   draft.value = createFundEditDraft(
     code,
-    snapshot.name,
+    marketData.name,
     store.holdingsByCode[code],
     store.groups,
-    snapshot.nav,
+    marketData.nav,
   )
   visible.value = true
 }

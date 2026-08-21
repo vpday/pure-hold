@@ -110,7 +110,7 @@ test('fund settings round trip without persisting runtime snapshots', () => {
     saveFundSettings(settings)
     assert.deepEqual(loadFundSettings(), settings)
     const raw = storage.getItem(fundSettingsStorageKey) ?? ''
-    assert.equal(raw.includes('snapshotsByCode'), false)
+    assert.equal(raw.includes('marketDataByCode'), false)
   })
 })
 

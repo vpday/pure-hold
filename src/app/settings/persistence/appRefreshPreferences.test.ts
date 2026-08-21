@@ -24,7 +24,7 @@ test('app refresh preferences persist defaults and valid values', () => {
     }
     saveAppRefreshPreferences(preferences)
     assert.deepEqual(loadAppRefreshPreferences(), preferences)
-    assert.equal(storage.getItem(appSettingsStorageKey)?.includes('snapshotsByCode'), false)
+    assert.equal(storage.getItem(appSettingsStorageKey)?.includes('marketDataByCode'), false)
   })
 })
 

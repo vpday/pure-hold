@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createTestFundSnapshot } from '../testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '../testing/createTestFundMarketData.ts'
 import { calculateFundHoldingMetrics } from './fundHoldingMetrics.ts'
 
 test('calculates confirmed current-day and cumulative holding income', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: 50,
       estimatedAt: '2026-08-10 14:30',
       estimatedChangePercent: 60,
@@ -38,8 +38,8 @@ test('calculates confirmed current-day and cumulative holding income', () => {
 
 test('derives cumulative cost from exact cents instead of a rounded average price', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       nav: 1.5,
       navDate: '2026-08-10',
     },
@@ -60,8 +60,8 @@ test('derives cumulative cost from exact cents instead of a rounded average pric
 
 test('uses only a current Shanghai-day estimate before confirmed NAV arrives', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       estimatedAt: '2026/08/10 14:30:00',
       estimatedChangePercent: 50,
       estimatedNav: 1.5,
@@ -86,15 +86,15 @@ test('uses only a current Shanghai-day estimate before confirmed NAV arrives', (
 })
 
 test('keeps the previous confirmed trading-day income after current NAV arrives', () => {
-  const previousConfirmedSnapshot = {
-    ...createTestFundSnapshot('161726'),
+  const previousConfirmedMarketData = {
+    ...createTestFundMarketData('161726'),
     dailyChangePercent: 50,
     nav: 1.5,
     navDate: '2026-08-07',
   }
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...previousConfirmedSnapshot,
+    currentMarketData: {
+      ...previousConfirmedMarketData,
       dailyChangePercent: 10,
       nav: 1.65,
       navDate: '2026-08-10',
@@ -106,7 +106,7 @@ test('keeps the previous confirmed trading-day income after current NAV arrives'
       totalCostCents: 10000,
       units: 100,
     },
-    previousConfirmedSnapshot,
+    previousConfirmedMarketData,
     today: '2026-08-10',
   })
 
@@ -117,8 +117,8 @@ test('keeps the previous confirmed trading-day income after current NAV arrives'
 
 test('does not produce holding values from invalid NAV, units or cost inputs', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: 1,
       nav: 1,
       navDate: '2026-08-10',
@@ -140,10 +140,10 @@ test('does not produce holding values from invalid NAV, units or cost inputs', (
   assert.equal(metrics.holdingDays, null)
 })
 
-test('uses the latest confirmed snapshot as yesterday on a non-trading day', () => {
+test('uses the latest confirmed market data as yesterday on a non-trading day', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: 50,
       estimatedAt: '2026-08-07 15:00',
       estimatedChangePercent: 60,
@@ -170,8 +170,8 @@ test('uses the latest confirmed snapshot as yesterday on a non-trading day', () 
 
 test('derives an estimate percentage only when the provider percentage is missing', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       estimatedAt: '2026-08-10 14:30',
       estimatedNav: 1.5,
       nav: 1,
@@ -192,8 +192,8 @@ test('derives an estimate percentage only when the provider percentage is missin
 
 test('rejects a daily change that makes the previous NAV denominator zero', () => {
   const metrics = calculateFundHoldingMetrics({
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: -100,
       nav: 1,
       navDate: '2026-08-10',

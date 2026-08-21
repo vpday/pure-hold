@@ -61,38 +61,38 @@ const performance = useFundPerformance(
 )
 const metrics = useFundMetrics(historyDataSource, benchmarkDataSource)
 const holdings = useFundHoldings(() => detail.visible.value && activeSection.value === 'holdings')
-const snapshot = computed(() => {
+const marketData = computed(() => {
   const code = detail.currentCode.value
-  return code ? store.snapshotsByCode[code] : undefined
+  return code ? store.marketDataByCode[code] : undefined
 })
 const holdingMetrics = computed(() => {
   const code = detail.currentCode.value
-  const currentSnapshot = snapshot.value
+  const currentMarketData = marketData.value
   const holding = code ? store.holdingsByCode[code] : undefined
-  if (!code || !currentSnapshot || !holding) return undefined
+  if (!code || !currentMarketData || !holding) return undefined
 
   return calculateFundHoldingMetrics({
-    currentSnapshot,
+    currentMarketData,
     holding,
-    previousConfirmedSnapshot: store.previousSnapshotsByCode[code],
+    previousConfirmedMarketData: store.previousConfirmedMarketDataByCode[code],
     today: shanghaiDate(),
   })
 })
 const currentNavByFund = computed<CurrentNavByFund>(() => {
   const code = detail.currentCode.value
-  const currentSnapshot = snapshot.value
+  const currentMarketData = marketData.value
   if (
     !code ||
-    !currentSnapshot ||
-    currentSnapshot.navDate === null ||
-    currentSnapshot.nav === null
+    !currentMarketData ||
+    currentMarketData.navDate === null ||
+    currentMarketData.nav === null
   ) {
     return {}
   }
   return {
     [code]: {
-      date: currentSnapshot.navDate,
-      unitNav: { confidence: 'actual', source: 'platform', value: currentSnapshot.nav },
+      date: currentMarketData.navDate,
+      unitNav: { confidence: 'actual', source: 'platform', value: currentMarketData.nav },
     },
   }
 })
@@ -112,10 +112,10 @@ const ledger = computed(() => {
   return state ? toFundLedgerViewModel(state) : undefined
 })
 const viewModel = computed(() => {
-  const currentSnapshot = snapshot.value
-  return currentSnapshot
+  const currentMarketData = marketData.value
+  return currentMarketData
     ? toFundDetailViewModel(
-        currentSnapshot,
+        currentMarketData,
         detail.basicInfo.value,
         holdingMetrics.value,
         ledger.value?.position?.units.text,
@@ -157,8 +157,8 @@ onBeforeUnmount(() => {
 })
 
 function open(code: string): void {
-  const currentSnapshot = store.snapshotsByCode[code]
-  if (!store.fundOrder.includes(code) || !currentSnapshot) {
+  const currentMarketData = store.marketDataByCode[code]
+  if (!store.fundOrder.includes(code) || !currentMarketData) {
     detail.close()
     MessagePlugin.error('基金不存在，无法查看详情')
     return

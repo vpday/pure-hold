@@ -9,8 +9,13 @@ import FundHoldingStatistics from './components/FundHoldingStatistics.vue'
 import { toFundHoldingStatisticsViewModel } from './presenters/toFundHoldingStatisticsViewModel'
 
 const store = useFundsStore()
-const { holdingOrder, holdingsByCode, isRefreshing, previousSnapshotsByCode, snapshotsByCode } =
-  storeToRefs(store)
+const {
+  holdingOrder,
+  holdingsByCode,
+  isRefreshing,
+  previousConfirmedMarketDataByCode,
+  marketDataByCode,
+} = storeToRefs(store)
 
 const activeHoldingOrder = computed(() =>
   holdingOrder.value.filter((code) => (holdingsByCode.value[code]?.units ?? 0) > 0),
@@ -19,21 +24,21 @@ const visible = computed(() => activeHoldingOrder.value.length > 0)
 const viewModel = computed(() => {
   const today = shanghaiDate()
   const items = activeHoldingOrder.value.flatMap((code) => {
-    const currentSnapshot = snapshotsByCode.value[code]
+    const currentMarketData = marketDataByCode.value[code]
     const holding = holdingsByCode.value[code]
-    if (!currentSnapshot || !holding) return []
+    if (!currentMarketData || !holding) return []
 
     return [
       {
-        currentSnapshot,
+        currentMarketData,
         holding,
         metrics: calculateFundHoldingMetrics({
-          currentSnapshot,
+          currentMarketData,
           holding,
-          previousConfirmedSnapshot: previousSnapshotsByCode.value[code],
+          previousConfirmedMarketData: previousConfirmedMarketDataByCode.value[code],
           today,
         }),
-        previousConfirmedSnapshot: previousSnapshotsByCode.value[code],
+        previousConfirmedMarketData: previousConfirmedMarketDataByCode.value[code],
         today,
       },
     ]

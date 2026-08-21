@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { createTestFundSnapshot } from '../testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '../testing/createTestFundMarketData.ts'
 import { mergeFundRefreshResult } from './mergeFundRefreshResult.ts'
 
 test('refresh merge only replaces valid current requested funds and preserves stale data', () => {
-  const oldA = createTestFundSnapshot('161726')
-  const oldB = createTestFundSnapshot('161725')
+  const oldA = createTestFundMarketData('161726')
+  const oldB = createTestFundMarketData('161725')
   const freshA = { ...oldA, estimatedNav: 1.23, fetchedAt: 100 }
   const unexpected = { ...oldA, code: 'unexpected' }
   const result = mergeFundRefreshResult(
@@ -17,12 +17,12 @@ test('refresh merge only replaces valid current requested funds and preserves st
       fetchedAt: 100,
       issues: [{ code: 'missing-record', fundCode: '161725' }],
       source: 'network',
-      snapshots: [freshA, unexpected],
+      marketData: [freshA, unexpected],
     },
   )
   assert.equal(result.updatedCount, 1)
-  assert.equal(result.snapshotsByCode['161726'], freshA)
-  assert.equal(result.snapshotsByCode['161725'], oldB)
+  assert.equal(result.marketDataByCode['161726'], freshA)
+  assert.equal(result.marketDataByCode['161725'], oldB)
   assert.deepEqual(
     result.issues.map((issue) => issue.code),
     ['missing-record', 'unexpected-record'],
@@ -30,20 +30,20 @@ test('refresh merge only replaces valid current requested funds and preserves st
 })
 
 test('refresh merge ignores a fund deleted while the request was active', () => {
-  const snapshot = createTestFundSnapshot('161726')
+  const marketData = createTestFundMarketData('161726')
   const result = mergeFundRefreshResult({}, [], ['161726'], {
     fetchedAt: 100,
     issues: [],
     source: 'network',
-    snapshots: [snapshot],
+    marketData: [marketData],
   })
   assert.equal(result.updatedCount, 0)
-  assert.deepEqual(result.snapshotsByCode, {})
+  assert.deepEqual(result.marketDataByCode, {})
 })
 
-test('refresh merge does not replace confirmed data with an older or unconfirmed snapshot', () => {
+test('refresh merge does not replace confirmed market data with older or unconfirmed data', () => {
   const current = {
-    ...createTestFundSnapshot('161726'),
+    ...createTestFundMarketData('161726'),
     nav: 1.7,
     navDate: '2026-08-10',
   }
@@ -55,9 +55,9 @@ test('refresh merge does not replace confirmed data with an older or unconfirmed
       fetchedAt: 100,
       issues: [],
       source: 'cache',
-      snapshots: [incoming],
+      marketData: [incoming],
     })
     assert.equal(result.updatedCount, 0)
-    assert.equal(result.snapshotsByCode['161726'], current)
+    assert.equal(result.marketDataByCode['161726'], current)
   }
 })

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData.ts'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
-import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '@/domains/funds/testing/createTestFundMarketData.ts'
 import type { FundRowViewModel, FundSortField } from '../models/fundListViewModel.ts'
-import { sortFundRows } from './sortFundSnapshots.ts'
+import { sortFundRows } from './sortFundRows.ts'
 import { toFundListViewModel } from './toFundListViewModel.ts'
 
 const sortFields = [
@@ -32,8 +32,8 @@ const sortFields = [
 ] as const satisfies readonly FundSortField[]
 
 test('fund presenter keeps signs, missing placeholders, all return fields and trends', () => {
-  const source: FundSnapshot = {
-    ...createTestFundSnapshot('161726'),
+  const source: FundMarketData = {
+    ...createTestFundMarketData('161726'),
     dailyChangePercent: -1,
     estimatedChangePercent: 2,
     estimatedNav: 1.23456,
@@ -102,7 +102,7 @@ test('fund presenter formats holding income and keeps raw amount sort values', (
     yesterdayIncomePercent: 0,
   }
 
-  const row = toFundListViewModel(createTestFundSnapshot('161726'), metrics)
+  const row = toFundListViewModel(createTestFundMarketData('161726'), metrics)
 
   assert.equal(row.holding?.currentIncome.label, '今日收益')
   assert.equal(row.holding?.currentIncome.amountText, '+25.00')
@@ -162,6 +162,6 @@ function rowWithSortValue(
   field: FundSortField,
   value: number | null,
 ): FundRowViewModel {
-  const row = toFundListViewModel(createTestFundSnapshot(code))
+  const row = toFundListViewModel(createTestFundMarketData(code))
   return { ...row, sortValues: { ...row.sortValues, [field]: value } }
 }

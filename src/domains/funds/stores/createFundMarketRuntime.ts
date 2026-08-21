@@ -1,13 +1,13 @@
 import { ref, shallowRef, type Ref, type ShallowRef } from 'vue'
 
-import { createEmptyFundSnapshot } from '../models/createEmptyFundSnapshot.ts'
+import { createEmptyFundMarketData } from '../models/createEmptyFundMarketData.ts'
 import type { FundSetting } from '../models/fundSettings.ts'
-import type { FundSnapshot } from '../models/fundSnapshot.ts'
+import type { FundMarketData } from '../models/fundMarketData.ts'
 import type { FundRefreshIssue } from '../services/tiantian/fundRefreshIssue.ts'
 import {
-  fetchTiantianFundSnapshots,
+  fetchTiantianFundMarketData,
   type FundRefreshSource,
-} from '../services/tiantian/fetchTiantianFundSnapshots.ts'
+} from '../services/tiantian/fetchTiantianFundMarketData.ts'
 import type { FundSettingsEffect } from './createFundSettingsCommandModule.ts'
 import { mergeFundRefreshResult } from './mergeFundRefreshResult.ts'
 
@@ -23,8 +23,8 @@ export interface FundPollingConfiguration {
 }
 
 export interface FundMarketRuntime {
-  readonly snapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
-  readonly previousSnapshotsByCode: ShallowRef<Readonly<Record<string, FundSnapshot>>>
+  readonly marketDataByCode: ShallowRef<Readonly<Record<string, FundMarketData>>>
+  readonly previousConfirmedMarketDataByCode: ShallowRef<Readonly<Record<string, FundMarketData>>>
   readonly isRefreshing: Ref<boolean>
   readonly lastRefreshIssues: ShallowRef<readonly FundRefreshIssue[]>
   readonly lastSuccessfulRefreshAt: Ref<number | undefined>
@@ -38,12 +38,12 @@ export interface FundMarketRuntime {
 }
 
 export function createFundMarketRuntime(options: FundMarketRuntimeOptions): FundMarketRuntime {
-  const snapshotsByCode = shallowRef<Readonly<Record<string, FundSnapshot>>>(
+  const marketDataByCode = shallowRef<Readonly<Record<string, FundMarketData>>>(
     Object.fromEntries(
-      options.initialFunds.map(({ code, name }) => [code, createEmptyFundSnapshot(code, name)]),
+      options.initialFunds.map(({ code, name }) => [code, createEmptyFundMarketData(code, name)]),
     ),
   )
-  const previousSnapshotsByCode = shallowRef<Readonly<Record<string, FundSnapshot>>>({})
+  const previousConfirmedMarketDataByCode = shallowRef<Readonly<Record<string, FundMarketData>>>({})
   const isRefreshing = ref(false)
   const lastRefreshIssues = shallowRef<readonly FundRefreshIssue[]>([])
   const lastSuccessfulRefreshAt = ref<number | undefined>()
@@ -83,12 +83,12 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     activeController = controller
     isRefreshing.value = true
 
-    const request = fetchTiantianFundSnapshots(requestedCodes, controller.signal, requestOptions)
+    const request = fetchTiantianFundMarketData(requestedCodes, controller.signal, requestOptions)
       .then((batch) => {
         if (currentLifecycle !== lifecycle) return
 
         const merged = mergeFundRefreshResult(
-          snapshotsByCode.value,
+          marketDataByCode.value,
           options.getFundCodes(),
           requestedCodes,
           batch,
@@ -96,12 +96,12 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
         lastRefreshIssues.value = merged.issues
         if (merged.updatedCount === 0) return
 
-        previousSnapshotsByCode.value = advancePreviousSnapshots(
-          previousSnapshotsByCode.value,
-          snapshotsByCode.value,
-          merged.snapshotsByCode,
+        previousConfirmedMarketDataByCode.value = advancePreviousConfirmedMarketData(
+          previousConfirmedMarketDataByCode.value,
+          marketDataByCode.value,
+          merged.marketDataByCode,
         )
-        snapshotsByCode.value = merged.snapshotsByCode
+        marketDataByCode.value = merged.marketDataByCode
         lastSuccessfulRefreshAt.value = batch.fetchedAt
         lastRefreshSource.value = batch.source
         syncObservedNames(batch, requestedCodes, currentCodes, merged.issues)
@@ -132,42 +132,50 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     invalidateActiveRefresh()
     if (effect.kind === 'settings-replaced') {
       const fundsByCode = new Map(effect.funds.map((fund) => [fund.code, fund.name]))
-      const nextSnapshots: Record<string, FundSnapshot> = {}
+      const nextMarketDataByCode: Record<string, FundMarketData> = {}
       for (const code of options.getFundCodes()) {
         const name = fundsByCode.get(code)
         if (name === undefined) continue
-        const existing = snapshotsByCode.value[code]
-        nextSnapshots[code] = existing ? { ...existing, name } : createEmptyFundSnapshot(code, name)
+        const existing = marketDataByCode.value[code]
+        nextMarketDataByCode[code] = existing
+          ? { ...existing, name }
+          : createEmptyFundMarketData(code, name)
       }
-      snapshotsByCode.value = nextSnapshots
+      marketDataByCode.value = nextMarketDataByCode
 
-      const nextPreviousSnapshots: Record<string, FundSnapshot> = {}
-      for (const [code, snapshot] of Object.entries(previousSnapshotsByCode.value)) {
+      const nextPreviousConfirmedMarketDataByCode: Record<string, FundMarketData> = {}
+      for (const [code, previousConfirmedMarketData] of Object.entries(
+        previousConfirmedMarketDataByCode.value,
+      )) {
         const name = fundsByCode.get(code)
-        if (name !== undefined) nextPreviousSnapshots[code] = { ...snapshot, name }
+        if (name !== undefined) {
+          nextPreviousConfirmedMarketDataByCode[code] = { ...previousConfirmedMarketData, name }
+        }
       }
-      previousSnapshotsByCode.value = nextPreviousSnapshots
+      previousConfirmedMarketDataByCode.value = nextPreviousConfirmedMarketDataByCode
       void refreshAll()
       return
     }
 
     if (effect.kind === 'funds-added') {
-      snapshotsByCode.value = {
-        ...snapshotsByCode.value,
+      marketDataByCode.value = {
+        ...marketDataByCode.value,
         ...Object.fromEntries(
-          effect.funds.map(({ code, name }) => [code, createEmptyFundSnapshot(code, name)]),
+          effect.funds.map(({ code, name }) => [code, createEmptyFundMarketData(code, name)]),
         ),
       }
       void refreshCodes(effect.funds.map(({ code }) => code))
       return
     }
 
-    const nextSnapshots = { ...snapshotsByCode.value }
-    delete nextSnapshots[effect.code]
-    snapshotsByCode.value = nextSnapshots
-    const nextPreviousSnapshots = { ...previousSnapshotsByCode.value }
-    delete nextPreviousSnapshots[effect.code]
-    previousSnapshotsByCode.value = nextPreviousSnapshots
+    const nextMarketDataByCode = { ...marketDataByCode.value }
+    delete nextMarketDataByCode[effect.code]
+    marketDataByCode.value = nextMarketDataByCode
+    const nextPreviousConfirmedMarketDataByCode = {
+      ...previousConfirmedMarketDataByCode.value,
+    }
+    delete nextPreviousConfirmedMarketDataByCode[effect.code]
+    previousConfirmedMarketDataByCode.value = nextPreviousConfirmedMarketDataByCode
   }
 
   function dispose(): void {
@@ -237,7 +245,7 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
 
   function syncObservedNames(
     batch: {
-      readonly snapshots: readonly FundSnapshot[]
+      readonly marketData: readonly FundMarketData[]
     },
     requestedCodes: readonly string[],
     currentCodes: ReadonlySet<string>,
@@ -245,9 +253,9 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
   ): void {
     const requested = new Set(requestedCodes)
     const observedNames: Record<string, string> = {}
-    for (const snapshot of batch.snapshots) {
-      if (requested.has(snapshot.code) && currentCodes.has(snapshot.code)) {
-        observedNames[snapshot.code] = snapshot.name
+    for (const marketData of batch.marketData) {
+      if (requested.has(marketData.code) && currentCodes.has(marketData.code)) {
+        observedNames[marketData.code] = marketData.name
       }
     }
     if (Object.keys(observedNames).length === 0) return
@@ -268,31 +276,31 @@ export function createFundMarketRuntime(options: FundMarketRuntimeOptions): Fund
     lastRefreshIssues,
     lastRefreshSource,
     lastSuccessfulRefreshAt,
-    previousSnapshotsByCode,
+    previousConfirmedMarketDataByCode,
     refreshAll,
     setPollingConfiguration,
-    snapshotsByCode,
+    marketDataByCode,
     startPolling,
     stopPolling,
   }
 }
 
-function advancePreviousSnapshots(
-  previousSnapshots: Readonly<Record<string, FundSnapshot>>,
-  currentSnapshots: Readonly<Record<string, FundSnapshot>>,
-  nextSnapshots: Readonly<Record<string, FundSnapshot>>,
-): Readonly<Record<string, FundSnapshot>> {
-  let result: Record<string, FundSnapshot> | undefined
-  for (const [code, nextSnapshot] of Object.entries(nextSnapshots)) {
-    const currentSnapshot = currentSnapshots[code]
-    if (!currentSnapshot || !isConfirmedDateAdvance(currentSnapshot, nextSnapshot)) continue
-    result ??= { ...previousSnapshots }
-    result[code] = currentSnapshot
+function advancePreviousConfirmedMarketData(
+  previousConfirmedMarketDataByCode: Readonly<Record<string, FundMarketData>>,
+  currentMarketDataByCode: Readonly<Record<string, FundMarketData>>,
+  nextMarketDataByCode: Readonly<Record<string, FundMarketData>>,
+): Readonly<Record<string, FundMarketData>> {
+  let result: Record<string, FundMarketData> | undefined
+  for (const [code, nextMarketData] of Object.entries(nextMarketDataByCode)) {
+    const currentMarketData = currentMarketDataByCode[code]
+    if (!currentMarketData || !isConfirmedDateAdvance(currentMarketData, nextMarketData)) continue
+    result ??= { ...previousConfirmedMarketDataByCode }
+    result[code] = currentMarketData
   }
-  return result ?? previousSnapshots
+  return result ?? previousConfirmedMarketDataByCode
 }
 
-function isConfirmedDateAdvance(current: FundSnapshot, next: FundSnapshot): boolean {
+function isConfirmedDateAdvance(current: FundMarketData, next: FundMarketData): boolean {
   return (
     current.nav !== null &&
     current.navDate !== null &&

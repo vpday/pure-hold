@@ -1,10 +1,10 @@
-import type { FundSnapshot } from '../../models/fundSnapshot.ts'
+import type { FundMarketData } from '../../models/fundMarketData.ts'
 import type { TiantianFundDto } from './tiantianFundDto.ts'
 
-export function mapTiantianFundSnapshot(
+export function mapTiantianFundMarketData(
   dto: TiantianFundDto,
   fetchedAt: number,
-): FundSnapshot | null {
+): FundMarketData | null {
   const code = toRequiredString(dto.FCODE)
   const name = toRequiredString(dto.SHORTNAME)
   if (!code || !name) {

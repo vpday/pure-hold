@@ -190,7 +190,7 @@ test('configuration transfer round trips both domains without refresh preference
     portfolio,
   })
   assert.equal(text.includes('intervalSeconds'), false)
-  assert.equal(text.includes('snapshotsByCode'), false)
+  assert.equal(text.includes('marketDataByCode'), false)
 
   const result = parseConfigurationTransfer(
     text,

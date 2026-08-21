@@ -3,13 +3,13 @@ import { computed, ref, toValue, watch, type ComputedRef, type MaybeRefOrGetter 
 import { calculateFundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
 import type { FundGroupDefinition } from '@/domains/funds/models/fundGroupDefinition.ts'
 import type { FundHolding } from '@/domains/funds/models/fundHolding.ts'
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot.ts'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData.ts'
 import type { FundRefreshIssue } from '@/domains/funds/services/tiantian/fundRefreshIssue.ts'
 import type { FundRowViewModel, FundSort } from '../models/fundListViewModel.ts'
 import { buildFundCategories, type FundCategory } from '../presenters/buildFundCategories.ts'
 import { clearFundCategorySorts } from '../presenters/clearFundCategorySorts.ts'
 import { formatEstimatedDisplayDate, formatNavDisplayDate } from '../presenters/formatFundDates.ts'
-import { sortFundRows } from '../presenters/sortFundSnapshots.ts'
+import { sortFundRows } from '../presenters/sortFundRows.ts'
 import { toFundListViewModel } from '../presenters/toFundListViewModel.ts'
 
 export interface FundListRefreshNotice {
@@ -35,8 +35,10 @@ export interface UseFundListSessionInputs {
   readonly holdingOrder: MaybeRefOrGetter<readonly string[]>
   readonly holdingsByCode: MaybeRefOrGetter<Readonly<Record<string, FundHolding>>>
   readonly lastRefreshIssues: MaybeRefOrGetter<readonly FundRefreshIssue[]>
-  readonly previousSnapshotsByCode: MaybeRefOrGetter<Readonly<Record<string, FundSnapshot>>>
-  readonly snapshotsByCode: MaybeRefOrGetter<Readonly<Record<string, FundSnapshot>>>
+  readonly previousConfirmedMarketDataByCode: MaybeRefOrGetter<
+    Readonly<Record<string, FundMarketData>>
+  >
+  readonly marketDataByCode: MaybeRefOrGetter<Readonly<Record<string, FundMarketData>>>
   readonly now?: () => Date
 }
 
@@ -75,24 +77,24 @@ export function useFundListSession(inputs: UseFundListSessionInputs): FundListSe
   const model = computed<FundListSessionModel>(() => {
     const category = activeCategory.value
     const holdingMode = category.id === 'holdings'
-    const snapshotsByCode = toValue(inputs.snapshotsByCode)
+    const marketDataByCode = toValue(inputs.marketDataByCode)
     const holdingsByCode = toValue(inputs.holdingsByCode)
-    const previousSnapshotsByCode = toValue(inputs.previousSnapshotsByCode)
+    const previousConfirmedMarketDataByCode = toValue(inputs.previousConfirmedMarketDataByCode)
     const currentTime = now()
     const today = shanghaiDate(currentTime)
     const baseRows = category.fundCodes.flatMap((code) => {
-      const snapshot = snapshotsByCode[code]
-      if (!snapshot || snapshot.code !== code) return []
+      const marketData = marketDataByCode[code]
+      if (!marketData || marketData.code !== code) return []
       const holding = holdingMode ? holdingsByCode[code] : undefined
       const metrics = holding
         ? calculateFundHoldingMetrics({
-            currentSnapshot: snapshot,
+            currentMarketData: marketData,
             holding,
-            previousConfirmedSnapshot: previousSnapshotsByCode[code],
+            previousConfirmedMarketData: previousConfirmedMarketDataByCode[code],
             today,
           })
         : undefined
-      return [toFundListViewModel(snapshot, metrics)]
+      return [toFundListViewModel(marketData, metrics)]
     })
     const activeSort = sortByCategory.value[category.id] ?? null
 
@@ -115,7 +117,7 @@ export function useFundListSession(inputs: UseFundListSessionInputs): FundListSe
       refreshNotices: buildRefreshNotices(
         toValue(inputs.lastRefreshIssues),
         baseRows,
-        snapshotsByCode,
+        marketDataByCode,
       ),
       rows: sortFundRows(baseRows, activeSort),
     }
@@ -139,7 +141,7 @@ export function useFundListSession(inputs: UseFundListSessionInputs): FundListSe
 function buildRefreshNotices(
   issues: readonly FundRefreshIssue[],
   rows: readonly FundRowViewModel[],
-  snapshotsByCode: Readonly<Record<string, FundSnapshot>>,
+  marketDataByCode: Readonly<Record<string, FundMarketData>>,
 ): readonly FundListRefreshNotice[] {
   const notices: FundListRefreshNotice[] = []
   if (issues.some(({ code }) => code === 'persistence-failed')) {
@@ -152,7 +154,7 @@ function buildRefreshNotices(
     notices.push({ level: 'warning', message: '网络刷新失败，已显示缓存数据' })
   }
   if (issues.some(({ code }) => code !== 'persistence-failed' && code !== 'cache-fallback')) {
-    const hasFreshData = rows.some(({ code }) => snapshotsByCode[code]?.fetchedAt !== null)
+    const hasFreshData = rows.some(({ code }) => marketDataByCode[code]?.fetchedAt !== null)
     notices.push({
       level: 'error',
       message: hasFreshData ? '部分基金刷新失败' : '基金刷新失败，请稍后重试',

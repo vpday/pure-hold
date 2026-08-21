@@ -1,6 +1,6 @@
-import type { FundSnapshot } from './fundSnapshot.ts'
+import type { FundMarketData } from '../models/fundMarketData.ts'
 
-export function createEmptyFundSnapshot(code: string, name: string): FundSnapshot {
+export function createTestFundMarketData(code: string, name = `基金 ${code}`): FundMarketData {
   return {
     code,
     dailyChangePercent: null,

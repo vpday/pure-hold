@@ -1,4 +1,4 @@
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
 import type {
   FundCurrentIncomeViewModel,
@@ -23,46 +23,46 @@ const returnFields = [
 ] as const satisfies readonly FundReturnField[]
 
 export function toFundListViewModel(
-  snapshot: FundSnapshot,
+  marketData: FundMarketData,
   holdingMetrics?: FundHoldingMetrics,
 ): FundRowViewModel {
   const returns = Object.fromEntries(
-    returnFields.map((field) => [field, formatPercent(snapshot.returns[field])]),
+    returnFields.map((field) => [field, formatPercent(marketData.returns[field])]),
   ) as Record<FundReturnField, string>
   const returnTrends = Object.fromEntries(
-    returnFields.map((field) => [field, toTrend(snapshot.returns[field])]),
+    returnFields.map((field) => [field, toTrend(marketData.returns[field])]),
   ) as Record<FundReturnField, FundTrend>
 
   return {
-    code: snapshot.code,
-    dailyChangePercentText: formatPercent(snapshot.dailyChangePercent),
-    estimatedAtText: snapshot.estimatedAt ?? '--',
-    estimatedChangePercentText: formatPercent(snapshot.estimatedChangePercent),
-    estimatedNavText: formatNumber(snapshot.estimatedNav, 4),
+    code: marketData.code,
+    dailyChangePercentText: formatPercent(marketData.dailyChangePercent),
+    estimatedAtText: marketData.estimatedAt ?? '--',
+    estimatedChangePercentText: formatPercent(marketData.estimatedChangePercent),
+    estimatedNavText: formatNumber(marketData.estimatedNav, 4),
     holding: holdingMetrics ? toHoldingViewModel(holdingMetrics) : undefined,
-    name: snapshot.name,
-    navDateText: snapshot.navDate ?? '--',
-    navText: formatNumber(snapshot.nav, 4),
+    name: marketData.name,
+    navDateText: marketData.navDate ?? '--',
+    navText: formatNumber(marketData.nav, 4),
     returns,
-    returnsDateText: snapshot.returnsDate ?? '--',
+    returnsDateText: marketData.returnsDate ?? '--',
     sortValues: {
-      ...snapshot.returns,
-      dailyChangePercent: snapshot.dailyChangePercent,
-      estimatedChangePercent: snapshot.estimatedChangePercent,
+      ...marketData.returns,
+      dailyChangePercent: marketData.dailyChangePercent,
+      estimatedChangePercent: marketData.estimatedChangePercent,
       estimatedIncome: holdingMetrics?.estimatedIncome ?? null,
-      estimatedNav: snapshot.estimatedNav,
+      estimatedNav: marketData.estimatedNav,
       holdingAmount: holdingMetrics?.holdingAmount ?? null,
       holdingDays: holdingMetrics?.holdingDays ?? null,
       holdingIncomePercent: holdingMetrics?.holdingIncomePercent ?? null,
-      nav: snapshot.nav,
+      nav: marketData.nav,
       todayIncome: holdingMetrics?.todayIncome ?? null,
       yesterdayIncome: holdingMetrics?.yesterdayIncome ?? null,
     },
-    tags: snapshot.tags,
+    tags: marketData.tags,
     trendByField: {
       ...returnTrends,
-      dailyChangePercent: toTrend(snapshot.dailyChangePercent),
-      estimatedChangePercent: toTrend(snapshot.estimatedChangePercent),
+      dailyChangePercent: toTrend(marketData.dailyChangePercent),
+      estimatedChangePercent: toTrend(marketData.estimatedChangePercent),
     },
   }
 }

@@ -11,7 +11,7 @@ export interface FundReturns {
   readonly sinceInception: number | null
 }
 
-export interface FundSnapshot {
+export interface FundMarketData {
   readonly code: string
   readonly name: string
   readonly tags: readonly string[]

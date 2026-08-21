@@ -2,12 +2,12 @@
 import { ref, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData'
 
 const props = defineProps<{
   categoryName: string
   fundCodes: readonly string[]
-  snapshotsByCode: Readonly<Record<string, FundSnapshot>>
+  marketDataByCode: Readonly<Record<string, FundMarketData>>
 }>()
 
 const emit = defineEmits<{
@@ -62,7 +62,7 @@ function handleDragEnd(event: { newIndex?: number; oldIndex?: number }): void {
             class="fund-order-drag-handle cursor-grab text-(--td-text-color-placeholder)"
           />
           <div class="min-w-0 flex-1">
-            <p class="truncate">{{ snapshotsByCode[code]?.name ?? code }}</p>
+            <p class="truncate">{{ marketDataByCode[code]?.name ?? code }}</p>
             <p class="truncate text-sm text-(--td-text-color-secondary)">{{ code }}</p>
           </div>
         </div>

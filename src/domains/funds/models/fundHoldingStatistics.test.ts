@@ -6,13 +6,13 @@ import {
   calculateFundHoldingStatistics,
   type FundHoldingStatisticsItem,
 } from './fundHoldingStatistics.ts'
-import { createTestFundSnapshot } from '../testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '../testing/createTestFundMarketData.ts'
 
 test('aggregates holding values and weighted income rates', () => {
   const first = createStatisticsItem({
     code: '161726',
-    currentSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    currentMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: 10,
       nav: 1.1,
       navDate: '2026-08-10',
@@ -39,8 +39,8 @@ test('aggregates holding values and weighted income rates', () => {
       yesterdayIncomeDate: '2026-08-07',
       yesterdayIncomePercent: 5,
     },
-    previousConfirmedSnapshot: {
-      ...createTestFundSnapshot('161726'),
+    previousConfirmedMarketData: {
+      ...createTestFundMarketData('161726'),
       dailyChangePercent: 5,
       nav: 1,
       navDate: '2026-08-07',
@@ -48,8 +48,8 @@ test('aggregates holding values and weighted income rates', () => {
   })
   const second = createStatisticsItem({
     code: '000001',
-    currentSnapshot: {
-      ...createTestFundSnapshot('000001'),
+    currentMarketData: {
+      ...createTestFundMarketData('000001'),
       estimatedChangePercent: 2,
       estimatedNav: 2.04,
       estimatedAt: '2026-08-10 14:30',
@@ -98,7 +98,7 @@ test('aggregates holding values and weighted income rates', () => {
 test('returns empty statistics when no item has usable values', () => {
   const item = createStatisticsItem({
     code: '161726',
-    currentSnapshot: createTestFundSnapshot('161726'),
+    currentMarketData: createTestFundMarketData('161726'),
     holding: {
       code: '161726',
       dividendMode: 'cash',
@@ -137,10 +137,10 @@ test('returns empty statistics when no item has usable values', () => {
 
 function createStatisticsItem(input: {
   readonly code: string
-  readonly currentSnapshot: FundHoldingStatisticsItem['currentSnapshot']
+  readonly currentMarketData: FundHoldingStatisticsItem['currentMarketData']
   readonly holding: FundHoldingStatisticsItem['holding']
   readonly metrics: FundHoldingMetrics
-  readonly previousConfirmedSnapshot?: FundHoldingStatisticsItem['previousConfirmedSnapshot']
+  readonly previousConfirmedMarketData?: FundHoldingStatisticsItem['previousConfirmedMarketData']
 }): FundHoldingStatisticsItem {
   return {
     ...input,

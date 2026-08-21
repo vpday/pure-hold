@@ -1,5 +1,5 @@
 import { readCacheResponseMetadata } from '@/shared/transport/cacheResponseMetadata.ts'
-import type { FundSnapshot } from '../../models/fundSnapshot.ts'
+import type { FundMarketData } from '../../models/fundMarketData.ts'
 import { createTiantianFundRequestBody } from './createTiantianFundRequestBody.ts'
 import type { FundRefreshIssue } from './fundRefreshIssue.ts'
 import { parseTiantianFundResponse } from './parseTiantianFundResponse.ts'
@@ -13,16 +13,16 @@ export interface FundRefreshBatch {
   readonly fetchedAt: number
   readonly issues: readonly FundRefreshIssue[]
   readonly source: FundRefreshSource
-  readonly snapshots: readonly FundSnapshot[]
+  readonly marketData: readonly FundMarketData[]
 }
 
-export async function fetchTiantianFundSnapshots(
+export async function fetchTiantianFundMarketData(
   fundCodes: readonly string[],
   signal?: AbortSignal,
   options?: { readonly force?: boolean },
 ): Promise<FundRefreshBatch> {
   const issues: FundRefreshIssue[] = []
-  const snapshots: FundSnapshot[] = []
+  const marketData: FundMarketData[] = []
   const successfulTimes: number[] = []
   const sources: Array<Exclude<FundRefreshSource, 'mixed'>> = []
 
@@ -47,7 +47,7 @@ export async function fetchTiantianFundSnapshots(
       }
       const parsed = parseTiantianFundResponse(await response.json(), codes, metadata.fetchedAt)
       issues.push(...parsed.issues)
-      snapshots.push(...parsed.snapshots)
+      marketData.push(...parsed.marketData)
     } catch (error) {
       if (signal?.aborted) {
         throw error
@@ -60,7 +60,7 @@ export async function fetchTiantianFundSnapshots(
     fetchedAt: successfulTimes.length > 0 ? Math.max(...successfulTimes) : Date.now(),
     issues,
     source: combineSources(sources),
-    snapshots,
+    marketData,
   }
 }
 

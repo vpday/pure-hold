@@ -3,23 +3,23 @@ import test from 'node:test'
 
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo.ts'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics.ts'
-import { createTestFundSnapshot } from '@/domains/funds/testing/createTestFundSnapshot.ts'
+import { createTestFundMarketData } from '@/domains/funds/testing/createTestFundMarketData.ts'
 import { toFundDetailViewModel } from './toFundDetailViewModel.ts'
 
-test('formats snapshot quotes and complete basic information', () => {
-  const snapshot = {
-    ...createTestFundSnapshot('161725', '招商中证白酒指数(LOF)A'),
+test('formats market data quotes and complete basic information', () => {
+  const marketData = {
+    ...createTestFundMarketData('161725', '招商中证白酒指数(LOF)A'),
     dailyChangePercent: -1.2,
     estimatedAt: '2026-08-03 15:00',
     estimatedNav: 1.25678,
     nav: 1.23456,
     navDate: '2026-07-28',
     returns: {
-      ...createTestFundSnapshot('161725').returns,
+      ...createTestFundMarketData('161725').returns,
       oneYear: 12.345,
     },
   }
-  const viewModel = toFundDetailViewModel(snapshot, createBasicInfo())
+  const viewModel = toFundDetailViewModel(marketData, createBasicInfo())
 
   assert.deepEqual(viewModel, {
     code: '161725',
@@ -81,7 +81,7 @@ test('formats holding metrics for the detail overview', () => {
   }
 
   const viewModel = toFundDetailViewModel(
-    createTestFundSnapshot('161726'),
+    createTestFundMarketData('161726'),
     undefined,
     metrics,
     '98',
@@ -115,11 +115,11 @@ test('formats holding metrics for the detail overview', () => {
 })
 
 test('maps all risk levels and preserves numeric ratings', () => {
-  const snapshot = createTestFundSnapshot('161725')
+  const marketData = createTestFundMarketData('161725')
   const expectedRisks = ['R1 低风险', 'R2 中低风险', 'R3 中风险', 'R4 中高风险', 'R5 高风险']
 
   for (let level = 1; level <= 5; level += 1) {
-    const result = toFundDetailViewModel(snapshot, {
+    const result = toFundDetailViewModel(marketData, {
       ...createBasicInfo(),
       morningstarRating: level,
       riskLevel: level,
@@ -130,14 +130,14 @@ test('maps all risk levels and preserves numeric ratings', () => {
     assert.equal(result.shanghaiRating, level)
   }
 
-  const missing = toFundDetailViewModel(snapshot)
+  const missing = toFundDetailViewModel(marketData)
   assert.equal(missing.riskText, '风险等级未知')
   assert.equal(missing.morningstarRating, null)
   assert.equal(missing.shanghaiRating, null)
 })
 
 test('uses placeholders and preserves unrecognized full dates', () => {
-  const viewModel = toFundDetailViewModel(createTestFundSnapshot('161725'), {
+  const viewModel = toFundDetailViewModel(createTestFundMarketData('161725'), {
     ...createBasicInfo(),
     establishedDate: '2015年5月27日',
     netAssetsDate: 'unknown',
@@ -154,7 +154,7 @@ test('uses placeholders and preserves unrecognized full dates', () => {
 })
 
 test('formats trading-rule amount units and precision', () => {
-  const snapshot = createTestFundSnapshot('161725')
+  const marketData = createTestFundMarketData('161725')
   const amounts = [
     [0, '0元'],
     [9999, '9999元'],
@@ -166,7 +166,7 @@ test('formats trading-rule amount units and precision', () => {
   ] as const
 
   for (const [amount, expected] of amounts) {
-    const rules = toFundDetailViewModel(snapshot, {
+    const rules = toFundDetailViewModel(marketData, {
       ...createBasicInfo(),
       minimumPurchaseAmountYuan: amount,
     }).tradingRules
@@ -176,8 +176,8 @@ test('formats trading-rule amount units and precision', () => {
 })
 
 test('shows discounts only for a lower valid purchase fee', () => {
-  const snapshot = createTestFundSnapshot('161725')
-  const discounted = toFundDetailViewModel(snapshot, {
+  const marketData = createTestFundMarketData('161725')
+  const discounted = toFundDetailViewModel(marketData, {
     ...createBasicInfo(),
     purchaseFeePercent: 0.125,
     standardPurchaseFeePercent: 1,
@@ -193,7 +193,7 @@ test('shows discounts only for a lower valid purchase fee', () => {
     [1, null],
     [null, 1],
   ] as const) {
-    const rules = toFundDetailViewModel(snapshot, {
+    const rules = toFundDetailViewModel(marketData, {
       ...createBasicInfo(),
       purchaseFeePercent,
       standardPurchaseFeePercent,
@@ -206,7 +206,7 @@ test('shows discounts only for a lower valid purchase fee', () => {
 })
 
 test('maps exact trading statuses to semantic tones', () => {
-  const snapshot = createTestFundSnapshot('161725')
+  const marketData = createTestFundMarketData('161725')
   const statuses = [
     ['开放申购', 'success'],
     ['开放赎回', 'success'],
@@ -219,7 +219,7 @@ test('maps exact trading statuses to semantic tones', () => {
   ] as const
 
   for (const [status, tone] of statuses) {
-    const rules = toFundDetailViewModel(snapshot, {
+    const rules = toFundDetailViewModel(marketData, {
       ...createBasicInfo(),
       purchaseStatus: status,
     }).tradingRules
@@ -230,7 +230,7 @@ test('maps exact trading statuses to semantic tones', () => {
 })
 
 test('keeps a complete placeholder model after a successful empty response', () => {
-  const rules = toFundDetailViewModel(createTestFundSnapshot('161725'), {
+  const rules = toFundDetailViewModel(createTestFundMarketData('161725'), {
     ...createBasicInfo(),
     custodyFeePercent: null,
     dailyPurchaseLimitYuan: null,
@@ -266,8 +266,8 @@ test('keeps a complete placeholder model after a successful empty response', () 
 })
 
 test('formats zero confirmation days and hides rules without basic information', () => {
-  const snapshot = createTestFundSnapshot('161725')
-  const rules = toFundDetailViewModel(snapshot, {
+  const marketData = createTestFundMarketData('161725')
+  const rules = toFundDetailViewModel(marketData, {
     ...createBasicInfo(),
     purchaseConfirmationDays: 0,
     redemptionConfirmationDays: 0,
@@ -278,7 +278,7 @@ test('formats zero confirmation days and hides rules without basic information',
   assert.equal(rules.purchaseConfirmationText, 'T+0')
   assert.equal(rules.redemptionConfirmationText, 'T+0')
   assert.equal(rules.redemptionFundsArrivalText, 'T+0')
-  assert.equal(toFundDetailViewModel(snapshot).tradingRules, null)
+  assert.equal(toFundDetailViewModel(marketData).tradingRules, null)
 })
 
 function createBasicInfo(): FundBasicInfo {

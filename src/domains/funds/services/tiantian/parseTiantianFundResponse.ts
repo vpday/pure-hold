@@ -1,12 +1,12 @@
-import type { FundSnapshot } from '../../models/fundSnapshot.ts'
+import type { FundMarketData } from '../../models/fundMarketData.ts'
 import type { FundRefreshIssue } from './fundRefreshIssue.ts'
-import { mapTiantianFundSnapshot } from './mapTiantianFundSnapshot.ts'
+import { mapTiantianFundMarketData } from './mapTiantianFundMarketData.ts'
 import type { TiantianFundDto } from './tiantianFundDto.ts'
 import { isSuccessfulTiantianResponse } from './tiantianResponse.ts'
 
 export interface ParsedTiantianFundResponse {
   readonly issues: readonly FundRefreshIssue[]
-  readonly snapshots: readonly FundSnapshot[]
+  readonly marketData: readonly FundMarketData[]
 }
 
 export function parseTiantianFundResponse(
@@ -26,38 +26,38 @@ export function parseTiantianFundResponse(
         code: 'business-response-failed',
         fundCode,
       })),
-      snapshots: [],
+      marketData: [],
     }
   }
 
   const requested = new Set(requestedCodes)
   const returned = new Set<string>()
   const issues: FundRefreshIssue[] = []
-  const snapshots: FundSnapshot[] = []
+  const marketData: FundMarketData[] = []
 
   for (const record of value.data) {
     if (!isRecord(record)) {
       issues.push({ code: 'malformed-record' })
       continue
     }
-    const snapshot = mapTiantianFundSnapshot(record as TiantianFundDto, fetchedAt)
-    if (!snapshot) {
+    const incomingMarketData = mapTiantianFundMarketData(record as TiantianFundDto, fetchedAt)
+    if (!incomingMarketData) {
       issues.push({
         code: 'malformed-record',
         fundCode: typeof record.FCODE === 'string' ? record.FCODE : undefined,
       })
       continue
     }
-    if (!requested.has(snapshot.code)) {
-      issues.push({ code: 'unexpected-record', fundCode: snapshot.code })
+    if (!requested.has(incomingMarketData.code)) {
+      issues.push({ code: 'unexpected-record', fundCode: incomingMarketData.code })
       continue
     }
-    if (returned.has(snapshot.code)) {
-      issues.push({ code: 'malformed-record', fundCode: snapshot.code })
+    if (returned.has(incomingMarketData.code)) {
+      issues.push({ code: 'malformed-record', fundCode: incomingMarketData.code })
       continue
     }
-    returned.add(snapshot.code)
-    snapshots.push(snapshot)
+    returned.add(incomingMarketData.code)
+    marketData.push(incomingMarketData)
   }
 
   for (const fundCode of requestedCodes) {
@@ -67,8 +67,8 @@ export function parseTiantianFundResponse(
   }
 
   const order = new Map(requestedCodes.map((code, index) => [code, index]))
-  snapshots.sort((left, right) => (order.get(left.code) ?? 0) - (order.get(right.code) ?? 0))
-  return { issues, snapshots }
+  marketData.sort((left, right) => (order.get(left.code) ?? 0) - (order.get(right.code) ?? 0))
+  return { issues, marketData }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

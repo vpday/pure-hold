@@ -1,14 +1,14 @@
 import type { FundHoldingMetrics, FundCurrentIncomeSource } from './fundHoldingMetrics.ts'
 import { holdingTotalCostCents, type FundHolding } from './fundHolding.ts'
-import type { FundSnapshot } from './fundSnapshot.ts'
+import type { FundMarketData } from './fundMarketData.ts'
 
 export type FundHoldingStatisticsIncomeSource = FundCurrentIncomeSource | 'mixed'
 
 export interface FundHoldingStatisticsItem {
-  readonly currentSnapshot: FundSnapshot
+  readonly currentMarketData: FundMarketData
   readonly holding: FundHolding
   readonly metrics: FundHoldingMetrics
-  readonly previousConfirmedSnapshot?: FundSnapshot
+  readonly previousConfirmedMarketData?: FundMarketData
   readonly today: string
 }
 
@@ -82,7 +82,7 @@ function currentIncomePair(item: FundHoldingStatisticsItem): IncomePair | null {
   const { holding, metrics } = item
   if (metrics.currentIncomeSource === 'actual' && metrics.todayIncome !== null) {
     const base = incomeBaseAmount(
-      item.currentSnapshot.nav,
+      item.currentMarketData.nav,
       holding.units,
       metrics.todayIncomePercent,
     )
@@ -99,12 +99,12 @@ function yesterdayIncomePair(item: FundHoldingStatisticsItem): IncomePair | null
   const { holding, metrics } = item
   if (metrics.yesterdayIncome === null) return null
 
-  const snapshot = hasCurrentConfirmedNav(item)
-    ? item.previousConfirmedSnapshot
-    : item.currentSnapshot
-  if (!snapshot) return null
+  const marketData = hasCurrentConfirmedNav(item)
+    ? item.previousConfirmedMarketData
+    : item.currentMarketData
+  if (!marketData) return null
 
-  const base = incomeBaseAmount(snapshot.nav, holding.units, metrics.yesterdayIncomePercent)
+  const base = incomeBaseAmount(marketData.nav, holding.units, metrics.yesterdayIncomePercent)
   return base === null ? null : { amount: metrics.yesterdayIncome, base }
 }
 

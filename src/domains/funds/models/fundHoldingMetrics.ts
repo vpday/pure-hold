@@ -1,5 +1,5 @@
 import { holdingTotalCostCents, type FundHolding } from './fundHolding.ts'
-import type { FundSnapshot } from './fundSnapshot.ts'
+import type { FundMarketData } from './fundMarketData.ts'
 
 export type FundCurrentIncomeSource = 'actual' | 'estimated' | 'none'
 
@@ -20,51 +20,53 @@ export interface FundHoldingMetrics {
 }
 
 export interface CalculateFundHoldingMetricsInput {
-  readonly currentSnapshot: FundSnapshot
+  readonly currentMarketData: FundMarketData
   readonly holding: FundHolding
-  readonly previousConfirmedSnapshot?: FundSnapshot
+  readonly previousConfirmedMarketData?: FundMarketData
   readonly today: string
 }
 
 export function calculateFundHoldingMetrics({
-  currentSnapshot,
+  currentMarketData,
   holding,
-  previousConfirmedSnapshot,
+  previousConfirmedMarketData,
   today,
 }: CalculateFundHoldingMetricsInput): FundHoldingMetrics {
-  const nav = positiveFiniteNumber(currentSnapshot.nav)
+  const nav = positiveFiniteNumber(currentMarketData.nav)
   const units = positiveFiniteNumber(holding.units)
   const totalCostCents = holdingTotalCostCents(holding)
   const totalCost = positiveFiniteNumber(totalCostCents === null ? null : totalCostCents / 100)
-  const hasCurrentNav = nav !== null && currentSnapshot.navDate === today
-  const estimatedNav = positiveFiniteNumber(currentSnapshot.estimatedNav)
+  const hasCurrentNav = nav !== null && currentMarketData.navDate === today
+  const estimatedNav = positiveFiniteNumber(currentMarketData.estimatedNav)
   const currentEstimateNav =
     !hasCurrentNav &&
     nav !== null &&
     estimatedNav !== null &&
-    fundDate(currentSnapshot.estimatedAt) === today
+    fundDate(currentMarketData.estimatedAt) === today
       ? estimatedNav
       : null
   const estimatedIncomePercent =
     currentEstimateNav !== null && nav !== null
-      ? (finiteNumber(currentSnapshot.estimatedChangePercent) ??
+      ? (finiteNumber(currentMarketData.estimatedChangePercent) ??
         (currentEstimateNav / nav - 1) * 100)
       : null
-  const todayIncomePercent = hasCurrentNav ? finiteNumber(currentSnapshot.dailyChangePercent) : null
+  const todayIncomePercent = hasCurrentNav
+    ? finiteNumber(currentMarketData.dailyChangePercent)
+    : null
   const todayIncome =
     nav !== null && units !== null ? incomeFromChangePercent(nav, units, todayIncomePercent) : null
-  const yesterdaySnapshot = hasCurrentNav ? previousConfirmedSnapshot : currentSnapshot
-  const yesterdayNav = positiveFiniteNumber(yesterdaySnapshot?.nav ?? null)
-  const yesterdayIncomePercent = finiteNumber(yesterdaySnapshot?.dailyChangePercent ?? null)
+  const yesterdayMarketData = hasCurrentNav ? previousConfirmedMarketData : currentMarketData
+  const yesterdayNav = positiveFiniteNumber(yesterdayMarketData?.nav ?? null)
+  const yesterdayIncomePercent = finiteNumber(yesterdayMarketData?.dailyChangePercent ?? null)
   const hasYesterdayIncome =
     yesterdayNav !== null &&
     units !== null &&
-    yesterdaySnapshot?.navDate !== null &&
-    yesterdaySnapshot?.navDate !== undefined &&
-    yesterdaySnapshot.navDate < today
+    yesterdayMarketData?.navDate !== null &&
+    yesterdayMarketData?.navDate !== undefined &&
+    yesterdayMarketData.navDate < today
 
   return {
-    confirmedNavDate: nav === null ? null : currentSnapshot.navDate,
+    confirmedNavDate: nav === null ? null : currentMarketData.navDate,
     currentIncomeSource: hasCurrentNav
       ? 'actual'
       : currentEstimateNav !== null
@@ -88,7 +90,7 @@ export function calculateFundHoldingMetrics({
     yesterdayIncome: hasYesterdayIncome
       ? incomeFromChangePercent(yesterdayNav, units, yesterdayIncomePercent)
       : null,
-    yesterdayIncomeDate: hasYesterdayIncome ? yesterdaySnapshot.navDate : null,
+    yesterdayIncomeDate: hasYesterdayIncome ? yesterdayMarketData.navDate : null,
     yesterdayIncomePercent: hasYesterdayIncome ? yesterdayIncomePercent : null,
   }
 }

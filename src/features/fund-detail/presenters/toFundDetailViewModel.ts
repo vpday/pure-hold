@@ -1,6 +1,6 @@
 import type { FundBasicInfo } from '@/domains/funds/models/fundBasicInfo'
 import type { FundHoldingMetrics } from '@/domains/funds/models/fundHoldingMetrics'
-import type { FundSnapshot } from '@/domains/funds/models/fundSnapshot'
+import type { FundMarketData } from '@/domains/funds/models/fundMarketData'
 import { formatRowDate } from '@/shared/presenters/formatRowDate'
 import type {
   FundDetailHoldingViewModel,
@@ -17,29 +17,29 @@ const warningStatuses = new Set(['限大额', '限制申购'])
 const errorStatuses = new Set(['暂停申购', '暂停赎回', '封闭期'])
 
 export function toFundDetailViewModel(
-  snapshot: FundSnapshot,
+  marketData: FundMarketData,
   basicInfo?: FundBasicInfo,
   holdingMetrics?: FundHoldingMetrics,
   availableUnitsText?: string,
 ): FundDetailViewModel {
   return {
-    code: snapshot.code,
+    code: marketData.code,
     companyName: basicInfo?.companyName ?? '--',
-    dailyChangePercentText: formatPercent(snapshot.dailyChangePercent),
-    dailyChangeTrend: toTrend(snapshot.dailyChangePercent),
+    dailyChangePercentText: formatPercent(marketData.dailyChangePercent),
+    dailyChangeTrend: toTrend(marketData.dailyChangePercent),
     establishedDateText: formatRowDate(basicInfo?.establishedDate ?? '--'),
-    estimatedAtTimeText: formatRowDate(snapshot.estimatedAt ?? '--'),
-    estimatedNavText: formatNumber(snapshot.estimatedNav, 4),
+    estimatedAtTimeText: formatRowDate(marketData.estimatedAt ?? '--'),
+    estimatedNavText: formatNumber(marketData.estimatedNav, 4),
     fundType: basicInfo?.fundType ?? '--',
     holding: holdingMetrics ? toHoldingViewModel(holdingMetrics, availableUnitsText) : null,
     morningstarRating: basicInfo?.morningstarRating ?? null,
-    name: snapshot.name,
-    navDateText: formatCompactDate(snapshot.navDate),
-    navText: formatNumber(snapshot.nav, 4),
+    name: marketData.name,
+    navDateText: formatCompactDate(marketData.navDate),
+    navText: formatNumber(marketData.nav, 4),
     netAssetsDateText: formatCompactDate(basicInfo?.netAssetsDate),
     netAssetsText: formatNetAssets(basicInfo?.netAssetsYuan),
-    oneYearReturnText: formatPercent(snapshot.returns.oneYear),
-    oneYearReturnTrend: toTrend(snapshot.returns.oneYear),
+    oneYearReturnText: formatPercent(marketData.returns.oneYear),
+    oneYearReturnTrend: toTrend(marketData.returns.oneYear),
     riskText: formatRisk(basicInfo?.riskLevel),
     shanghaiRating: basicInfo?.shanghaiRating ?? null,
     trackingErrorText: formatNumber(basicInfo?.trackingError ?? null, 4),
