@@ -2,7 +2,7 @@ import {
   createCacheRouteRegistry,
   type CacheRouteRegistry,
 } from '@/pwa/cache/cacheRouteRegistry.ts'
-import { tiantianFundSnapshotPostCacheRoute } from '@/pwa/cache/tiantianFundSnapshotPostCacheAdapter.ts'
+import { tiantianFundMarketDataPostCacheRoute } from '@/pwa/cache/tiantianFundMarketDataPostCacheAdapter.ts'
 import { tiantianMmGetCacheRoute } from '@/pwa/cache/tiantianMmGetCacheAdapter.ts'
 
 type ManifestEntry = string | { revision?: string; url: string }
@@ -42,7 +42,7 @@ const isServiceWorkerRuntime =
   typeof self !== 'undefined' && 'clients' in serviceWorker && 'skipWaiting' in serviceWorker
 const cacheRouteRegistry = createCacheRouteRegistry([
   tiantianMmGetCacheRoute,
-  tiantianFundSnapshotPostCacheRoute,
+  tiantianFundMarketDataPostCacheRoute,
 ])
 
 if (isServiceWorkerRuntime) {

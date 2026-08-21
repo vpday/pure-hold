@@ -6,27 +6,27 @@ import {
 import { createCachePolicyHandler, type CacheResponseContext } from './cachePolicy.ts'
 import type { CacheRoute } from './cacheRouteRegistry.ts'
 
-export const tiantianFundSnapshotEndpoint =
+export const tiantianFundMarketDataEndpoint =
   'https://fundcomapi.tiantianfunds.com/mm/FundFavor/FundFavorInfo'
 
-const tiantianFundSnapshotPostCacheAdapter = {
-  createCacheKey: createTiantianFundSnapshotCacheKey,
-  decorateResponse: createSnapshotResponse,
+const tiantianFundMarketDataPostCacheAdapter = {
+  createCacheKey: createTiantianFundMarketDataCacheKey,
+  decorateResponse: decorateMarketDataResponse,
   metadataCacheName: 'pure-hold-fund-snapshot-metadata-v1',
   responseCacheName: 'pure-hold-fund-snapshot-v1',
 }
 
-export const handleTiantianFundSnapshotPostRequest = createCachePolicyHandler(
-  tiantianFundSnapshotPostCacheAdapter,
+export const handleTiantianFundMarketDataPostRequest = createCachePolicyHandler(
+  tiantianFundMarketDataPostCacheAdapter,
 )
 
-export const tiantianFundSnapshotPostCacheRoute: CacheRoute = {
-  handle: handleTiantianFundSnapshotPostRequest,
-  id: 'tiantian-fund-snapshot-post',
-  matches: matchesTiantianFundSnapshotPostRequest,
+export const tiantianFundMarketDataPostCacheRoute: CacheRoute = {
+  handle: handleTiantianFundMarketDataPostRequest,
+  id: 'tiantian-fund-market-data-post',
+  matches: matchesTiantianFundMarketDataPostRequest,
 }
 
-export function matchesTiantianFundSnapshotPostRequest(request: Request): boolean {
+export function matchesTiantianFundMarketDataPostRequest(request: Request): boolean {
   if (request.method !== 'POST') {
     return false
   }
@@ -40,7 +40,7 @@ export function matchesTiantianFundSnapshotPostRequest(request: Request): boolea
   )
 }
 
-export async function createTiantianFundSnapshotCacheKey(request: Request): Promise<Request> {
+export async function createTiantianFundMarketDataCacheKey(request: Request): Promise<Request> {
   const body = normalizeFormBody(await request.clone().text())
   const params = new URLSearchParams(body)
   const keyUrl = new URL('https://pure-hold.invalid/tiantian-fund-snapshot')
@@ -58,7 +58,7 @@ function normalizeFormBody(body: string): string {
   return new URLSearchParams(entries).toString()
 }
 
-function createSnapshotResponse(response: Response, context: CacheResponseContext): Response {
+function decorateMarketDataResponse(response: Response, context: CacheResponseContext): Response {
   const headers = new Headers(response.headers)
   headers.set(cacheResponseSourceHeader, context.source)
   if (context.cachedAt === undefined) {
