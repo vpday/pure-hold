@@ -32,7 +32,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 | 资产配置 API | `fetchTiantianFundAssetAllocation`                     | 天天基金资产配置历史适配器的领域入口                          |
 | 基金设置模型 | `FundSettings`                                         | 基金代码、名称、分组、持仓等可跨页面恢复的设置                |
 | 基金持久化   | `loadFundSettings` / `saveFundSettings`                | 版本化基金设置的加载、验证、恢复和保存                        |
-| 基金行情刷新 | `fetchTiantianFundSnapshots`                           | 天天基金批量快照、缓存来源和实际数据时间                      |
+| 基金行情刷新 | `fetchTiantianFundMarketData`                          | 天天基金批量基金行情、缓存来源和实际数据时间                  |
 | 天天基金标识 | `initializeTiantianDeviceId` / `getTiantianDeviceId`   | 页面会话内稳定的天天基金专用 deviceid                         |
 | 响应式行为   | `useBreakpoints`                                       | Tailwind 断点对应的共享运行时状态                             |
 | PWA 更新 UI  | `PwaUpdateNotification`                                | 提示并应用新的 Service Worker 版本                            |
@@ -50,7 +50,7 @@ PureHold（简持）是面向个人投资者的 Vue 3 单页应用。当前提�
 
 `src/features` 保存面向用户的功能组合。Feature 可以读取一个或多个领域，生成页面模型并管理局部交互，但不拥有第三方协议知识。
 
-`src/app` 保存跨领域但仍属于本应用的协调能力。`src/app/settings` 保存应用级刷新偏好和纯配置传输协议；它通过 Domain facade 读写指数分组与基金设置，不读取原始 localStorage，也不接触行情快照或设备标识。
+`src/app` 保存跨领域但仍属于本应用的协调能力。`src/app/settings` 保存应用级刷新偏好和纯配置传输协议；它通过 Domain facade 读写指数分组与基金设置，不读取原始 localStorage，也不接触基金行情数据或设备标识。
 
 `src/app/coordination` 提供 app-local 的 compensated commit seam。`runCompensatedCommit` 统一捕获快照、执行具名恢复路径和收集恢复错误；各协调器仍负责领域校验、正向写入顺序和失败 route 的选择。公开的 `CoordinationFailureFact` 只描述持久化最终是 `unchanged`、`restored` 还是 `partial`，与 `status`、`reason`、`retryable` 以及 pending 状态正交。该 seam 不是 ACID 事务，不拥有任何 Domain policy，也不把 Store 命令或第三方协议带入 App 层。
 
@@ -80,13 +80,13 @@ EastmoneyIndexQuoteDto
 
 Pinia 保存当前页面运行期间的共享领域状态。PWA Service Worker 负责安装、版本更新、静态资源预缓存和明确允许的网络缓存。Pinia 本身不自动提供离线持久化；Funds 领域通过显式的版本化 localStorage 服务保存 `FundSettings`，Service Worker 不替代 Vue 状态管理或领域持久化。
 
-`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `snapshotsByCode` 或 `previousSnapshotsByCode`。Store 启动时由设置命令 module 提供设置状态，由行情 runtime 为每只基金创建空 `FundSnapshot`；确认净值日期推进时，runtime 仅在内存中保留上一份确认快照，同日刷新和旧数据不推进或回滚它。行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情或上一份确认快照。
+`FundSettings` 只包含基金代码与名称、分组、持仓顺序和汇总持仓，不包含 `marketDataByCode` 或 `previousConfirmedMarketDataByCode`。Store 启动时由设置命令 module 提供设置状态，由 `FundMarketRuntime` 为每只基金创建空 `FundMarketData`；确认净值日期推进时，runtime 仅在内存中保留上一确认行情数据，同日刷新和旧数据不推进或回滚它。行情刷新只更新 Pinia，接口返回的新名称通过设置命令 module best-effort 回写。行情原始 HTTP 响应由 Service Worker 按明确规则缓存，不能通过 localStorage 恢复行情数据或上一确认行情数据。
 
 基金设置使用版本化 key `pure-hold:fund-settings:v1`。旧 key `pure-hold:fund-state:v4` 保留但不读取、不删除、不迁移；新设置解析失败时备份原始内容并恢复为空设置，localStorage 不可用时应用继续使用内存中的空设置。
 
-应用刷新偏好使用独立版本化 key `pure-hold:app-settings:v1`，默认启用指数 10 秒、基金 2 分钟；它们只控制首页指数行情和基金快照的定时刷新，详情历史与局部会话不受影响。配置传输包只包含指数分组和完整 `FundSettings`（含持仓），不包含刷新偏好、运行时快照、生成的指数目录或天天基金 deviceid。
+应用刷新偏好使用独立版本化 key `pure-hold:app-settings:v1`，默认启用指数 10 秒、基金 2 分钟；它们只控制首页指数行情和基金行情数据的定时刷新，详情历史与局部会话不受影响。配置传输包只包含指数分组和完整 `FundSettings`（含持仓），不包含刷新偏好、运行时基金行情数据、生成的指数目录或天天基金 deviceid。
 
-实时指数行情、基金搜索和腾讯市场状态不进入 Service Worker 缓存。天天基金的 GET `/mm`、`/mm/**` 请求和精确匹配的快照 POST 请求由 Service Worker 处理；页面未被 Service Worker 控制时仍直接使用网络。离线重新打开应用时，指数定义以及已保存的基金设置和持仓仍可展示，行情由受控页面的缓存响应更新或先显示空快照。
+实时指数行情、基金搜索和腾讯市场状态不进入 Service Worker 缓存。天天基金的 GET `/mm`、`/mm/**` 请求和精确匹配的基金行情 POST 请求由 Service Worker 处理；页面未被 Service Worker 控制时仍直接使用网络。离线重新打开应用时，指数定义以及已保存的基金设置和持仓仍可展示，行情由受控页面的缓存响应更新或先显示空的基金行情数据。
 
 ## Code Map
 
@@ -106,7 +106,7 @@ src/
 │  │  ├─ services/tencent/      # 腾讯市场状态适配器
 │  │  └─ stores/                # 指数运行时状态与市场筛选
 │  └─ funds/
-│     ├─ models/                # 基金快照、持仓、历史数据和收益计算
+│     ├─ models/                # 基金行情数据、持仓、历史数据和收益计算
 │     ├─ services/eastmoney/    # 东方财富基金搜索适配器
 │     ├─ services/tiantian/     # 天天基金实时行情、资料、历史和请求会话适配器
 │     ├─ services/persistence/  # 版本化基金设置持久化与恢复
@@ -126,7 +126,7 @@ src/
 │  ├─ fund-search/              # 搜索会话、累计选择和批量新增
 │  └─ settings/                 # 刷新偏好、配置导入导出和响应式设置 UI
 ├─ pwa/
-│  └─ cache/                    # 查询缓存共同策略与天天基金 GET/快照 POST adapter
+│  └─ cache/                    # 查询缓存共同策略与天天基金 GET/基金行情 POST 响应缓存 adapter
 └─ shared/
    ├─ composables/              # 无业务语义的共享 Vue 能力
    ├─ persistence/              # 浏览器字符串存储的机械 Adapter
@@ -136,7 +136,7 @@ src/
 
 `App.vue` 只组合应用壳和 feature 入口。`SettingsEntry` 是应用设置的 Feature 入口，负责草稿、响应式 Dialog/Drawer、浏览器 Clipboard/File/Download 适配和用户确认；纯传输解析与跨 Store 回滚协调留在 `src/app/settings/`。`IndexOverviewSection` 是指数概览的组合点，负责 Store 生命周期、应用刷新偏好到指数轮询 seam 的连接、全局手动刷新订阅、页面模型、Collapse 和移动端 Drawer。子展示组件只接收 props，不直接请求数据或读取 Pinia。
 
-`FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、列表行模型、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundSnapshot` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
+`FundListSection` 是基金展示组合点，负责连接 Funds Store、轮询、全局刷新、Toast、删除命令以及详情、编辑和分组入口；`useFundListSession` 通过单一只读 model 集中系统/自定义分类、分类恢复、每分类排序、持仓指标、列表行模型、日期标题和刷新 notices。桌面表格和移动卡片消费同一份 session 有序行模型，只把用户操作与排序意图发送给组合点。`FundDetailEntry` 读取 Store 中持续更新的 `FundMarketData` 作为首屏行情来源，并在 Feature 内组合基础资料、累计收益、净值历史、跨 Funds 与 Indices 的比较图表和数据指标会话；净值历史、分红送配与固定基准通过详情级数据源共享请求和成功缓存。详情展示子组件只接收 props 和发送事件。`FundSearchEntry` 是基金搜索与新增组合点，负责搜索会话、累计选择和最终提交。`fund-search` 与 `fund-edit` 共同依赖 `fund-holding-form` 的单基金草稿、校验和字段组件；这些展示子组件不读取 Pinia、不请求网络、不写持久化。
 
 详情图表共同使用 feature-local ECharts runtime 管理 DOM、实例和 observer；历史数据源共同使用请求池管理 pending 与订阅者。图表 option、业务展示语义、成功缓存、force 和交易日策略仍留在各自 component 或 data source adapter。
 
@@ -188,9 +188,9 @@ IndexSettings Feature 草稿 / 配置导入
   -> 只刷新本次新增代码的实时行情
 ```
 
-搜索关键词、分页、请求取消、错误、累计选择、展开状态和未提交持仓字段只存在于 `fund-search` Feature。只有最终确认后的基金、汇总持仓和空行情快照进入 Funds Store。`addFunds` 成功表示基金设置已经本地保存，不表示随后发起的实时行情刷新成功；刷新失败保留已添加基金、持仓和空行情快照。
+搜索关键词、分页、请求取消、错误、累计选择、展开状态和未提交持仓字段只存在于 `fund-search` Feature。只有最终确认后的基金、汇总持仓和空基金行情数据进入 Funds Store。`addFunds` 成功表示基金设置已经本地保存，不表示随后发起的实时行情刷新成功；刷新失败保留已添加基金、持仓和空基金行情数据。
 
-基金设置与行情快照的生命周期分离：
+基金设置与基金行情数据的生命周期分离：
 
 ```text
 pure-hold:fund-settings:v1
@@ -198,22 +198,22 @@ pure-hold:fund-settings:v1
   -> FundSettings（代码、名称、分组、持仓）
   -> createFundSettingsCommandModule
   -> useFundsStore 设置状态
-  -> createFundMarketRuntime（包含空的 snapshotsByCode）
+  -> createFundMarketRuntime（包含空的 marketDataByCode）
 
 main.ts 初始化天天基金 deviceid
-  -> fetchTiantianFundSnapshots
-  -> 天天基金快照 POST
-  -> 快照 POST cache adapter + 共同 cache policy
+  -> fetchTiantianFundMarketData
+  -> 天天基金首页行情 POST
+  -> 基金行情 POST 响应缓存 adapter + 共同 cache policy
   -> 中性 transport contract 定义的来源/时间响应头
   -> parseTiantianFundResponse
-  -> FundSnapshot
-  -> Pinia snapshotsByCode
-  -> 确认日期推进时更新内存 previousSnapshotsByCode
+  -> FundMarketData
+  -> Pinia marketDataByCode
+  -> 确认日期推进时更新内存 previousConfirmedMarketDataByCode
   -> useFundsStore 名称观察协调
   -> createFundSettingsCommandModule（名称 best-effort 持久化）
 ```
 
-快照缓存保存原始 HTTP 响应，不保存领域 DTO；DTO 校验与转换仍由 `services/tiantian/` 完成。行情数值、标签和时间戳更新不会触发 localStorage 写入。
+基金行情响应缓存保存原始 HTTP 响应，不保存领域 DTO；DTO 校验与转换仍由 `services/tiantian/` 完成。行情数值、标签和时间戳更新不会触发 localStorage 写入。
 
 首页刷新偏好与配置传输的数据流是：
 
@@ -230,13 +230,13 @@ IndexGroupDefinition[] + FundSettings
   -> Domain facade 先持久化、再更新内存；后续写入失败时回滚已写分区
 ```
 
-刷新偏好只影响首页的指数与基金快照定时刷新，手动全局刷新仍调用现有一次性协调器；配置传输不携带刷新偏好、运行时快照、生成目录或 deviceid。
+刷新偏好只影响首页的指数与基金行情数据定时刷新，手动全局刷新仍调用现有一次性协调器；配置传输不携带刷新偏好、运行时基金行情数据、生成目录或 deviceid。
 
 单基金编辑的数据流是：
 
 ```text
 FundListSection 操作入口
-  -> FundEditEntry 打开基金快照
+  -> FundEditEntry 打开基金行情数据
   -> fund-holding-form 持仓草稿 + 自定义分组 ID 草稿
   -> 有持仓输入时 updateFundHolding 先保存持仓
   -> updateFundGroupMembership 再保存分组关系
@@ -248,7 +248,7 @@ FundListSection 操作入口
 
 ```text
 FundListSection 桌面或移动入口
-  -> FundDetailEntry 读取 Funds Store 的 FundSnapshot
+  -> FundDetailEntry 读取 Funds Store 的 FundMarketData
   -> 立即生成名称、代码、净值和收益展示模型
   -> fetchTiantianFundBasicInfo
   -> FundBaseInfos DTO 校验与归一化
@@ -259,7 +259,7 @@ FundListSection 桌面或移动入口
   -> 响应式底部 Drawer / FundTradingRules
 ```
 
-天天基金协议中的百分号、字段名和确认日编码在适配器中转换为 `FundBasicInfo` 的费率、人民币金额、状态和非负整数天数；协议细节不进入 Feature。`toFundDetailViewModel` 统一生成金额单位、费率、折扣、状态 tone 和 T+N 文案，`FundTradingRules` 只通过 props 渲染三张卡片。基础资料缓存只存在于 `FundDetailEntry` 挂载期间，不进入 Pinia、localStorage 或 Service Worker。关闭详情保留成功缓存；全局刷新清空缓存，并在详情打开时重新请求当前基金。基础资料失败只影响详情区，Store 快照提供的头部行情继续展示。
+天天基金协议中的百分号、字段名和确认日编码在适配器中转换为 `FundBasicInfo` 的费率、人民币金额、状态和非负整数天数；协议细节不进入 Feature。`toFundDetailViewModel` 统一生成金额单位、费率、折扣、状态 tone 和 T+N 文案，`FundTradingRules` 只通过 props 渲染三张卡片。基础资料缓存只存在于 `FundDetailEntry` 挂载期间，不进入 Pinia、localStorage 或 Service Worker。关闭详情保留成功缓存；全局刷新清空缓存，并在详情打开时重新请求当前基金。基础资料失败只影响详情区，Store 基金行情数据提供的头部行情继续展示。
 
 基金详情累计收益的数据流是：
 
@@ -371,15 +371,15 @@ FundDetailEntry 当前基金代码
 - `useFundAssetAllocation` 隐藏首次 tab 激活、按基金代码的成功缓存、取消、过期响应隔离和刷新保旧数据。
 - `toFundDetailViewModel` 隐藏详情金额、费率、折扣、状态 tone 和 T+N 的展示语义。
 - `createFundSettingsCommandModule` 隐藏七类设置命令的候选构造、领域校验、先保存后提交、运行时 effect，以及 effective/persisted 名称双状态。
-- `createFundMarketRuntime` 隐藏空快照构造、批量刷新、合并、去重、取消、生命周期隔离、可见性轮询、刷新元数据、上一份确认快照和行情名称观察。
+- `createFundMarketRuntime` 隐藏空基金行情数据构造、批量刷新、合并、去重、取消、生命周期隔离、可见性轮询、刷新元数据、上一确认行情数据和行情名称观察。
 - `useFundsStore` 隐藏设置状态与行情 runtime 的协调，并保持 Feature 使用的公共 facade；新增、删除、持仓、分组、组织排序、完整设置替换和轮询内部状态不向 Feature 暴露内部 module。
 - `useAppSettingsStore` 隐藏应用刷新偏好的版本化加载、校验、先保存后提交和损坏恢复；`configurationTransfer` 隐藏导入包解析、分区校验、未知指数引用警告和跨分区回滚协调。
-- `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解行情快照。
+- `loadFundSettings` / `saveFundSettings` 隐藏基金设置 schema 版本、结构验证、损坏数据备份和恢复；它们不理解基金行情数据。
 - `browserStorageAdapter` 隐藏 `localStorage` 能力检测、原始字符串读写异常和 best-effort 持久化授权；基金设置、指数分组和 deviceid 各自决定失败后的领域策略。
 - `createCachePolicyHandler` 隐藏查询缓存的新鲜判断、网络访问、200 响应写入、过期清理、24 小时回退和容量淘汰；具体 HTTP 请求差异由两个 PWA adapter 提供。
 - `createCacheRouteRegistry` 要求 route 同时拥有 matcher 与 handler；只有唯一匹配会处理请求，重叠或 matcher 异常会记录错误并让 Service Worker 网络直通。
 - `readCacheResponseMetadata` 隐藏三个 transport header 的解析与缺失 metadata 时的网络时间 fallback，使 Funds Domain 不依赖 PWA 实现。
-- `fetchTiantianFundSnapshots` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
+- `fetchTiantianFundMarketData` 隐藏 50 只基金一批的请求、缓存来源和实际数据时间，并将 `cache-fallback` 转换为结构化刷新问题。
 
 天天基金适配器通过 `createTiantianRequestParams` 统一注入页面会话内稳定的 `deviceid`，以及 `plat`、`product` 和 `version` 固定参数。deviceid 从独立 key 读取，缺失或格式非法时重新生成；storage 读写失败时只保留本次页面会话内存值。该 deviceid 只用于天天基金，不进入基金设置或导入导出数据。`isSuccessfulTiantianResponse` 只校验共享响应外壳；`data` 的数组或对象形状、空数据语义、附加字段和失败策略仍由各接口 parser 负责。
 
@@ -397,11 +397,11 @@ FundDetailEntry 当前基金代码
 - **新增网络缓存必须显式声明匹配范围、时效、容量和失败策略；禁止默认缓存所有 GET 请求。**
 - **生成文件 `auto-imports.d.ts` 和 `components.d.ts` 不手工维护。**
 - **`fundOrder` 是基金存在性和“全部”分类顺序的权威来源；代码不得重复。**
-- **`snapshotsByCode` 的键必须与 `fundOrder` 完全一致，`previousSnapshotsByCode` 只能是 `fundOrder` 的子集且只保存确认日期推进前的快照；`holdingsByCode` 只能是 `fundOrder` 的子集；`holdingOrder` 必须与 `holdingsByCode` 的键集合完全一致并保存“持仓”分类的独立顺序；快照或持仓记录内的代码必须等于对应键。**
+- **`marketDataByCode` 的键必须与 `fundOrder` 完全一致，`previousConfirmedMarketDataByCode` 只能是 `fundOrder` 的子集且只保存确认日期推进前的上一确认行情数据；`holdingsByCode` 只能是 `fundOrder` 的子集；`holdingOrder` 必须与 `holdingsByCode` 的键集合完全一致并保存“持仓”分类的独立顺序；行情数据或持仓记录内的代码必须等于对应键。**
 - **自定义基金分组只能引用 `fundOrder` 中的代码；“全部”和“持仓”是运行时派生分类，不进入持久化分组。**
-- **删除基金必须同时清理快照、汇总持仓、`holdingOrder` 和全部自定义分组引用。**
+- **删除基金必须同时清理基金行情数据、汇总持仓、`holdingOrder` 和全部自定义分组引用。**
 - **基金批量变更必须先持久化候选 `FundSettings`，再替换内存状态；后续行情刷新失败不得回滚已保存设置。**
-- **`FundSettings` 不得包含行情快照；`snapshotsByCode` 和 `previousSnapshotsByCode` 只属于 `createFundMarketRuntime` 的运行时状态，行情字段更新不得触发设置持久化。**
+- **`FundSettings` 不得包含基金行情数据；`marketDataByCode` 和 `previousConfirmedMarketDataByCode` 只属于 `createFundMarketRuntime` 的运行时状态，行情字段更新不得触发设置持久化。**
 - **天天基金 deviceid 只在该领域内复用，必须独立于基金设置和导入导出数据。**
 
 ## 横切关注点
@@ -412,17 +412,17 @@ FundDetailEntry 当前基金代码
 
 指数分组通过 `createIndexSettingsCommandModule` 执行唯一公开提交：完整候选先由 `validateIndexGroups` 严格验证，再写入版本化 storage，成功后才由 Store 私有 callback 应用并重置相关行情生命周期。Feature 和 App 协调器不能分别调用保存与运行时替换原语。
 
-`useFundsStore` 是基金共享领域的公共 facade 和设置状态与行情 runtime 的协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再应用设置状态；行情 runtime 独立持有 `snapshotsByCode`、`previousSnapshotsByCode`、刷新请求和元数据。确认日期严格推进时，当前确认快照成为上一份快照；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
+`useFundsStore` 是基金共享领域的公共 facade 和设置状态与行情 runtime 的协调点。设置命令 module 持有代码、名称、分组、持仓顺序和汇总持仓，所有显式设置命令都先把候选 `FundSettings` 持久化，再应用设置状态；行情 runtime 独立持有 `marketDataByCode`、`previousConfirmedMarketDataByCode`、刷新请求和元数据。确认日期严格推进时，当前确认行情数据成为上一确认行情数据；同日更新、旧日期响应和缺少确认数据的响应不推进或回滚确认状态。基金组织排序将全部、持仓和自定义分组顺序作为一个原子候选设置提交。全量刷新和新增后的定向刷新共享相同的部分成功合并规则；行情数值只更新 runtime，名称变化通过 best-effort 协作回写设置，名称持久化失败不回滚已提交行情，并以稳定问题状态暴露。具体 schema 版本、存储 key 和刷新实现分别以 `fundSettingsSchemaVersion.ts`、`createFundSettingsCommandModule.ts` 和 `createFundMarketRuntime.ts` 为权威来源。
 
 ### PWA 与缓存
 
 `vite.config.ts` 以 `injectManifest` 模式构建 `src/sw.ts`。该入口只负责预缓存、用户确认后的版本切换、生命周期和查询缓存路由；请求匹配与 Cache Storage 实现在 `src/pwa/cache/`。每个 production route 在同一 object 中绑定稳定 ID、matcher 与 handler，registry 执行 exclusive-match：0 个匹配不接管请求，唯一匹配才调用 handler，多路匹配或 matcher 异常记录 method、URL 和 route ID 后不调用 `respondWith`，由浏览器网络直通。两个查询 adapter 共用 `cachePolicy.ts` 的同一套新鲜判断、网络访问、过期回退和容量淘汰流程，HTTP 方法只决定匹配与 cache key，不决定缓存策略。
 
-实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。`tiantianMmGetCacheAdapter.ts` 只匹配天天基金 GET `/mm`、`/mm/**`；`tiantianFundSnapshotPostCacheAdapter.ts` 只在来源、精确路径、POST 方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时处理首页快照。固定的页面会话 deviceid 使相同天天基金请求可以复用缓存。
+实时指数行情、中证 `H00300` 全收益历史、东方财富基金搜索与历史收益、腾讯市场状态不进入 Service Worker 缓存。`tiantianMmGetCacheAdapter.ts` 只匹配天天基金 GET `/mm`、`/mm/**`；`tiantianFundMarketDataPostCacheAdapter.ts` 只在来源、精确路径、POST 方法和 `application/x-www-form-urlencoded` Content-Type 都匹配时处理首页基金行情响应。固定的页面会话 deviceid 使相同天天基金请求可以复用缓存。
 
-GET 使用原始 `Request` 作为 key；快照 POST 使用内部 GET `Request` 作为 key，key 包含 endpoint、规范化 form body 和 deviceid，不按单只基金拆分。两个 adapter 各自拥有响应缓存、时间元数据缓存和最多 100 条记录。共同 cache policy 规定缓存新鲜期为 10 分钟、最多保留 24 小时；手动刷新通过 `cache: 'no-store'` 绕过新鲜缓存，网络失败时仅回退到 24 小时内的缓存。只有快照 POST adapter 根据 `src/shared/transport/cacheResponseMetadata.ts` 的 contract，通过 `X-Pure-Hold-Data-Source`、`X-Pure-Hold-Cached-At` 和 `X-Pure-Hold-Cache-Fallback` 向页面传递来源和实际缓存时间；GET 继续返回原始响应。Service Worker 不解析基金 DTO，两个缓存保存的也仍是原始接口响应。
+GET 使用原始 `Request` 作为 key；基金行情 POST 使用内部 GET `Request` 作为 key，key 包含 endpoint、规范化 form body 和 deviceid，不按单只基金拆分。两个 adapter 各自拥有响应缓存、时间元数据缓存和最多 100 条记录。共同 cache policy 规定缓存新鲜期为 10 分钟、最多保留 24 小时；手动刷新通过 `cache: 'no-store'` 绕过新鲜缓存，网络失败时仅回退到 24 小时内的缓存。只有基金行情 POST adapter 根据 `src/shared/transport/cacheResponseMetadata.ts` 的 contract，通过 `X-Pure-Hold-Data-Source`、`X-Pure-Hold-Cached-At` 和 `X-Pure-Hold-Cache-Fallback` 向页面传递来源和实际缓存时间；GET 继续返回原始响应。Service Worker 不解析基金 DTO，两个缓存保存的也仍是原始基金行情响应。
 
-详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、滚动超额计算输入、风险参数和风险计算输入的 Feature 会话缓存不持久化。滚动超额不增加独立网络缓存，也不写 Store、localStorage 或 Service Worker。基金设置和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存；行情快照不从 localStorage 恢复，页面首次启动时可先显示空快照，再由受控 Service Worker 请求更新。
+详情基础资料、累计收益、详情级基金历史数据源、资产配置、全收益指数数据源、滚动超额计算输入、风险参数和风险计算输入的 Feature 会话缓存不持久化。滚动超额不增加独立网络缓存，也不写 Store、localStorage 或 Service Worker。基金设置和汇总持仓的离线恢复来自应用显式写入的版本化 localStorage，不来自网络缓存；基金行情数据不从 localStorage 恢复，页面首次启动时可先显示空的基金行情数据，再由受控 Service Worker 请求更新。
 
 ### UI 与响应式
 
