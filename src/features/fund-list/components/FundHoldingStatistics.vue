@@ -51,7 +51,7 @@ function formatHoldingIncome(value: number): string {
 }
 
 function formatRate(rateText: string): string {
-  if (rateText === '--') return '--'
+  if (rateText === '--') return ''
   return amountsMasked.value ? '******' : rateText
 }
 

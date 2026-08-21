@@ -227,7 +227,7 @@ test('configuration transfer keeps old packages without a portfolio section comp
   if (result.ok) assert.equal(result.package.portfolio, undefined)
 })
 
-test('configuration transfer preserves orphan fund references and reports them as warnings', () => {
+test('configuration transfer preserves portfolio fund references without warnings', () => {
   const result = parseConfigurationTransfer(
     serializeConfigurationTransfer({ portfolio }),
     new Set(),
@@ -237,12 +237,7 @@ test('configuration transfer preserves orphan fund references and reports them a
   assert.equal(result.ok, true)
   if (!result.ok) return
   assert.deepEqual(result.package.portfolio, portfolio)
-  assert.deepEqual(result.warnings, [
-    {
-      message: '投资账本包含未添加基金 000001 的孤立记录，恢复基金后会按代码重新关联',
-      section: 'portfolio',
-    },
-  ])
+  assert.deepEqual(result.warnings, [])
 })
 
 test('configuration transfer rejects an import containing invalid sections without partial data', () => {

@@ -57,7 +57,7 @@ function sectionErrorLabel(error: ConfigurationTransferSectionError): string {
   <section aria-labelledby="settings-backup-heading">
     <h3 id="settings-backup-heading" class="text-sm font-semibold">配置备份</h3>
     <p class="mt-1 text-xs text-(--td-text-color-secondary)">
-      导出指数分组、完整基金配置（含持仓）和投资账本，不包含自动刷新偏好或行情快照。
+      导出指数分组、完整基金配置（含持仓）和投资账本，不包含自动刷新配置。
     </p>
 
     <div class="mt-4 flex flex-wrap gap-2">

@@ -48,7 +48,7 @@ const rules = computed(() => ({
   dividendMode: [{ enum: ['cash', 'reinvest'], message: '请选择分红方式', required: true }],
   holdingDays: [
     {
-      message: '请输入正整数持仓天数，且换算后的购买日期须早于今天且非周末',
+      message: '请输入持仓天数，换算后的购买日期须早于今天且非周末',
       required: true,
       validator: (value: unknown) => isValidHoldingDays(value),
     },
@@ -283,7 +283,7 @@ defineExpose({ validate })
           align="right"
           :decimal-places="0"
           :min="1"
-          placeholder="请输入正整数"
+          placeholder="请输入天数"
           step="1"
           suffix="天"
           theme="normal"

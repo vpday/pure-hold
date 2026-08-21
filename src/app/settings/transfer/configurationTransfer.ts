@@ -76,7 +76,7 @@ export function serializeConfigurationTransfer(sources: ConfigurationTransferSou
 export function parseConfigurationTransfer(
   text: string,
   knownIndexQuoteCodes: ReadonlySet<string>,
-  knownFundCodes?: ReadonlySet<string>,
+  _knownFundCodes?: ReadonlySet<string>,
 ): ConfigurationTransferParseResult {
   let parsed: unknown
   try {
@@ -136,32 +136,7 @@ export function parseConfigurationTransfer(
     return { message: '配置文件不包含可导入的配置分区', ok: false }
   }
 
-  const warnings =
-    hasPortfolio && knownFundCodes !== undefined
-      ? createPortfolioWarnings(result.portfolio!, knownFundCodes)
-      : []
-
-  return { ok: true, package: result, sectionErrors: [], warnings }
-}
-
-function createPortfolioWarnings(
-  portfolio: Portfolio,
-  knownFundCodes: ReadonlySet<string>,
-): ConfigurationTransferWarning[] {
-  const orphanedFundCodes = new Set<string>(portfolio.fundCodes)
-  for (const event of portfolio.events) orphanedFundCodes.add(event.fundCode)
-
-  const missingFundCodes = [...orphanedFundCodes]
-    .filter((fundCode) => !knownFundCodes.has(fundCode))
-    .sort()
-  if (missingFundCodes.length === 0) return []
-
-  return [
-    {
-      message: `投资账本包含未添加基金 ${missingFundCodes.join('、')} 的孤立记录，恢复基金后会按代码重新关联`,
-      section: 'portfolio',
-    },
-  ]
+  return { ok: true, package: result, sectionErrors: [], warnings: [] }
 }
 
 function parseIndexGroups(

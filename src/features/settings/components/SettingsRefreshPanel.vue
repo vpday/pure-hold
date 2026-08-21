@@ -78,11 +78,11 @@ function updateFundInterval(value: number | number[]): void {
 
       <div>
         <div class="flex items-center justify-between gap-2 sm:justify-start">
-          <span>基金快照</span>
+          <span>基金估算</span>
           <t-switch
             size="small"
             :value="modelValue.funds.enabled"
-            aria-label="启用基金快照自动刷新"
+            aria-label="启用基金估算自动刷新"
             @change="updateFundEnabled"
           />
         </div>

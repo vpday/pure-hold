@@ -86,7 +86,7 @@ export function createConfigurationTransferCoordinator(
       return { ok: false, reason: '投资账本传输暂不可用' }
     }
     if (portfolioSelected && adapters.getPortfolio === undefined) {
-      return { ok: false, reason: '投资账本快照暂不可用' }
+      return { ok: false, reason: '投资账本配置暂不可用' }
     }
     if (portfolioSelected && adapters.rebuildHoldingProjections === undefined) {
       return { ok: false, reason: '投资账本恢复后无法重建持仓信息' }
