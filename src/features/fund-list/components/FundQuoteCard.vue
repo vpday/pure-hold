@@ -36,7 +36,7 @@ function isPlaceholderPair(first: string, second: string): boolean {
       <div @click="emit('detail', row.code)">
         <span class="block font-medium">{{ row.name }}</span>
         <span class="mt-1 flex flex-wrap gap-2 items-center">
-          <t-tag color="var(--td-gray-color-8)" size="small" variant="light">{{ row.code }}</t-tag>
+          <t-tag size="small" variant="light">{{ row.code }}</t-tag>
           <span v-if="row.tags.length" class="flex flex-wrap gap-1">
             <t-tag
               v-for="tag in row.tags"

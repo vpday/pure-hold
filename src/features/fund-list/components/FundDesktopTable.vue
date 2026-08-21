@@ -241,10 +241,8 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
       <p class="fund-name-button" :title="row.name" @click="emit('detail', row.code)">
         {{ row.name }}
       </p>
-      <div class="fund-code-tags overflow-x-auto">
-        <p class="font-mono tabular-nums text-(--td-text-color-secondary)">
-          {{ row.code }}
-        </p>
+      <div class="fund-code-tags">
+        <t-tag variant="light" size="small">{{ row.code }}</t-tag>
         <t-tag
           v-for="tag in row.tags"
           :key="tag"
@@ -388,7 +386,7 @@ function shouldShowRowDate(rowDate: string, headerDate: string): boolean {
 @reference '@/style.css';
 
 .fund-code-tags {
-  @apply mt-1 flex max-w-35 gap-1 scrollbar-thumb-transparent hover:scrollbar-thumb-current;
+  @apply mt-1 flex max-w-35 gap-1 scrollbar-thumb-transparent hover:scrollbar-thumb-current overflow-x-auto overscroll-contain scrollbar-thin;
 }
 
 .fund-name-button {

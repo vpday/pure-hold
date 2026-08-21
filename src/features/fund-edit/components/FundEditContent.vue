@@ -22,7 +22,7 @@ const groupOptions = computed(() =>
 <template>
   <div class="flex flex-col gap-4 overflow-y-auto">
     <t-alert v-if="submitError" theme="error" :message="submitError" />
-    <header class="flex flex-wrap items-center gap-2">
+    <header class="flex flex-wrap items-center gap-2 text-(--td-text-color-primary)">
       <h3 class="min-w-0 flex-1 font-medium">{{ draft.name }}</h3>
       <t-tag variant="light" size="small">{{ draft.code }}</t-tag>
     </header>
